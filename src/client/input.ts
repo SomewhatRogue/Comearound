@@ -26,11 +26,16 @@ export class Input {
   onChange = () => {};
   /** For the on-screen diagnostics. */
   debug(): string {
-    return `stick ${this.stick.id >= 0 ? `${this.stick.x.toFixed(2)},${this.stick.z.toFixed(2)}` : 'up'} in ${this.dx.toFixed(2)},${this.dz.toFixed(2)}${this.blocked ? ' BLOCKED' : ''}`;
+    return `stick ${this.stick.id !== null ? `${this.stick.x.toFixed(2)},${this.stick.z.toFixed(2)}` : 'up'} in ${this.dx.toFixed(2)},${this.dz.toFixed(2)}${this.blocked ? ' BLOCKED' : ''}`;
   }
   /** Set while a text field has focus or a panel is open, so typing doesn't walk you around. */
   blocked = false;
-  private stick = { id: -1, ox: 0, oz: 0, x: 0, z: 0, full: false };
+  /**
+   * Which finger (or mouse) holds the stick, as a key like t3 or p1; null when nobody does.
+   * Never compare ids to zero: iOS hands out touch identifiers that can be negative, and an
+   * `id >= 0` test once made every drag on an iPhone count as "not held".
+   */
+  private stick: { id: string | null; ox: number; oz: number; x: number; z: number; full: boolean } = { id: null, ox: 0, oz: 0, x: 0, z: 0, full: false };
   private touchSprint = false;
   private touchCrouch = false;
 
@@ -63,7 +68,7 @@ export class Input {
     let dz = (has('s', 'arrowdown') ? 1 : 0) - (has('w', 'arrowup') ? 1 : 0);
     let sprint = has('shift');
     let crouch = has(' ', 'c', 'control');
-    if (this.stick.id >= 0) {
+    if (this.stick.id !== null) {
       [dx, dz] = [this.stick.x, this.stick.z];
       sprint ||= this.stick.full;
     }
@@ -100,8 +105,8 @@ export class Input {
     // them) the page around the game can claim a drag as a scroll and cancel the pointer. Calling
     // preventDefault on non-passive touch listeners keeps the drag ours. Pointer events stay for a
     // mouse or pen (testing on a laptop with ?touch).
-    const begin = (id: number, x: number, y: number) => {
-      if (this.stick.id >= 0) return;
+    const begin = (id: string, x: number, y: number) => {
+      if (this.stick.id !== null) return;
       // Only a focused text field needs letting go of; blurring anything else can blur the window.
       const focused = document.activeElement as HTMLElement | null;
       if (focused?.tagName === 'INPUT') focused.blur();
@@ -112,7 +117,7 @@ export class Input {
       knob.style.transform = 'translate(-50%, -50%)';
       this.update();
     };
-    const move = (id: number, cx: number, cy: number) => {
+    const move = (id: string, cx: number, cy: number) => {
       if (id !== this.stick.id) return;
       let x = cx - this.stick.ox;
       let z = cy - this.stick.oz;
@@ -126,9 +131,9 @@ export class Input {
       this.stick.full = l > R * 1.25;
       this.update();
     };
-    const end = (id: number) => {
+    const end = (id: string) => {
       if (id !== this.stick.id) return;
-      this.stick.id = -1;
+      this.stick.id = null;
       base.classList.remove('on');
       this.update();
     };
@@ -136,26 +141,26 @@ export class Input {
     zone.addEventListener('touchstart', (e) => {
       e.preventDefault();
       // A stick whose finger is gone (its touchend never arrived) gives way to the new touch.
-      if (this.stick.id >= 1000 && !Array.from(e.touches).some((t) => t.identifier + 1000 === this.stick.id)) end(this.stick.id);
+      if (this.stick.id?.startsWith('t') && !Array.from(e.touches).some((t) => `t${t.identifier}` === this.stick.id)) end(this.stick.id);
       const t = e.changedTouches[0];
-      if (t) begin(t.identifier + 1000, t.clientX, t.clientY);
+      if (t) begin(`t${t.identifier}`, t.clientX, t.clientY);
     }, opts);
     zone.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      for (const t of Array.from(e.changedTouches)) move(t.identifier + 1000, t.clientX, t.clientY);
+      for (const t of Array.from(e.changedTouches)) move(`t${t.identifier}`, t.clientX, t.clientY);
     }, opts);
     for (const ev of ['touchend', 'touchcancel'] as const) {
       zone.addEventListener(ev, (e) => {
-        for (const t of Array.from(e.changedTouches)) end(t.identifier + 1000);
+        for (const t of Array.from(e.changedTouches)) end(`t${t.identifier}`);
       });
     }
     zone.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') return;
       zone.setPointerCapture(e.pointerId);
-      begin(e.pointerId, e.clientX, e.clientY);
+      begin(`p${e.pointerId}`, e.clientX, e.clientY);
     });
-    zone.addEventListener('pointermove', (e) => e.pointerType !== 'touch' && move(e.pointerId, e.clientX, e.clientY));
-    for (const ev of ['pointerup', 'pointercancel'] as const) zone.addEventListener(ev, (e) => e.pointerType !== 'touch' && end(e.pointerId));
+    zone.addEventListener('pointermove', (e) => e.pointerType !== 'touch' && move(`p${e.pointerId}`, e.clientX, e.clientY));
+    for (const ev of ['pointerup', 'pointercancel'] as const) zone.addEventListener(ev, (e) => e.pointerType !== 'touch' && end(`p${e.pointerId}`));
 
     // Buttons: react on touchstart (no 300 ms wait, no scroll stealing), with pointer for a mouse.
     const btn = (sel: string) => pad.querySelector<HTMLElement>(sel)!;
@@ -180,7 +185,7 @@ export class Input {
     // Switching away mid-drag: let go of the stick and the sprint button.
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'hidden') return;
-      end(this.stick.id);
+      if (this.stick.id !== null) end(this.stick.id);
       this.touchSprint = false;
       this.update();
     });
