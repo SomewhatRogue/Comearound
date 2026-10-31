@@ -12,7 +12,7 @@ import { Rng } from '../shared/rng';
 import { DOG } from '../shared/tuning';
 import { makeBrain, tickBot } from './bots';
 import { bark, moveDog, separateDogs } from './dogs';
-import { tickFlock } from './flock';
+import { spawnFlock, tickFlock } from './flock';
 import { tickGoat } from './goat';
 import { endField, startRun, tickRound } from './round';
 import { activeDogs, type Dog, type Room } from './state';
@@ -54,6 +54,8 @@ export class GameRoom implements Room {
   constructor(private send: (connId: string, msg: string) => void, opts: GameOptions = {}) {
     this.rng = new Rng(opts.seed ?? Date.now());
     this.timeScale = opts.timeScale ?? 1;
+    // The lobby is The Meadow with its flock out: practise while you wait.
+    this.sheep = spawnFlock(this);
   }
 
   emit(dogId: string, ev: PrivateEvent): void {
@@ -109,8 +111,9 @@ export class GameRoom implements Room {
     if (!d) {
       d = blankDog(`p${this.nextId++}`, String(token).slice(0, 64), cleanLook(look));
       d.spectator = this.phase !== 'lobby' && this.phase !== 'results';
-      d.x = this.rng.range(-4, 4);
-      d.z = this.rng.range(-3, 3);
+      // Lobby: start where field 1 starts, behind the practice flock.
+      d.x = this.rng.range(-16, -14);
+      d.z = this.rng.range(-4, 4);
       this.dogs.set(d.id, d);
     }
     d.connected = true;
@@ -148,9 +151,10 @@ export class GameRoom implements Room {
       if (d.bot || !d.connected) this.dogs.delete(id);
       else Object.assign(d, { spectator: false, frozen: 0 });
     }
-    this.sheep = [];
     this.goat = null;
+    this.field = TRIALS[0];
     this.phase = 'lobby';
+    this.sheep = spawnFlock(this);
   }
 
   tick(realDt: number): void {
@@ -163,10 +167,8 @@ export class GameRoom implements Room {
     }
     for (const d of this.dogs.values()) if (!d.spectator) moveDog(this, d, this.phase === 'playing' || this.phase === 'lobby' ? dt : 0);
     separateDogs(this);
-    if (this.phase === 'playing') {
-      tickGoat(this, dt);
-      tickFlock(this, dt);
-    }
+    if (this.phase === 'playing') tickGoat(this, dt);
+    if (this.phase === 'playing' || this.phase === 'lobby') tickFlock(this, dt);
     this.noises = [];
     tickRound(this, dt);
     for (const [conn, id] of this.conns) {

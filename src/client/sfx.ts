@@ -1,6 +1,6 @@
 /**
  * Every sound in the game, synthesized with Web Audio: no files, nothing to load or block.
- * Cute and round on purpose: bubbles, plinks, chimes, a goat. One master volume with mute (M).
+ * Cute and round on purpose: woofs, baas, plinks, chimes, a goat. One master volume with mute (M).
  * Browsers start audio suspended until the first click or key press; unlock() handles that.
  */
 let ctx: AudioContext | null = null;
@@ -195,6 +195,34 @@ export const sfx = {
     voice({ f0: 110, dur: 2.4, type: 'sawtooth', gain: 0.05, lp: 500 });
     voice({ f0: 116.5, dur: 2.4, type: 'sawtooth', gain: 0.04, lp: 500, at: 0.05 });
     sfx.bleat(0.8);
+  },
+  /** A dog. pitch > 1 for small dogs (a pug yips), < 1 for big ones. Two quick barks: ruff-ruff. */
+  woof(pitch = 1, volume = 1) {
+    for (const at of [0, 0.16]) {
+      voice({ f0: 260 * pitch, f1: 140 * pitch, dur: 0.13, type: 'sawtooth', gain: 0.11 * volume, lp: 900 * pitch, at });
+      noise({ dur: 0.08, f0: 700 * pitch, f1: 300 * pitch, gain: 0.08 * volume, at, q: 1.5 });
+    }
+  },
+  /** A sheep: baa, softer and lower than the goat, with a wobble. */
+  baa(volume = 1, pitch = 1) {
+    voice({ f0: 240 * pitch, f1: 210 * pitch, dur: 0.6, type: 'sawtooth', gain: 0.05 * volume, lp: 1100, vib: 9, vibRate: 9 });
+    voice({ f0: 480 * pitch, f1: 420 * pitch, dur: 0.6, type: 'triangle', gain: 0.02 * volume, vib: 9, vibRate: 9 });
+  },
+  /** A sheep goes through the gate: a soft wooden clack and a rising plink. */
+  penned(step = 0) {
+    voice({ f0: 180, f1: 140, dur: 0.08, gain: 0.08, type: 'triangle' });
+    voice({ f0: semi(523, step), dur: 0.35, type: 'triangle', gain: 0.12, at: 0.05 });
+    voice({ f0: semi(1046, step), dur: 0.25, gain: 0.04, at: 0.05 });
+  },
+  /** Uh oh: the goat is heading for you. */
+  uhoh() {
+    voice({ f0: 520, f1: 500, dur: 0.16, type: 'triangle', gain: 0.1 });
+    voice({ f0: 390, f1: 370, dur: 0.3, type: 'triangle', gain: 0.1, at: 0.18 });
+  },
+  /** A whistle: the shepherd starting a field. */
+  whistle() {
+    voice({ f0: 1500, f1: 2300, dur: 0.25, gain: 0.08 });
+    voice({ f0: 2300, f1: 1700, dur: 0.35, gain: 0.08, at: 0.28 });
   },
   thud() {
     voice({ f0: 120, f1: 70, dur: 0.22, gain: 0.16 });

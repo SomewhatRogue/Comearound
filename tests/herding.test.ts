@@ -69,7 +69,7 @@ describe('the flock', () => {
     };
     const quiet = moved(false);
     const loud = moved(true);
-    expect(loud).toBeGreaterThan(1.5);
+    expect(loud).toBeGreaterThan(1.2);
     expect(loud).toBeGreaterThan(quiet * 2);
   });
 

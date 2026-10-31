@@ -16,7 +16,8 @@ export function publicView(room: Room): PublicView {
     phase: room.phase,
     mode: room.mode,
     hostId: room.hostId,
-    fieldIdx: room.fieldIdx,
+    fieldId: room.field.id,
+    fieldIdx: Math.min(room.fieldIdx, room.fieldCount - 1),
     fieldCount: room.fieldCount,
     timeLeft: Math.max(0, Math.ceil(room.timeLeft)),
     dogs: [...room.dogs.values()].map((d) => ({

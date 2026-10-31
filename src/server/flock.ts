@@ -92,8 +92,7 @@ export function tickFlock(room: Room, dt: number): void {
         if (p.team !== null && p.team !== s.team) continue;
         const g = gateOf(p);
         const gd = Math.hypot(s.x - g.x, s.z - g.z);
-        const outside = (s.x - g.x) * g.ox + (s.z - g.z) * g.oz > -0.2;
-        if (gd < SHEEP.followRange && outside && flock.some((o, k) => pennedNow[k] && o.team === s.team && inPen(p, o.x, o.z))) {
+        if (gd < SHEEP.followRange && flock.some((o, k) => pennedNow[k] && o.team === s.team && inPen(p, o.x, o.z))) {
           // Off to the side of the opening: line up on the gate first, then go in.
           const lat = Math.abs((s.x - g.x) * g.oz - (s.z - g.z) * g.ox);
           const aim = lat > p.gateW / 2 - 0.4 ? { x: g.x + g.ox * 1.2, z: g.z + g.oz * 1.2 } : p;

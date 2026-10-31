@@ -79,7 +79,9 @@ export interface PublicView {
   phase: Phase;
   mode: Mode;
   hostId: string | null;
-  /** Index into TRIALS (or 0 for versus) and how many fields this run has. */
+  /** The field being played (or shown in the lobby): look it up with fieldById. */
+  fieldId: string;
+  /** Which field of the run this is (0-based) and how many fields this run has. */
   fieldIdx: number;
   fieldCount: number;
   timeLeft: number;

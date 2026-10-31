@@ -41,10 +41,11 @@ export function isDown(d: Dog): boolean {
 
 /** Woof. Scatters sheep nearby (flock.ts reads `barks`), costs calm-herding points. */
 export function bark(room: Room, d: Dog): boolean {
-  if (d.barkCd > 0 || d.spectator || d.frozen > 0 || room.phase !== 'playing') return false;
+  if (d.barkCd > 0 || d.spectator || d.frozen > 0 || (room.phase !== 'playing' && room.phase !== 'lobby')) return false;
   d.barkCd = DOG.barkCooldown;
   d.barks++;
-  d.fieldBarks++;
+  // Practice barks in the lobby don't count against you.
+  if (room.phase === 'playing') d.fieldBarks++;
   room.noises.push({ kind: 'bark', x: d.x, z: d.z, by: d.id });
   return true;
 }

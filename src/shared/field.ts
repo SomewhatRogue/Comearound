@@ -108,3 +108,7 @@ export function gateOf(p: Pen): { x: number; z: number; ox: number; oz: number }
     default: return { x: p.x + p.w / 2, z: p.z, ox: 1, oz: 0 };
   }
 }
+
+export function fieldById(id: string): FieldDef {
+  return [...TRIALS, VERSUS].find((f) => f.id === id) ?? TRIALS[0];
+}
