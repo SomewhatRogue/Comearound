@@ -7,8 +7,8 @@
 import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { gateOf, penWalls, type FieldDef } from '../shared/field';
-import { Rng } from '../shared/rng';
 import { at, hayMesh, mat, mesh, pondMesh, rockMesh, treeMesh } from './models';
+import { Scenery } from './scenery';
 
 export const TEAM_COLORS = ['#3d7dd8', '#e8762c'] as const;
 export const TEAM_NAMES = ['Blue', 'Orange'] as const;
@@ -66,10 +66,6 @@ export function makeStage(host: HTMLElement, lowfx = false, phone = false): Stag
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun, sun.target);
 
-  const outside = mesh(new THREE.PlaneGeometry(220, 220), '#78985a', false);
-  outside.rotation.x = -Math.PI / 2;
-  outside.position.y = -0.01;
-  scene.add(outside);
 
   const resize = () => {
     const w = host.clientWidth;
@@ -87,6 +83,7 @@ export function makeStage(host: HTMLElement, lowfx = false, phone = false): Stag
 /** The current field's ground, fences, pens and props. Rebuilt when the field changes. */
 export class FieldView {
   private group: THREE.Group | null = null;
+  private scenery: Scenery | null = null;
   id = '';
 
   constructor(private stage: Stage, private lowfx: boolean) {}
@@ -103,39 +100,19 @@ export class FieldView {
       });
     }
     this.group = buildField(f, this.lowfx);
+    this.scenery = new Scenery(f, this.lowfx);
+    this.group.add(this.scenery.group);
     this.stage.scene.add(this.group);
+  }
+
+  /** Clouds and butterflies. */
+  update(time: number, dt: number): void {
+    this.scenery?.update(time, dt);
   }
 }
 
 function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
   const g = new THREE.Group();
-  const rng = new Rng(f.id.length * 977 + f.w);
-  const grass = mesh(new THREE.PlaneGeometry(f.w, f.d), '#8db164', false);
-  grass.rotation.x = -Math.PI / 2;
-  grass.receiveShadow = true;
-  g.add(grass);
-
-  // Tufts and flowers, so "down in the grass" means something. Instanced: cheap.
-  const tufts = new THREE.InstancedMesh(new THREE.ConeGeometry(0.12, 0.35, 4), mat('#6f9a48'), lowfx ? 120 : 420);
-  const flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.07, 0), mat('#fff6d8'), lowfx ? 30 : 110);
-  const yellow = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.07, 0), mat('#f2c84b'), lowfx ? 20 : 80);
-  const m = new THREE.Matrix4();
-  for (const inst of [tufts, flowers, yellow]) {
-    for (let i = 0; i < inst.count; i++) {
-      const x = rng.range(-f.w / 2 + 0.5, f.w / 2 - 0.5);
-      const z = rng.range(-f.d / 2 + 0.5, f.d / 2 - 0.5);
-      // Not on pen floors or in ponds.
-      if (f.pens.some((p) => Math.abs(x - p.x) < p.w / 2 + 0.2 && Math.abs(z - p.z) < p.d / 2 + 0.2) || f.obstacles.some((o) => o.kind === 'pond' && Math.hypot(x - o.x, z - o.z) < o.r + 0.4)) {
-        inst.setMatrixAt(i, m.makeScale(0, 0, 0));
-        continue;
-      }
-      const s = rng.range(0.7, 1.3);
-      m.compose(new THREE.Vector3(x, inst === tufts ? 0.15 * s : 0.12, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rng.range(0, 6), 0)), new THREE.Vector3(s, s, s));
-      inst.setMatrixAt(i, m);
-    }
-    g.add(inst);
-  }
-
   // Outer fence: posts and two rails.
   const hw = f.w / 2;
   const hd = f.d / 2;
@@ -199,13 +176,6 @@ function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
     g.add(obj);
   }
 
-  // A few trees outside the fence for a sense of place.
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2 + rng.range(-0.2, 0.2);
-    const t = treeMesh(rng.range(1.1, 1.8), i);
-    t.position.set(Math.cos(a) * (hw + rng.range(4, 12)), 0, Math.sin(a) * (hd + rng.range(4, 10)));
-    g.add(t);
-  }
   return g;
 }
 

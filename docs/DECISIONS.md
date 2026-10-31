@@ -2,6 +2,26 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-30 (night): first phone play, goat mischief, harder, prettier (Claude Opus 5.5)
+
+- **iPhone movement bug:** iOS hands out negative touch identifiers, and the stick treated
+  `id >= 0` as "held", so the knob followed your finger while the dog stood still. Found with an
+  on-screen readout (`?diag`) from Kyle's screenshot. Ids are now strings; never compare them to 0.
+  Also on the way: touch events (non-passive) instead of pointer events for the stick, a window
+  blur no longer drops the stick, portrait plays, solo catches up to real time each frame.
+- **Kyle: "goat needs work".** It now picks mischief every 7 to 12 s: strolls into the biggest
+  loose group and bleats in it ("hehe"), or stands in a pen's gateway so sheep won't pass
+  ("NOPE"), or grazes. Penned, it wanders back out ("bye!") unless a dog lies down by the gate, so
+  the goat bonus has to be held to the end. Dogs can drive it: the eye best, walking shoves it,
+  sprinting at it moves it more but annoys it (Kyle's original "lunge at it, it stares").
+- **Kyle: "a little too easy".** Sheep bolt at nothing now and then (not near a dog lying down),
+  follow-the-leader at the gate is weaker and shorter range, lonely sheep pull back less, and
+  fields are shorter (100 / 120 / 150 s; versus 150). Bots alone now miss sheep on some seeds.
+- **Kyle: more beauty.** Patchy grass, wildflower patches per field (meadow daisies and
+  buttercups, orchard clover and poppies with windfall apples, hillside heather and bluebells,
+  Field Day poppies and bunting), tall grass along fences and round trees, butterflies, rolling
+  hills, hedgerows, a red barn and silo, drifting clouds. All instanced (`src/client/scenery.ts`).
+
 ## 2026-10-30 (late): pivot to Come Bye!, a sheepdog herding game (Claude Opus 5.5)
 
 Kyle: the minigames were all basically the same thing; scrap it. New idea (his): you're a dog,

@@ -110,10 +110,10 @@ const sendInput = () => {
   sent++;
 };
 input.onChange = sendInput;
-// On phones, a one-line readout of what the controls and the room are doing (temporary, while we
-// chase a phone-only movement bug). Tap it to hide.
+// ?diag: a one-line readout of what the controls and the room are doing (it found the iPhone
+// negative-touch-id bug). Tap it to hide.
 const diag = document.getElementById('diag')!;
-diag.hidden = !isTouch;
+diag.hidden = !params.has('diag');
 diag.addEventListener('click', () => (diag.hidden = true));
 let diagAt = 0;
 let frames = 0;
@@ -141,6 +141,7 @@ function frame(now: number) {
   if (pub && me && net.me) {
     const field = fieldById(pub.fieldId);
     fieldView.show(field, pub.mode);
+    fieldView.update(now / 1000, dt);
     // Predict our own run; ease back toward the server so we never drift far from the truth.
     if (!havePrediction) [predicted.x, predicted.z, predicted.rot, havePrediction] = [me.x, me.z, me.rot, true];
     const len = Math.hypot(input.dx, input.dz);
