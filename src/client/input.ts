@@ -2,7 +2,7 @@
  * Input: keyboard on desktop, a thumbstick and three buttons on phones (held sideways).
  * Keyboard: WASD or arrows to move, Shift to sprint, Space (or C) to crouch (hold still to lie
  * down), E (or B, or Enter) to bark, M for sound, Esc for the menu.
- * Touch: drag anywhere (not on a button or panel) to steer (push to the edge to sprint), BARK, a DOWN
+ * Touch: drag anywhere (not on a button or panel) to steer (drag past the ring to sprint), BARK, a DOWN
  * toggle for crouching, and a SPRINT button you hold.
  */
 export const isTouch = (() => {
@@ -43,7 +43,6 @@ export class Input {
    * `id >= 0` test once made every drag on an iPhone count as "not held".
    */
   private stick: { id: string | null; ox: number; oz: number; x: number; z: number; full: boolean } = { id: null, ox: 0, oz: 0, x: 0, z: 0, full: false };
-  private touchSprint = false;
   private touchCrouch = false;
 
   constructor() {
@@ -79,7 +78,6 @@ export class Input {
       [dx, dz] = [this.stick.x, this.stick.z];
       sprint ||= this.stick.full;
     }
-    sprint ||= this.touchSprint;
     crouch ||= this.touchCrouch;
     if (this.blockedNow) [dx, dz, sprint, crouch] = [0, 0, false, false];
     [this.dx, this.dz, this.sprint, this.crouch] = [dx, dz, sprint && !crouch, crouch];
@@ -136,12 +134,14 @@ export class Input {
       const k = m < 0.15 ? 0 : m;
       [this.stick.x, this.stick.z] = l > 0 ? [(x / Math.min(l, R)) * k, (z / Math.min(l, R)) * k] : [0, 0];
       this.stick.full = l > R * 1.25;
+      // Sprinting (dragged past the ring's edge): the knob lights up.
+      base.classList.toggle('sprint', this.stick.full);
       this.update();
     };
     const end = (id: string) => {
       if (id !== this.stick.id) return;
       this.stick.id = null;
-      base.classList.remove('on');
+      base.classList.remove('on', 'sprint');
       this.update();
     };
     const opts = { passive: false } as const;
@@ -178,23 +178,15 @@ export class Input {
       if (up) for (const ev of ['pointerup', 'pointerleave'] as const) el.addEventListener(ev, (e) => e.pointerType !== 'touch' && up());
     };
     press(btn('.bark'), () => this.onBark());
-    press(btn('.sprint'), () => {
-      this.touchSprint = true;
-      this.touchCrouch = false;
-      btn('.down').classList.remove('on');
-      this.update();
-    }, () => ((this.touchSprint = false), this.update()));
     press(btn('.down'), () => {
       this.touchCrouch = !this.touchCrouch;
       btn('.down').classList.toggle('on', this.touchCrouch);
       this.update();
     });
-    // Switching away mid-drag: let go of the stick and the sprint button.
+    // Switching away mid-drag: let go of the stick.
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'hidden') return;
       if (this.stick.id !== null) end(this.stick.id);
-      this.touchSprint = false;
-      this.update();
     });
     // The page itself never scrolls or zooms under a thumb.
     document.addEventListener('touchmove', (e) => {

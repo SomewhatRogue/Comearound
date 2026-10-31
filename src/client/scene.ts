@@ -253,8 +253,10 @@ export function followCamera(stage: Stage, x: number, z: number, dt: number, clo
     return;
   }
   // On tour (a field's intro) the camera rides higher and glides more slowly between shots.
-  const h = close ? 7 : (portrait ? 28 : 19) * (tour ? 1.25 : 1);
-  const back = close ? 7.5 : (portrait ? 17 : 14) * (tour ? 1.25 : 1);
+  // A phone held sideways is short: ride a little higher so there's field above and below the dog.
+  const shortWide = !portrait && innerHeight < 500;
+  const h = close ? 7 : (portrait ? 28 : shortWide ? 23 : 19) * (tour ? 1.25 : 1);
+  const back = close ? 7.5 : (portrait ? 17 : shortWide ? 15.5 : 14) * (tour ? 1.25 : 1);
   const want = new THREE.Vector3(x, h, z + back);
   const k = 1 - Math.exp(-dt * (close ? 3 : tour ? 3.2 : 5));
   stage.camera.position.lerp(want, k);

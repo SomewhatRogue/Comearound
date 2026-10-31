@@ -75,7 +75,7 @@ async function main() {
   await until('friend barked', async () => meIn(await state(friend.page)).barks === 1);
   mark(`movement +${moved.toFixed(2)} m, crouch, down and bark ok`);
 
-  // The phone's buttons: hold SPRINT and drag the stick.
+  // The phone's stick: drag it.
   await phone.page.click('[data-act=fold]');
   const px0 = meIn(await state(phone.page)).x;
   await phone.page.locator('#touch .stick-zone').waitFor({ state: 'visible' });

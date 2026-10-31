@@ -2,6 +2,18 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (late evening): phones, upright first; no sprint button (Claude Opus 5.5)
+
+Kyle: sideways "almost doesn't work as well"; upright plays better. And the SPRINT button is
+redundant (dragging the stick far already sprints), blocks things and makes too many buttons.
+
+- **Sprint button gone.** On a phone you sprint by dragging past the stick's ring, which now
+  lights up yellow while you do. The lobby tip and the menu say so.
+- **Sideways phones (landscape, under 500 px tall) get a compact layout:** a smaller top bar,
+  a smaller minimap (104 px wide, was 150), DOWN and BARK side by side and smaller, a smaller
+  stick, and the camera rides a little higher so there's field above and below your dog.
+- **The "sideways gives you more field" tip is gone**: upright is the way to play.
+
 ## 2026-10-31 (evening, late): comebye.online, and the name is Come Bye (Claude Opus 5.5)
 
 - Kyle bought **comebye.online**. Added to the Vercel project as the main domain, with

@@ -158,7 +158,7 @@ export class Panels {
       : this.party
         ? this.party.html(pub, me)
         : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
-    const touchTip = document.body.classList.contains('touch') ? '<p class="touch-tip">Drag anywhere on the field to move. Tap <b>Practise</b> to fold this away and try the buttons.</p>' : '';
+    const touchTip = document.body.classList.contains('touch') ? '<p class="touch-tip">Drag anywhere on the field to move; drag further, past the ring, to sprint. Tap <b>Practise</b> to fold this away and try the buttons.</p>' : '';
     const best = this.bests.gentle || this.bests.tricky || this.bests.wild || this.bests.challenge ? `<p class="quiet">Your best runs: Gentle <b>${this.bests.gentle}</b> &middot; Tricky <b>${this.bests.tricky}</b> &middot; Wild <b>${this.bests.wild}</b> &middot; Challenge <b>${this.bests.challenge}</b></p>` : '';
     return `<button class="chip fold" data-act="fold">Practise</button><h2>Come Bye!</h2>${roomLine}
       <label>Your dog's name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>${touchTip}
@@ -240,7 +240,7 @@ function menuHtml(pub: PublicView, me: PrivateView): string {
   const chip = (k: 'sound' | 'music', name: string) => `<button class="chip ${on(k) ? 'on' : ''}" data-act="toggle" data-v="${k}">${name}: ${on(k) ? 'on' : 'off'}</button>`;
   return `<div class="sheet menu"><button class="x" data-act="close">Close</button><div class="audio-row">${chip('sound', 'Sound')}${chip('music', 'Music')}</div><h2>How to herd</h2><ol>
     <li><b>Get the sheep into the pen</b>, through the gate. They count once they're inside. Every sheep in (and held for a moment) ends the field early, and the time left is bonus points.</li>
-    <li><b>Sheep move away from dogs.</b> Walking pushes them; sprinting scatters them. Circle wide to get <b>behind</b> them (on the far side from the gate) before you push.</li>
+    <li><b>Sheep move away from dogs.</b> Walking pushes them; sprinting (Shift, or on a phone drag past the ring) scatters them. Circle wide to get <b>behind</b> them (on the far side from the gate) before you push.</li>
     <li><b>Crouch</b> (<b>Space</b>, or <b>DOWN</b> on a phone) to stalk. Face the sheep and you give them <b>the eye</b> (the pale cone): they drift away calmly, without panicking.</li>
     <li><b>Lie down</b>: crouch and hold still. Sheep near you settle (the green ring). Good for holding a flock or a gate.</li>
     <li><b>Bark</b> (<b>E</b>) sends sheep running fast. It has a cooldown, costs calm-herding points, and <b>the goat hates it</b>: bark near it too often and it walks over, stares you down and you freeze. <i>NAUGHTY.</i></li>

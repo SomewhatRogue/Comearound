@@ -20,7 +20,8 @@ export class Minimap {
     this.canvas.hidden = !show;
     if (!show || now - this.at < 120) return;
     this.at = now;
-    const W = 150;
+    // Smaller on a short screen (a phone held sideways) so it doesn't take a third of the height.
+    const W = innerHeight < 500 && innerWidth > innerHeight ? 104 : 150;
     const scale = W / f.w;
     const H = Math.round(f.d * scale);
     const dpr = Math.min(2, window.devicePixelRatio || 1);

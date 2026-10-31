@@ -205,24 +205,21 @@ body.touch #minimap { top: 52px; bottom: auto; left: calc(10px + var(--safe-l));
 #touch .stick { position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%; background: #ffffff33; border: 3px solid #ffffff88; opacity: 0; pointer-events: none; transition: opacity 0.15s; }
 #touch .stick.on { opacity: 1; }
 #touch .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; border-radius: 50%; background: #fffbe8; box-shadow: 0 3px 0 #0003; transform: translate(-50%, -50%); }
-#touch .buttons { position: absolute; right: calc(18px + var(--safe-r)); bottom: calc(18px + var(--safe-b)); display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; gap: 12px; align-items: end; pointer-events: auto; }
+#touch .buttons { position: absolute; right: calc(18px + var(--safe-r)); bottom: calc(18px + var(--safe-b)); display: flex; gap: 14px; align-items: flex-end; pointer-events: auto; }
 #touch button { border: 0; border-radius: 50%; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; color: var(--ink); background: var(--paper); box-shadow: 0 4px 0 #0003; touch-action: none; }
-#touch .bark { grid-column: 2; grid-row: 1 / span 2; width: 92px; height: 92px; font-size: 17px; background: var(--sun); }
+#touch .bark { width: 92px; height: 92px; font-size: 17px; background: var(--sun); }
 #touch .bark.cool { opacity: 0.5; }
-#touch .sprint { grid-column: 1; grid-row: 1; width: 66px; height: 66px; }
-#touch .down { grid-column: 1; grid-row: 2; width: 66px; height: 66px; }
+#touch .down { width: 66px; height: 66px; }
+#touch .stick.sprint { border-color: var(--sun); background: #f2c94c33; }
+#touch .stick.sprint .knob { background: var(--sun); }
 #touch .down.on { background: var(--grass); color: #fff; }
 #touch button:active { transform: translateY(2px); box-shadow: 0 2px 0 #0003; }
 body.touch #dogbar { left: 50%; transform: translateX(-50%); bottom: calc(10px + var(--safe-b)); justify-items: center; }
 body.touch #bark-key { display: none; }
-/* Portrait still plays (the Claude app may not rotate); a tip suggests sideways, then fades. */
-#rotate { display: none; }
+/* A phone held upright: the way most people play. */
 @media (orientation: portrait) {
-  body.touch #rotate { display: flex; align-items: center; gap: 10px; position: fixed; left: 50%; top: 56px; translate: -50% 0; z-index: 20; background: #2b2a22e6; color: #fff; font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 999px; white-space: nowrap; pointer-events: none; animation: fade 0.6s 6s forwards; }
-  body.touch #rotate .phone { width: 12px; height: 20px; border: 2px solid #fff; border-radius: 3px; animation: turn 1.6s ease-in-out infinite; }
-  body.touch #rotate p { margin: 0; }
   #touch .bark { width: 84px; height: 84px; }
-  #touch .sprint, #touch .down { width: 60px; height: 60px; }
+  #touch .down { width: 60px; height: 60px; }
   body.touch #dogbar { left: calc(14px + var(--safe-l)); transform: none; justify-items: start; }
   body.touch #stamina { width: 110px; }
 }
@@ -292,3 +289,21 @@ button.audio.is-off .off { display: inline; }
 .join-code { display: flex; gap: 6px; }
 .join-code input { flex: 1; min-width: 0; font: inherit; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; padding: 5px 10px; border: 2px solid var(--line); border-radius: 10px; background: #fff; }
 .friends .details { font-family: ui-monospace, monospace; font-size: 11px; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
+
+/* A phone held sideways: the screen is short, so everything on it gets smaller and keeps to the
+   edges, leaving the field the middle. */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.touch #topbar { top: 4px; gap: 5px; }
+  body.touch #topbar > div, body.touch #topbar > button, body.touch .pen-count { padding: 3px 9px; font-size: 12px; }
+  body.touch #topbar > button.audio { padding: 3px 7px; }
+  body.touch button.audio svg { width: 15px; height: 15px; }
+  body.touch #minimap { top: 40px; left: calc(8px + var(--safe-l)); opacity: 0.85; }
+  #touch .stick-zone { inset: 36px 0 0 0; }
+  #touch .buttons { right: calc(12px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); gap: 10px; }
+  #touch .bark { width: 72px; height: 72px; font-size: 15px; }
+  #touch .down { width: 54px; height: 54px; font-size: 12px; }
+  #touch .stick { width: 96px; height: 96px; margin: -48px 0 0 -48px; }
+  #touch .knob { width: 44px; height: 44px; }
+  body.touch #dogbar { bottom: calc(6px + var(--safe-b)); }
+  body.touch .side { top: 38px; max-height: calc(100% - 46px); }
+}
