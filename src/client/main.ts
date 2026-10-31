@@ -14,7 +14,7 @@ import { LocalNet } from './local';
 import { dogMesh } from './models';
 import { Net, type NetLike } from './net';
 import { Panels } from './panels';
-import { FieldView, followCamera, makeStage } from './scene';
+import { FieldView, followCamera, glLost, glRestored, makeStage } from './scene';
 import { sfx } from './sfx';
 import { SoundDirector } from './sounds';
 import '@fontsource/fredoka/400.css';
@@ -61,7 +61,7 @@ if (params.get('name')) look = { ...look, name: params.get('name')!.slice(0, 14)
 if (params.get('breed') && (BREEDS as readonly string[]).includes(params.get('breed')!)) look = { ...look, breed: params.get('breed') as Look['breed'], coat: DEFAULT_COAT[params.get('breed') as Look['breed']] };
 
 const lowfx = params.has('lowfx');
-const stage = makeStage(document.getElementById('game')!, lowfx);
+const stage = makeStage(document.getElementById('game')!, lowfx, isTouch);
 const fieldView = new FieldView(stage, lowfx);
 const entities = new Entities(stage);
 const hud = new Hud();
@@ -185,7 +185,7 @@ function frame(now: number) {
   if (!diag.hidden && now - diagAt > 250 && pub && me) {
     diagAt = now;
     const srv = net instanceof LocalNet ? [...net.room.dogs.values()].find((d) => d.id === me.id) : null;
-    diag.textContent = `${input.debug()} | sent ${sent} | room dx ${srv ? `${srv.dx.toFixed(2)},${srv.dz.toFixed(2)}` : '?'} | dog ${me.x.toFixed(1)},${me.z.toFixed(1)} ${me.frozen ? 'frozen' : me.down ? 'down' : me.posture}${me.spectator ? ' SPECTATOR' : ''} | me ${predicted.x.toFixed(1)},${predicted.z.toFixed(1)} | ${pub.phase} | ${fps} fps${net instanceof LocalNet ? ` | ticks ${net.ticks}` : ''}`;
+    diag.textContent = `${input.debug()} | sent ${sent} | room dx ${srv ? `${srv.dx.toFixed(2)},${srv.dz.toFixed(2)}` : '?'} | dog ${me.x.toFixed(1)},${me.z.toFixed(1)} ${me.frozen ? 'frozen' : me.down ? 'down' : me.posture}${me.spectator ? ' SPECTATOR' : ''} | me ${predicted.x.toFixed(1)},${predicted.z.toFixed(1)} | ${pub.phase} | ${fps} fps${net instanceof LocalNet ? ` | ticks ${net.ticks}` : ''} | gl ${stage.renderer.getContext().isContextLost() ? 'LOST' : 'ok'} lost ${glLost}/${glRestored} draws ${stage.renderer.info.render.calls} | sheep0 ${pub.sheep[0] ? pub.sheep[0].x.toFixed(1) : '-'}`;
   }
   requestAnimationFrame(frame);
 }

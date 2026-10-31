@@ -13,6 +13,10 @@ import { at, hayMesh, mat, mesh, pondMesh, rockMesh, treeMesh } from './models';
 export const TEAM_COLORS = ['#3d7dd8', '#e8762c'] as const;
 export const TEAM_NAMES = ['Blue', 'Orange'] as const;
 
+/** Times the WebGL context was lost and restored (shown in the phone diagnostics). */
+export let glLost = 0;
+export let glRestored = 0;
+
 export interface Stage {
   renderer: THREE.WebGLRenderer;
   labels: CSS2DRenderer;
@@ -29,10 +33,17 @@ export function label(text: string, cls: string): CSS2DObject {
   return new CSS2DObject(el);
 }
 
-export function makeStage(host: HTMLElement, lowfx = false): Stage {
-  const renderer = new THREE.WebGLRenderer({ antialias: !lowfx, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(lowfx ? 1 : Math.min(window.devicePixelRatio, 2));
+export function makeStage(host: HTMLElement, lowfx = false, phone = false): Stage {
+  // Phones get a lighter renderer: big shadow maps and full-res buffers can make a phone drop the
+  // WebGL context, which freezes the picture while everything else keeps running.
+  const renderer = new THREE.WebGLRenderer({ antialias: !lowfx && !phone, preserveDrawingBuffer: !phone, powerPreference: 'default' });
+  renderer.setPixelRatio(lowfx ? 1 : Math.min(window.devicePixelRatio, phone ? 1.5 : 2));
   renderer.shadowMap.enabled = !lowfx;
+  renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    glLost++;
+  });
+  renderer.domElement.addEventListener('webglcontextrestored', () => (glRestored++));
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.NeutralToneMapping;
   host.appendChild(renderer.domElement);
@@ -50,7 +61,7 @@ export function makeStage(host: HTMLElement, lowfx = false): Stage {
   const sun = new THREE.DirectionalLight('#ffe6bf', 2.3);
   sun.position.set(-14, 26, 10);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(phone ? 1024 : 2048, phone ? 1024 : 2048);
   Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 24, bottom: -24, near: 1, far: 80 });
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun, sun.target);
