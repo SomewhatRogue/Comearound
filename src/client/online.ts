@@ -119,6 +119,20 @@ export class Online {
     this.host = null;
   }
 
+  /** A fresh room with a new code (if a room got stuck, or to play with different people). */
+  newRoom(): void {
+    this.stopHosting();
+    this.dropGuest();
+    this.room = newCode();
+    this.mode = 'friends';
+    const url = new URL(location.href);
+    url.searchParams.set('room', this.room);
+    try {
+      history.replaceState(null, '', url);
+    } catch { /* sandboxed frame */ }
+    void this.connect();
+  }
+
   /** Join a friend's room by its code (typed in the lobby). */
   joinCode(raw: string): void {
     const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
@@ -206,16 +220,16 @@ export class Online {
         body = '<p>Couldn\'t reach the matchmaking server, so this is a solo game for now.</p><div class="games"><button class="chip" data-act="retry">Try again</button></div>';
         break;
       case 'host':
-        body = `<p class="code-line">Room code <b>${esc(this.room)}</b></p><div class="invite"><code>${esc(this.link().replace(/^https?:\/\//, ''))}</code><button class="chip on" data-act="share">${'share' in navigator ? 'Share link' : 'Copy link'}</button></div>
+        body = `<p class="code-line">Room code <b>${esc(this.room)}</b> <button class="link" data-act="newroom">new code</button></p><div class="invite"><code>${esc(this.link().replace(/^https?:\/\//, ''))}</code><button class="chip on" data-act="share">${'share' in navigator ? 'Share link' : 'Copy link'}</button></div>
           <p class="quiet">${this.friends ? `${this.friends === 1 ? 'A friend has' : `${this.friends} friends have`} joined. Pick a course and start when you're ready.` : 'Send this link to friends. When they open it, they pop up in your pack below.'} Bot dogs fill any empty spots. Keep this tab open: it runs the game.</p>${packBox}`;
         break;
       case 'guest':
-        body = `<p>You're in <b>${esc(hostName)}</b>'s game. They pick the course and start it.</p>${packBox}`;
+        body = `<p>You're in <b>${esc(hostName)}</b>'s game. They pick the course and start it.</p>${packBox}<div class="games"><button class="chip" data-act="newroom">Leave and start my own room</button></div>`;
         break;
       case 'failed':
         body = this.why === 'answer'
-          ? '<p>The host\'s game didn\'t answer. Check the code, and ask them to keep the game open and on screen: phones pause games in the background, so a host on a phone can\'t switch away to send the link.</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>'
-          : '<p>Found the host, but your two networks wouldn\'t let the games link up, even through the relay. Try again, or try from a different network (Wi-Fi instead of mobile data, say).</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>';
+          ? '<p>The host\'s game didn\'t answer. Check the code, and ask them to keep the game open and on screen: phones pause games in the background, so a host on a phone can\'t switch away to send the link.</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="newroom">Start my own room</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>'
+          : '<p>Found the host, but your two networks wouldn\'t let the games link up, even through the relay. Try again, or try from a different network (Wi-Fi instead of mobile data, say).</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="newroom">Start my own room</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>';
         break;
     }
     const join = this.state === 'connecting' || this.state === 'starting' ? '' : `<div class="join-code"><input id="code-input" maxlength="12" placeholder="Friend's code" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="chip" data-act="joincode">Join</button></div>`;

@@ -13,7 +13,7 @@ import { Input, isTouch } from './input';
 import { LocalNet } from './local';
 import { Online } from './online';
 import { Party, SwitchNet } from './party';
-import { dogMesh } from './models';
+import { breedScale, dogMesh } from './models';
 import { Net, type NetLike } from './net';
 import { Panels } from './panels';
 import { FieldView, followCamera, glLost, glRestored, makeStage } from './scene';
@@ -213,7 +213,7 @@ function frame(now: number) {
     // While you dress your dog (the lobby panel open) the camera comes in close on it.
     const dressing = pub.phase === 'lobby' && !panels.collapsed;
     const close = pub.phase === 'lobby' && (dressing || idleFor > 1.2);
-    if (!noLoop) followCamera(stage, focus.x, focus.z, dt, close, !!touring, dressing && !touring);
+    if (!noLoop) followCamera(stage, focus.x, focus.z, dt, close, !!touring, dressing && !touring ? breedScale(look.breed) : 0);
     frameBesidePanel(dressing, dt);
     weather.update(pub, focus, dt);
     music.setRain(pub.phase !== 'lobby' && pub.weather.kind !== 'clear');

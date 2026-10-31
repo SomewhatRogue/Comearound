@@ -2,6 +2,14 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (midday): new room button; the chihuahua (Claude Opus 5.5)
+
+- **"new code"** next to the room code (and "Start my own room" on the failure screen, "Leave and
+  start my own room" for a guest) makes a fresh room with a new code and hosts it straight away.
+- **Chihuahua** (Kyle): ninth breed, tiny (0.58 of a collie), spindly legs, apple head (1.3x),
+  big splayed "satellite" ears, big round eyes, sickle tail; new Fawn coat. The dressing-room
+  camera now frames by breed size, so small dogs get a closer look.
+
 ## 2026-10-31 (after midnight): rooms with no setup; collar and tail fixes (Claude Opus 5.5)
 
 - **Kyle wants online rooms to work with just a code, no setup.** Matchmaking now tries our own

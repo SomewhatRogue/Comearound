@@ -55,10 +55,14 @@ interface BreedShape {
   body: number;
   girth: number;
   snout: number;
-  ears: 'tip' | 'prick' | 'drop' | 'bat';
+  ears: 'tip' | 'prick' | 'drop' | 'bat' | 'giant';
   tail: 'plume' | 'curl' | 'pom' | 'stub' | 'straight' | 'feather';
   fluff?: 'ruff' | 'poodle';
   flatFace?: boolean;
+  /** Head size relative to the usual (the chihuahua's apple head). */
+  head?: number;
+  /** Big round eyes (the chihuahua). */
+  bigEyes?: boolean;
 }
 
 const SHAPES: Record<Breed, BreedShape> = {
@@ -70,7 +74,14 @@ const SHAPES: Record<Breed, BreedShape> = {
   corgi: { scale: 0.85, leg: 0.17, body: 0.56, girth: 0.19, snout: 0.15, ears: 'bat', tail: 'stub' },
   husky: { scale: 1.04, leg: 0.4, body: 0.5, girth: 0.18, snout: 0.17, ears: 'prick', tail: 'curl' },
   pug: { scale: 0.72, leg: 0.24, body: 0.36, girth: 0.21, snout: 0.05, ears: 'drop', tail: 'curl', flatFace: true },
+  // Tiny, spindly legs, a big apple head, huge ears and big round eyes.
+  chihuahua: { scale: 0.58, leg: 0.27, body: 0.32, girth: 0.13, snout: 0.06, ears: 'giant', tail: 'curl', head: 1.3, bigEyes: true },
 };
+
+/** How big a breed is (1 = a collie), for framing the dressing-room camera. */
+export function breedScale(breed: string): number {
+  return (SHAPES as Record<string, BreedShape>)[breed]?.scale ?? 1;
+}
 
 export interface DogRig {
   root: THREE.Group;
@@ -120,6 +131,7 @@ export function dogMesh(look: Look): DogRig {
   front.add(at(chest, 0, -s.girth * 0.25, half + s.girth * 0.2));
   const head = group('head');
   head.position.set(0, s.girth * 0.9, half + s.girth * 0.75);
+  head.scale.setScalar(s.head ?? 1);
   addHead(head, s, main, accent, maskC, eye.color, look.collar);
   front.add(head);
   addCollar(front, s, half, look.collar);
@@ -203,8 +215,9 @@ function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string,
   // Eyes: bright and slightly glowing, so blue eyes read from the camera.
   const eyeMat = mat(eyeColor, { emissive: eyeColor, emissiveIntensity: 0.45, roughness: 0.3 });
   for (const side of [-1, 1]) {
-    head.add(at(mesh(new THREE.SphereGeometry(0.03, 8, 6), eyeMat, false), side * 0.068, 0.04, r * 0.85));
-    head.add(at(mesh(new THREE.SphereGeometry(0.012, 5, 4), '#0a0a0a', false), side * 0.072, 0.045, r * 0.85 + 0.025));
+    const er = s.bigEyes ? 0.042 : 0.03;
+    head.add(at(mesh(new THREE.SphereGeometry(er, 8, 6), eyeMat, false), side * (s.bigEyes ? 0.072 : 0.068), 0.04, r * 0.85));
+    head.add(at(mesh(new THREE.SphereGeometry(er * 0.42, 5, 4), '#0a0a0a', false), side * (s.bigEyes ? 0.078 : 0.072), 0.045, r * 0.85 + er * 0.85));
     const ear = group('ear');
     ear.position.set(side * 0.09, 0.1, -0.02);
     let e: THREE.Mesh;
@@ -216,6 +229,11 @@ function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string,
       case 'bat':
         e = mesh(new THREE.ConeGeometry(0.075, 0.2, 4), maskC);
         e.position.y = 0.08;
+        break;
+      case 'giant':
+        // Chihuahua satellite dishes: big, wide, splayed out to the sides.
+        e = mesh(new THREE.ConeGeometry(0.085, 0.21, 4), maskC);
+        e.position.y = 0.09;
         break;
       case 'tip': {
         // Semi-erect with a folded tip: the collie look.
@@ -232,7 +250,7 @@ function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string,
         e.position.set(side * 0.04, -0.07, 0);
     }
     ear.add(e);
-    ear.rotation.z = -side * 0.25;
+    ear.rotation.z = -side * (s.ears === 'giant' ? 0.7 : 0.25);
     head.add(ear);
   }
   if (s.fluff === 'poodle') head.add(at(mesh(new THREE.IcosahedronGeometry(0.12, 1), main), 0, 0.14, -0.02));
