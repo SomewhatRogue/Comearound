@@ -74,10 +74,13 @@ export class Input {
     this.onChange();
   }
 
+  /**
+   * The window lost focus: let go of held keys. Touch is left alone. iOS fires a window blur
+   * inside the Claude app's web view as a drag starts, which used to cancel the stick mid-drag
+   * (the knob followed your finger, the dog never moved). A touch ends with touchend, not blur.
+   */
   clear(): void {
     this.keys.clear();
-    this.stick.id = -1;
-    this.touchSprint = false;
     this.update();
   }
 
@@ -99,7 +102,9 @@ export class Input {
     // mouse or pen (testing on a laptop with ?touch).
     const begin = (id: number, x: number, y: number) => {
       if (this.stick.id >= 0) return;
-      (document.activeElement as HTMLElement | null)?.blur?.();
+      // Only a focused text field needs letting go of; blurring anything else can blur the window.
+      const focused = document.activeElement as HTMLElement | null;
+      if (focused?.tagName === 'INPUT') focused.blur();
       Object.assign(this.stick, { id, ox: x, oz: y, x: 0, z: 0, full: false });
       base.style.left = `${x}px`;
       base.style.top = `${y}px`;
@@ -130,6 +135,8 @@ export class Input {
     const opts = { passive: false } as const;
     zone.addEventListener('touchstart', (e) => {
       e.preventDefault();
+      // A stick whose finger is gone (its touchend never arrived) gives way to the new touch.
+      if (this.stick.id >= 1000 && !Array.from(e.touches).some((t) => t.identifier + 1000 === this.stick.id)) end(this.stick.id);
       const t = e.changedTouches[0];
       if (t) begin(t.identifier + 1000, t.clientX, t.clientY);
     }, opts);
@@ -168,6 +175,13 @@ export class Input {
     press(btn('.down'), () => {
       this.touchCrouch = !this.touchCrouch;
       btn('.down').classList.toggle('on', this.touchCrouch);
+      this.update();
+    });
+    // Switching away mid-drag: let go of the stick and the sprint button.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'hidden') return;
+      end(this.stick.id);
+      this.touchSprint = false;
       this.update();
     });
     // The page itself never scrolls or zooms under a thumb.
