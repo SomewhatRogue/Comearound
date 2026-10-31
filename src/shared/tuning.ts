@@ -53,7 +53,7 @@ export const GOAT = {
   annoyPerBark: 0.45,
   annoyDecay: 0.04,
   /** The stare freezes the dog it picked. */
-  stareSec: 2.8,
+  stareSec: 4,
   stareCooldown: 12,
 };
 

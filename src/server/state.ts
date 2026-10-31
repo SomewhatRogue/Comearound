@@ -44,6 +44,8 @@ export interface Dog {
   leftAt: number;
   spectator: boolean;
   bot: BotBrain | null;
+  /** Test hook (AUTOPILOT): a human seat driven by the bot brain, so probes can watch a real run. */
+  auto?: BotBrain | null;
 }
 
 export interface Sheep {

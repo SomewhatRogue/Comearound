@@ -2,7 +2,8 @@
  * Local dev and test server: serves the built client from dist/ and runs rooms in-process over
  * WebSockets on the same /parties/game-server/<room> path the Cloudflare deploy uses.
  *
- * Env: PORT (default 8787), TIMESCALE (test hook, default 1), SEED (fixed seed for repeatable runs).
+ * Env: PORT (default 8787), TIMESCALE (test hook, default 1), SEED (fixed seed for repeatable runs),
+ * AUTOPILOT=1 (test hook: human dogs herd with the bot brain once a run starts).
  */
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -23,6 +24,7 @@ function roomFor(name: string) {
     const sockets = new Map<string, import('ws').WebSocket>();
     const game = new GameRoom((id, msg) => sockets.get(id)?.send(msg), {
       timeScale: Number(process.env.TIMESCALE ?? 1),
+      autopilot: process.env.AUTOPILOT === '1',
       seed: process.env.SEED ? Number(process.env.SEED) : undefined,
     });
     r = { game, sockets };

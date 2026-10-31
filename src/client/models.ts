@@ -1,7 +1,12 @@
 /**
- * Placeholder models built from primitives until the KayKit art pass. Chunky, readable from above.
+ * Models built from primitives: chunky, readable from above, our own style (no asset packs).
+ * Dogs are rigged as a front half and a back half joined at the middle, so the spine can curve:
+ * low and stretched when sprinting, crouched with the head down when giving sheep the eye,
+ * flat out when lying down. Breeds change proportions, ears, tail and fluff; coats change colours.
  */
 import * as THREE from 'three';
+import { COATS, EYES, type Breed } from '../shared/looks';
+import type { Look } from '../shared/protocol';
 
 const mats = new Map<string, THREE.MeshStandardMaterial>();
 export function mat(color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}): THREE.MeshStandardMaterial {
@@ -11,127 +16,367 @@ export function mat(color: string, extra: Partial<THREE.MeshStandardMaterialPara
   return m;
 }
 
-function mesh(geo: THREE.BufferGeometry, color: string, shadow = true): THREE.Mesh {
-  const m = new THREE.Mesh(geo, mat(color));
+export function mesh(geo: THREE.BufferGeometry, color: string | THREE.Material, shadow = true): THREE.Mesh {
+  const m = new THREE.Mesh(geo, typeof color === 'string' ? mat(color) : color);
   m.castShadow = shadow;
   m.receiveShadow = true;
   return m;
 }
 
-function at(m: THREE.Mesh, x: number, y: number, z: number): THREE.Mesh {
-  m.position.set(x, y, z);
+export function at<T extends THREE.Object3D>(o: T, x: number, y: number, z: number): T {
+  o.position.set(x, y, z);
+  return o;
+}
+
+function group(name: string, ...kids: THREE.Object3D[]): THREE.Group {
+  const g = new THREE.Group();
+  g.name = name;
+  if (kids.length) g.add(...kids);
+  return g;
+}
+
+/** A capsule lying along z (dogs and sheep run along +z). */
+function along(r: number, len: number, color: string): THREE.Mesh {
+  const m = mesh(new THREE.CapsuleGeometry(r, len, 4, 10), color);
+  m.rotation.x = Math.PI / 2;
   return m;
 }
 
-export function hatMesh(hat: string): THREE.Object3D | null {
-  const g = new THREE.Group();
-  switch (hat) {
-    case 'cowboy':
-      g.add(mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 14), '#8b5a2b'));
-      g.add(at(mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.24, 10), '#8b5a2b'), 0, 0.13, 0));
-      break;
-    case 'top':
-      g.add(mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.04, 14), '#222'));
-      g.add(at(mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.42, 12), '#222'), 0, 0.22, 0));
-      break;
-    case 'crown':
-      g.add(at(mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.16, 8, 1, true), '#f2c14e'), 0, 0.06, 0));
-      for (let i = 0; i < 5; i++) {
-        const c = mesh(new THREE.ConeGeometry(0.06, 0.14, 4), '#f2c14e');
-        const a = (i / 5) * Math.PI * 2;
-        c.position.set(Math.cos(a) * 0.2, 0.2, Math.sin(a) * 0.2);
-        g.add(c);
-      }
-      break;
-    case 'beanie':
-      g.add(mesh(new THREE.SphereGeometry(0.31, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), '#c0392b'));
-      g.add(at(mesh(new THREE.SphereGeometry(0.08, 8, 6), '#f4f1de'), 0, 0.32, 0));
-      break;
-    case 'flower':
-      g.add(at(mesh(new THREE.ConeGeometry(0.14, 0.12, 6), '#f5d23d'), 0.18, 0.08, 0.05));
-      break;
-    case 'propeller': {
-      g.add(mesh(new THREE.SphereGeometry(0.3, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), '#29a19c'));
-      const blades = mesh(new THREE.BoxGeometry(0.7, 0.02, 0.08), '#f3a712');
-      blades.position.y = 0.36;
-      blades.name = 'spin';
-      g.add(blades);
-      break;
-    }
-    default:
-      return null;
-  }
-  return g;
-}
-
-/** A villager: round body in the player's colour, a head, eyes that show facing, and a hat. */
-export function playerMesh(color: string, hat: string): THREE.Group {
-  const root = new THREE.Group();
-  const body = new THREE.Group();
-  body.name = 'body';
-  root.add(body);
-  const torso = mesh(new THREE.CapsuleGeometry(0.36, 0.42, 4, 10), color);
-  torso.position.y = 0.6;
-  body.add(torso);
-  const head = mesh(new THREE.IcosahedronGeometry(0.32, 1), '#f1c9a5');
-  head.position.y = 1.32;
-  body.add(head);
-  for (const s of [-1, 1]) {
-    const eye = mesh(new THREE.SphereGeometry(0.05, 6, 4), '#1d1d1d', false);
-    eye.position.set(s * 0.12, 1.36, 0.28);
-    body.add(eye);
-  }
-  const h = hatMesh(hat);
-  if (h) {
-    h.position.y = 1.56;
-    body.add(h);
-  }
-  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.45, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false }));
+export function blobShadow(r: number): THREE.Mesh {
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(r, 18), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false }));
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = 0.02;
-  root.add(blob);
-  return root;
+  return blob;
 }
 
-export function goatMesh(): THREE.Group {
-  const g = new THREE.Group();
-  const body = mesh(new THREE.BoxGeometry(0.6, 0.5, 1.0), '#f4f1ea');
-  body.position.y = 0.7;
-  g.add(body);
-  const head = mesh(new THREE.BoxGeometry(0.4, 0.42, 0.45), '#f4f1ea');
-  head.position.set(0, 1.08, 0.6);
-  head.name = 'head';
-  g.add(head);
-  for (const s of [-1, 1]) {
-    const horn = mesh(new THREE.ConeGeometry(0.06, 0.28, 6), '#9a8a6a');
-    horn.position.set(s * 0.12, 1.4, 0.55);
-    horn.rotation.x = -0.4;
-    g.add(horn);
-    const eye = mesh(new THREE.BoxGeometry(0.1, 0.05, 0.02), '#2b1d0e', false);
-    eye.position.set(s * 0.11, 1.12, 0.83);
-    g.add(eye);
-    for (const z of [-0.35, 0.35]) {
-      const leg = mesh(new THREE.BoxGeometry(0.12, 0.45, 0.12), '#e0d8c8');
-      leg.position.set(s * 0.2, 0.22, z);
-      g.add(leg);
+interface BreedShape {
+  scale: number;
+  leg: number;
+  body: number;
+  girth: number;
+  snout: number;
+  ears: 'tip' | 'prick' | 'drop' | 'bat';
+  tail: 'plume' | 'curl' | 'pom' | 'stub' | 'straight' | 'feather';
+  fluff?: 'ruff' | 'poodle';
+  flatFace?: boolean;
+}
+
+const SHAPES: Record<Breed, BreedShape> = {
+  collie: { scale: 1, leg: 0.36, body: 0.5, girth: 0.17, snout: 0.16, ears: 'tip', tail: 'plume' },
+  keeshond: { scale: 0.95, leg: 0.3, body: 0.42, girth: 0.2, snout: 0.11, ears: 'prick', tail: 'curl', fluff: 'ruff' },
+  malinois: { scale: 1.06, leg: 0.42, body: 0.52, girth: 0.16, snout: 0.19, ears: 'prick', tail: 'straight' },
+  poodle: { scale: 1.08, leg: 0.48, body: 0.44, girth: 0.16, snout: 0.18, ears: 'drop', tail: 'pom', fluff: 'poodle' },
+  golden: { scale: 1.06, leg: 0.38, body: 0.54, girth: 0.19, snout: 0.17, ears: 'drop', tail: 'feather' },
+  corgi: { scale: 0.85, leg: 0.17, body: 0.56, girth: 0.19, snout: 0.15, ears: 'bat', tail: 'stub' },
+  husky: { scale: 1.04, leg: 0.4, body: 0.5, girth: 0.18, snout: 0.17, ears: 'prick', tail: 'curl' },
+  pug: { scale: 0.72, leg: 0.24, body: 0.36, girth: 0.21, snout: 0.05, ears: 'drop', tail: 'curl', flatFace: true },
+};
+
+export interface DogRig {
+  root: THREE.Group;
+  /** Moves up and down with posture and gait. */
+  rig: THREE.Group;
+  front: THREE.Group;
+  back: THREE.Group;
+  head: THREE.Group;
+  tail: THREE.Group;
+  legs: THREE.Group[];
+  ears: THREE.Object3D[];
+  hip: number;
+  leg: number;
+}
+
+/**
+ * A dog. Facing +z. The front half pivots at the middle of the back (rotation.x > 0 drops the
+ * head), the head pivots at the neck, each leg at its shoulder or hip.
+ */
+export function dogMesh(look: Look): DogRig {
+  const s = SHAPES[look.breed] ?? SHAPES.collie;
+  const coat = COATS.find((c) => c.id === look.coat) ?? COATS[0];
+  const eye = EYES.find((e) => e.id === look.eyes) ?? EYES[0];
+  const [main, accent, maskC] = [coat.main, coat.accent, coat.mask];
+  const hip = s.leg + s.girth * 0.7;
+  const half = s.body / 2;
+
+  const root = group('dog');
+  const rig = group('rig');
+  root.add(rig);
+  rig.position.y = hip;
+
+  // Back half: rear torso, hind legs, tail.
+  const back = group('back');
+  back.add(at(along(s.girth, half * 0.9, main), 0, 0, -half * 0.45));
+  const tail = group('tail');
+  tail.position.set(0, s.girth * 0.5, -half - s.girth * 0.6);
+  addTail(tail, s, main, accent);
+  back.add(tail);
+
+  // Front half: chest, front legs, neck and head.
+  const front = group('front');
+  front.add(at(along(s.girth * 1.05, half * 0.9, main), 0, 0.01, half * 0.45));
+  const chest = mesh(new THREE.SphereGeometry(s.girth * 0.85, 10, 8), accent);
+  front.add(at(chest, 0, -s.girth * 0.25, half + s.girth * 0.2));
+  const head = group('head');
+  head.position.set(0, s.girth * 0.9, half + s.girth * 0.75);
+  addHead(head, s, main, accent, maskC, eye.color, look.collar);
+  front.add(head);
+  if (s.fluff === 'ruff') {
+    // The keeshond's lion ruff.
+    front.add(at(mesh(new THREE.IcosahedronGeometry(s.girth * 1.35, 1), main), 0, s.girth * 0.2, half - 0.06));
+    front.add(at(mesh(new THREE.IcosahedronGeometry(s.girth * 0.95, 1), accent), 0, -s.girth * 0.15, half + s.girth * 0.45));
+  }
+  if (s.fluff === 'poodle') front.add(at(mesh(new THREE.IcosahedronGeometry(s.girth * 1.35, 1), main), 0, s.girth * 0.2, half * 0.6));
+
+  const legs: THREE.Group[] = [];
+  for (const [side, z, parent] of [[-1, half * 0.8, front], [1, half * 0.8, front], [-1, -half * 0.8, back], [1, -half * 0.8, back]] as const) {
+    const leg = group('leg');
+    leg.position.set(side * s.girth * 0.55, -s.girth * 0.3, z);
+    const L = s.leg + s.girth * 0.3;
+    leg.add(at(mesh(new THREE.CapsuleGeometry(0.055 * s.scale + 0.01, L - 0.08, 3, 6), main), 0, -L / 2, 0));
+    leg.add(at(mesh(new THREE.SphereGeometry(0.07, 6, 5), accent), 0, -L + 0.02, 0.03));
+    if (s.fluff === 'poodle') leg.add(at(mesh(new THREE.IcosahedronGeometry(0.1, 1), main), 0, -L + 0.1, 0));
+    parent.add(leg);
+    legs.push(leg);
+  }
+
+  rig.add(back, front);
+  root.add(blobShadow(0.42 * s.scale + 0.1));
+  rig.scale.setScalar(s.scale);
+  rig.position.y = hip * s.scale;
+  const ears = head.children.filter((c) => c.name === 'ear');
+  return { root, rig, front, back, head, tail, legs, ears, hip: hip * s.scale, leg: s.leg };
+}
+
+function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string, maskC: string, eyeColor: string, collar: string): void {
+  const r = 0.15;
+  head.add(mesh(new THREE.IcosahedronGeometry(r, 1), maskC));
+  // Blaze and muzzle in the accent colour (the collie's white stripe and nose).
+  const muzzle = mesh(new THREE.CapsuleGeometry(0.075, Math.max(0.01, s.snout), 3, 8), s.flatFace ? maskC : accent);
+  muzzle.rotation.x = Math.PI / 2;
+  head.add(at(muzzle, 0, -0.04, r * 0.7 + s.snout / 2));
+  if (!s.flatFace) head.add(at(mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), accent), 0, 0.06, r * 0.8));
+  head.add(at(mesh(new THREE.SphereGeometry(0.035, 6, 5), '#1b1414'), 0, -0.01, r * 0.75 + s.snout + 0.06));
+  // Eyes: bright and slightly glowing, so blue eyes read from the camera.
+  const eyeMat = mat(eyeColor, { emissive: eyeColor, emissiveIntensity: 0.45, roughness: 0.3 });
+  for (const side of [-1, 1]) {
+    head.add(at(mesh(new THREE.SphereGeometry(0.03, 8, 6), eyeMat, false), side * 0.068, 0.04, r * 0.85));
+    head.add(at(mesh(new THREE.SphereGeometry(0.012, 5, 4), '#0a0a0a', false), side * 0.072, 0.045, r * 0.85 + 0.025));
+    const ear = group('ear');
+    ear.position.set(side * 0.09, 0.1, -0.02);
+    let e: THREE.Mesh;
+    switch (s.ears) {
+      case 'prick':
+        e = mesh(new THREE.ConeGeometry(0.055, 0.15, 4), maskC);
+        e.position.y = 0.06;
+        break;
+      case 'bat':
+        e = mesh(new THREE.ConeGeometry(0.075, 0.2, 4), maskC);
+        e.position.y = 0.08;
+        break;
+      case 'tip': {
+        // Semi-erect with a folded tip: the collie look.
+        e = mesh(new THREE.ConeGeometry(0.055, 0.13, 4), maskC);
+        e.position.y = 0.05;
+        const tip = mesh(new THREE.ConeGeometry(0.04, 0.07, 4), maskC);
+        tip.position.set(0, 0.1, 0.03);
+        tip.rotation.x = 1.2;
+        ear.add(tip);
+        break;
+      }
+      default:
+        e = mesh(new THREE.CapsuleGeometry(0.05, 0.12, 3, 6), s.fluff === 'poodle' ? main : maskC);
+        e.position.set(side * 0.04, -0.07, 0);
     }
+    ear.add(e);
+    ear.rotation.z = -side * 0.25;
+    head.add(ear);
+  }
+  if (s.fluff === 'poodle') head.add(at(mesh(new THREE.IcosahedronGeometry(0.12, 1), main), 0, 0.14, -0.02));
+  // Collar.
+  const c = mesh(new THREE.TorusGeometry(0.12, 0.025, 5, 12), collar);
+  c.rotation.x = Math.PI / 2 - 0.5;
+  head.add(at(c, 0, -0.1, -0.08));
+}
+
+function addTail(tail: THREE.Group, s: BreedShape, main: string, accent: string): void {
+  switch (s.tail) {
+    case 'stub':
+      tail.add(mesh(new THREE.SphereGeometry(0.05, 6, 5), main));
+      break;
+    case 'curl': {
+      // Curled up over the back (keeshond, husky, pug).
+      const t = mesh(new THREE.TorusGeometry(0.09, 0.045, 5, 10, Math.PI * 1.4), main);
+      t.rotation.y = Math.PI / 2;
+      t.position.set(0, 0.1, 0.02);
+      tail.add(t);
+      break;
+    }
+    case 'pom': {
+      const stick = mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.22, 5), main);
+      stick.position.y = 0.1;
+      stick.rotation.x = -0.4;
+      tail.add(stick, at(mesh(new THREE.IcosahedronGeometry(0.08, 1), main), 0, 0.21, -0.08));
+      break;
+    }
+    default: {
+      // Hanging plume (collie, golden) or straight (malinois); tipped in the accent colour.
+      const len = s.tail === 'straight' ? 0.34 : 0.4;
+      const body = mesh(new THREE.CapsuleGeometry(s.tail === 'straight' ? 0.03 : 0.055, len, 3, 6), main);
+      body.position.set(0, -len / 2 + 0.05, -0.06);
+      body.rotation.x = 0.35;
+      const tip = mesh(new THREE.SphereGeometry(s.tail === 'straight' ? 0.035 : 0.06, 6, 5), s.tail === 'straight' ? main : accent);
+      tip.position.set(0, -len + 0.02, -0.16);
+      tail.add(body, tip);
+    }
+  }
+}
+
+export interface SheepRig {
+  root: THREE.Group;
+  body: THREE.Group;
+  head: THREE.Group;
+  legs: THREE.Mesh[];
+  mark: THREE.Mesh;
+}
+
+const WOOL = '#f3eee2';
+const FACE = '#3b302b';
+
+/** A sheep: a cloud of wool, a dark face with ears out sideways, four stick legs. */
+export function sheepMesh(): SheepRig {
+  const root = group('sheep');
+  const body = group('body');
+  body.position.y = 0.42;
+  root.add(body);
+  const wool = mat(WOOL);
+  for (const [x, y, z, r] of [[0, 0.08, 0, 0.34], [0.14, 0.1, 0.18, 0.24], [-0.14, 0.1, 0.18, 0.24], [0.14, 0.1, -0.18, 0.24], [-0.14, 0.1, -0.18, 0.24], [0, 0.22, 0, 0.26]] as const) {
+    body.add(at(mesh(new THREE.IcosahedronGeometry(r, 1), wool), x, y, z));
+  }
+  // The raddle mark: a dab of paint on the back, in the team's colour (versus).
+  const mark = mesh(new THREE.CircleGeometry(0.14, 10), mat('#3d7dd8', { side: THREE.DoubleSide }), false);
+  mark.rotation.x = -Math.PI / 2;
+  mark.position.set(0, 0.48, -0.08);
+  mark.visible = false;
+  body.add(mark);
+  const head = group('head');
+  head.position.set(0, 0.12, 0.38);
+  head.add(mesh(new THREE.CapsuleGeometry(0.1, 0.12, 3, 8), FACE));
+  head.children[0].rotation.x = Math.PI / 2 - 0.5;
+  head.add(at(mesh(new THREE.IcosahedronGeometry(0.12, 1), wool), 0, 0.1, -0.04));
+  for (const side of [-1, 1]) {
+    const ear = mesh(new THREE.CapsuleGeometry(0.035, 0.1, 3, 5), FACE);
+    ear.rotation.z = side * 1.3;
+    head.add(at(ear, side * 0.13, 0.03, -0.02));
+    head.add(at(mesh(new THREE.SphereGeometry(0.022, 5, 4), '#f6f2e6', false), side * 0.055, 0.04, 0.09));
+  }
+  body.add(head);
+  const legs: THREE.Mesh[] = [];
+  for (const [x, z] of [[-0.14, 0.18], [0.14, 0.18], [-0.14, -0.18], [0.14, -0.18]]) {
+    const leg = mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.4, 5), FACE);
+    leg.geometry.translate(0, -0.2, 0);
+    leg.position.set(x, 0.4, z);
+    root.add(leg);
+    legs.push(leg);
+  }
+  root.add(blobShadow(0.45));
+  return { root, body, head, legs, mark };
+}
+
+/** The goat: shaggier, horned, bearded, with floppy sideways ears and a judgemental face. */
+export function goatMesh(): { root: THREE.Group; head: THREE.Group; legs: THREE.Mesh[] } {
+  const root = group('goat');
+  const body = mesh(new THREE.BoxGeometry(0.56, 0.5, 0.95), '#e8e1d2');
+  body.position.y = 0.72;
+  root.add(body);
+  root.add(at(mesh(new THREE.BoxGeometry(0.5, 0.12, 0.7), '#cfc4ad'), 0, 1.0, -0.05));
+  const head = group('head');
+  head.position.set(0, 1.05, 0.55);
+  head.add(mesh(new THREE.BoxGeometry(0.34, 0.36, 0.42), '#e8e1d2'));
+  head.add(at(mesh(new THREE.BoxGeometry(0.26, 0.2, 0.18), '#d6ccb7'), 0, -0.1, 0.26));
+  head.add(at(mesh(new THREE.ConeGeometry(0.06, 0.2, 5), '#b9ad94'), 0, -0.3, 0.26));
+  for (const side of [-1, 1]) {
+    const horn = mesh(new THREE.ConeGeometry(0.05, 0.3, 6), '#9a8a6a');
+    horn.position.set(side * 0.1, 0.3, -0.08);
+    horn.rotation.x = -0.6;
+    head.add(horn);
+    const ear = mesh(new THREE.CapsuleGeometry(0.045, 0.16, 3, 6), '#ddd4c2');
+    ear.rotation.z = side * 1.4;
+    head.add(at(ear, side * 0.25, 0.06, -0.05));
+    // Rectangular pupils: the stare.
+    head.add(at(mesh(new THREE.SphereGeometry(0.05, 8, 6), '#c8a24a', false), side * 0.12, 0.05, 0.2));
+    head.add(at(mesh(new THREE.BoxGeometry(0.06, 0.018, 0.01), '#15110c', false), side * 0.12, 0.05, 0.25));
+  }
+  root.add(head);
+  const legs: THREE.Mesh[] = [];
+  for (const [x, z] of [[-0.18, 0.32], [0.18, 0.32], [-0.18, -0.32], [0.18, -0.32]]) {
+    const leg = mesh(new THREE.BoxGeometry(0.11, 0.48, 0.11), '#d6ccb7');
+    leg.geometry.translate(0, -0.24, 0);
+    leg.position.set(x, 0.48, z);
+    root.add(leg);
+    legs.push(leg);
+  }
+  root.add(blobShadow(0.55));
+  return { root, head, legs };
+}
+
+/** Props for the field. */
+export function treeMesh(r: number, seed: number): THREE.Group {
+  const g = group('tree');
+  g.add(at(mesh(new THREE.CylinderGeometry(0.16, 0.22, 1.4, 6), '#6b4a30'), 0, 0.7, 0));
+  const greens = ['#5f8f45', '#6c9c4c', '#557f3e'];
+  for (let i = 0; i < 3; i++) {
+    const a = seed + i * 2.1;
+    g.add(at(mesh(new THREE.IcosahedronGeometry(r * (0.8 - i * 0.12), 0), greens[i]), Math.cos(a) * 0.35, 1.7 + i * 0.45, Math.sin(a) * 0.35));
   }
   return g;
 }
 
-/** A crow target for the Pen snowball fight: a post with a crow that tips over when hit. */
-export function crowMesh(): THREE.Group {
-  const g = new THREE.Group();
-  g.add(at(mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.9, 6), '#8b6a45'), 0, 0.45, 0));
-  const bird = new THREE.Group();
-  bird.name = 'bird';
-  bird.position.y = 0.9;
-  bird.add(at(mesh(new THREE.SphereGeometry(0.2, 8, 6), '#222228'), 0, 0.18, 0));
-  bird.add(at(mesh(new THREE.SphereGeometry(0.13, 8, 6), '#222228'), 0, 0.42, -0.06));
-  const beak = at(mesh(new THREE.ConeGeometry(0.05, 0.16, 5), '#e0a92e'), 0, 0.42, -0.22);
-  beak.rotation.x = -Math.PI / 2;
-  bird.add(beak);
-  for (const s of [-1, 1]) bird.add(at(mesh(new THREE.SphereGeometry(0.03, 5, 4), '#f5f5f5', false), s * 0.06, 0.47, -0.17));
-  g.add(bird);
+export function rockMesh(r: number): THREE.Mesh {
+  const m = mesh(new THREE.DodecahedronGeometry(r, 0), '#9a968c');
+  m.scale.y = 0.6;
+  m.position.y = r * 0.3;
+  return m;
+}
+
+export function hayMesh(r: number): THREE.Group {
+  const g = group('hay');
+  const bale = mesh(new THREE.CylinderGeometry(r, r, r * 1.3, 12), '#d9b55a');
+  bale.rotation.z = Math.PI / 2;
+  bale.position.y = r;
+  g.add(bale);
+  for (const s of [-1, 1]) {
+    const band = mesh(new THREE.TorusGeometry(r * 1.01, 0.03, 4, 14), '#a8843a');
+    band.rotation.y = Math.PI / 2;
+    band.position.set(s * r * 0.35, r, 0);
+    g.add(band);
+  }
+  return g;
+}
+
+/** A pond: water, a muddy rim, cattails and a lily pad or two. */
+export function pondMesh(r: number, seed: number): THREE.Group {
+  const g = group('pond');
+  const rim = mesh(new THREE.CircleGeometry(r + 0.35, 20), '#7a6a4a', false);
+  rim.rotation.x = -Math.PI / 2;
+  rim.position.y = 0.012;
+  const water = mesh(new THREE.CircleGeometry(r, 20), mat('#5b9fc2', { roughness: 0.2, metalness: 0.1 }), false);
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = 0.02;
+  g.add(rim, water);
+  for (let i = 0; i < 7; i++) {
+    const a = seed + i * 0.9;
+    const reed = group('reed');
+    reed.add(at(mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.9, 4), '#5d7a3a'), 0, 0.45, 0));
+    reed.add(at(mesh(new THREE.CapsuleGeometry(0.045, 0.14, 2, 5), '#6b4226'), 0, 0.85, 0));
+    reed.position.set(Math.cos(a) * (r + 0.1), 0, Math.sin(a) * (r + 0.1));
+    reed.rotation.z = Math.sin(a * 3) * 0.15;
+    g.add(reed);
+  }
+  for (let i = 0; i < 3; i++) {
+    const pad = mesh(new THREE.CircleGeometry(0.22, 8, 0.4, Math.PI * 1.8), '#6aa04a', false);
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.set(Math.cos(seed + i * 2.3) * r * 0.5, 0.03, Math.sin(seed + i * 2.3) * r * 0.5);
+    g.add(pad);
+  }
   return g;
 }

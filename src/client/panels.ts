@@ -1,22 +1,30 @@
 /**
- * Panels: the lobby wardrobe, the board (accusations), the accuser's choice, the menu, the reveal.
- * Each renders only when its inputs change; buttons use data-act attributes and one listener.
+ * Panels: the lobby (your dog, the mode), the Esc menu (how to herd), the score card after each
+ * field, and the results with the leaderboard. Each renders only when its inputs change; buttons
+ * use data-act attributes and one listener.
  */
-import type { ClientMsg, Look, PrivateView, PublicView } from '../shared/protocol';
+import { TRIALS, fieldById } from '../shared/field';
+import { BREEDS, BREED_NAMES, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } from '../shared/looks';
+import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
+import { TEAM_NAMES } from './scene';
 import { sfx } from './sfx';
 
-import { COLORS, HATS } from '../shared/looks';
-export { COLORS, HATS };
-
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const name = (pub: PublicView, id: string) => esc(pub.players.find((p) => p.id === id)?.look.name ?? '?');
+const store = {
+  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+};
 
 export class Panels {
-  boardOpen = false;
   menuOpen = false;
+  /** The lobby panel can fold away so you can practise on the flock (on phones it covers the buttons). */
+  collapsed = false;
   private keys = { lobby: '', modal: '' };
-  private roundSec = 420;
+  private mode: Mode = 'trials';
   private bots = true;
+  private best = Number(store.get('tac-best-trials') ?? 0) || 0;
+  private newBest = false;
+  private savedRun = '';
 
   constructor(private send: (m: ClientMsg) => void, private look: Look, private saveLook: (l: Look) => void, private room: string, private solo = false) {
     document.addEventListener('click', (e) => {
@@ -27,34 +35,33 @@ export class Panels {
     });
     document.addEventListener('input', (e) => {
       const el = e.target as HTMLInputElement;
-      if (el.id === 'name-input') this.setLook({ ...this.look, name: el.value.slice(0, 14) });
+      if (el.id === 'name-input') this.setLook({ ...this.look, name: el.value.slice(0, 14) }, false);
     });
   }
 
-  private setLook(l: Look): void {
+  private setLook(l: Look, rerender = true): void {
     this.look = l;
     this.saveLook(l);
     this.send({ t: 'look', look: l });
-    this.keys.lobby = '';
+    if (rerender) this.keys.lobby = '';
   }
 
   private act(act: string, v: string): void {
-    if (act === 'color') this.setLook({ ...this.look, color: v });
-    if (act === 'hat') this.setLook({ ...this.look, hat: v });
-    if (act === 'len') [this.roundSec, this.keys.lobby] = [Number(v), ''];
+    if (act === 'breed') this.setLook({ ...this.look, breed: v as Breed, coat: DEFAULT_COAT[v as Breed] });
+    if (act === 'coat') this.setLook({ ...this.look, coat: v });
+    if (act === 'eyes') this.setLook({ ...this.look, eyes: v });
+    if (act === 'collar') this.setLook({ ...this.look, collar: v });
+    if (act === 'mode') [this.mode, this.keys.lobby] = [v as Mode, ''];
     if (act === 'bots') [this.bots, this.keys.lobby] = [!this.bots, ''];
-    if (act === 'start') this.send({ t: 'start', roundSec: this.roundSec, fillBots: this.bots });
-    if (act === 'copy') void navigator.clipboard?.writeText(location.href);
-    if (act === 'close') [this.boardOpen, this.menuOpen] = [false, false];
-    if (act === 'endRound') {
-      this.send({ t: 'endRound' });
+    if (act === 'start') this.send({ t: 'start', mode: this.mode, fillBots: this.bots || this.solo });
+    if (act === 'again') this.send({ t: 'start', mode: (v as Mode) || this.mode, fillBots: this.bots || this.solo });
+    if (act === 'copy') void navigator.clipboard?.writeText(location.href).catch(() => {});
+    if (act === 'close') this.menuOpen = false;
+    if (act === 'fold') [this.collapsed, this.keys.lobby] = [!this.collapsed, ''];
+    if (act === 'endField') {
+      this.send({ t: 'endField' });
       this.menuOpen = false;
     }
-    if (act === 'accuse') {
-      this.send({ t: 'accuse', targetId: v });
-      this.boardOpen = false;
-    }
-    if (act === 'end') this.send({ t: 'choice', endNow: v === '1' });
     if (act === 'lobby') {
       this.send({ t: 'toLobby' });
       this.menuOpen = false;
@@ -64,87 +71,140 @@ export class Panels {
 
   render(pub: PublicView, me: PrivateView): void {
     const lobby = document.getElementById('lobby')!;
-    const lk = pub.phase === 'lobby' ? JSON.stringify([this.look, pub.players.map((p) => [p.look, p.connected]), pub.hostId === me.you, this.roundSec, this.bots]) : 'off';
+    const lk = pub.phase === 'lobby' ? JSON.stringify([this.look, pub.dogs.map((d) => [d.look, d.connected, d.bot]), pub.hostId === me.you, this.mode, this.bots, this.collapsed]) : 'off';
     if (lk !== this.keys.lobby) {
       this.keys.lobby = lk;
       const typing = document.activeElement?.id === 'name-input';
-      if (!typing) lobby.innerHTML = pub.phase === 'lobby' ? this.lobbyHtml(pub, me) : '';
+      if (!typing) lobby.innerHTML = pub.phase === 'lobby' ? (this.collapsed ? '<button class="chip on unfold" data-act="fold">Your dog &amp; start</button>' : this.lobbyHtml(pub, me)) : '';
       lobby.style.display = pub.phase === 'lobby' ? '' : 'none';
+      lobby.classList.toggle('folded', this.collapsed);
+      document.body.classList.toggle('panel-open', pub.phase === 'lobby' && !this.collapsed);
     }
-    if (pub.phase !== 'playing') this.boardOpen = false;
+    this.recordBest(pub);
     const modal = document.getElementById('modal')!;
-    const mk = JSON.stringify([pub.phase, this.menuOpen, this.boardOpen, me.awaitingChoice, me.accusationUsed, me.role, pub.players.map((p) => p.inPen), !!pub.reveal, pub.hostId === me.you]);
+    const mk = JSON.stringify([pub.phase, this.menuOpen, pub.fieldIdx, pub.fieldScores.length, pub.hostId === me.you, this.newBest]);
     if (mk !== this.keys.modal) {
       this.keys.modal = mk;
-      const html = this.menuOpen ? menuHtml(pub, me) : me.awaitingChoice ? choiceHtml() : pub.reveal ? revealHtml(pub, me) : this.boardOpen ? this.boardHtml(pub, me) : '';
+      const html = this.menuOpen ? menuHtml(pub, me) : pub.phase === 'fieldEnd' ? fieldCard(pub, me) : pub.phase === 'results' ? this.resultsHtml(pub, me) : '';
       modal.innerHTML = html;
       modal.classList.toggle('hidden', !html);
+      modal.classList.toggle('glance', pub.phase === 'fieldEnd' && !this.menuOpen);
+    }
+  }
+
+  /** Trials: keep this browser's best run, so solo play has a leaderboard of its own. */
+  private recordBest(pub: PublicView): void {
+    if (pub.phase !== 'results' || pub.mode !== 'trials') return;
+    const run = runTotal(pub.fieldScores, null);
+    const id = JSON.stringify(pub.fieldScores);
+    if (id === this.savedRun) return;
+    this.savedRun = id;
+    this.newBest = run > this.best;
+    if (this.newBest) {
+      this.best = run;
+      store.set('tac-best-trials', String(run));
     }
   }
 
   private lobbyHtml(pub: PublicView, me: PrivateView): string {
     const host = pub.hostId === me.you;
-    const colors = COLORS.map((c) => `<button class="swatch ${c === this.look.color ? 'on' : ''}" style="background:${c}" data-act="color" data-v="${c}" aria-label="colour ${c}"></button>`).join('');
-    const hats = HATS.map((h) => `<button class="chip ${h === this.look.hat ? 'on' : ''}" data-act="hat" data-v="${h}">${h}</button>`).join('');
-    const who = pub.players.map((p) => `<li><i style="background:${p.look.color}"></i>${esc(p.look.name)}${p.id === pub.hostId ? ' <em>host</em>' : ''}</li>`).join('');
-    const lens = [300, 420, 600].map((s) => `<button class="chip ${s === this.roundSec ? 'on' : ''}" data-act="len" data-v="${s}">${s / 60} min</button>`).join('');
+    const breeds = BREEDS.map((b) => `<button class="chip ${b === this.look.breed ? 'on' : ''}" data-act="breed" data-v="${b}">${BREED_NAMES[b]}</button>`).join('');
+    const coats = COATS.map((c) => `<button class="swatch coat ${c.id === this.look.coat ? 'on' : ''}" style="--a:${c.main};--b:${c.accent};--c:${c.mask}" data-act="coat" data-v="${c.id}" title="${c.name}" aria-label="${c.name}"></button>`).join('');
+    const eyes = EYES.map((e) => `<button class="chip eye-chip ${e.id === this.look.eyes ? 'on' : ''}" data-act="eyes" data-v="${e.id}"><i style="background:${e.color}"></i>${e.name}</button>`).join('');
+    const collars = COLLARS.map((c) => `<button class="swatch ${c === this.look.collar ? 'on' : ''}" style="background:${c}" data-act="collar" data-v="${c}" aria-label="collar ${c}"></button>`).join('');
+    const pack = pub.dogs.filter((d) => !d.bot).map((d) => `<li><i style="background:${d.look.collar}"></i>${esc(d.look.name)} <span class="quiet">${BREED_NAMES[d.look.breed]}</span>${d.id === pub.hostId ? ' <em>host</em>' : ''}${d.connected ? '' : ' <span class="quiet">(away)</span>'}</li>`).join('');
+    const modes = ([['trials', 'Co-op Trials', 'Three fields together. Fast, calm herding scores best.'], ['versus', 'Versus', 'Two teams, two pens. Pen yours, or go and stir up theirs.']] as const)
+      .map(([m, n, d]) => `<button class="mode ${m === this.mode ? 'on' : ''}" data-act="mode" data-v="${m}"><b>${n}</b><span>${d}</span></button>`).join('');
     const controls = host
-      ? `<div class="row">${lens}</div>${this.solo ? '' : `<button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty seats with bots</button>`}<button class="big" data-act="start">Start the round</button>`
+      ? `<div class="label">Mode</div><div class="modes">${modes}</div>${this.solo ? '' : `<button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty spots with bot dogs</button>`}<button class="big" data-act="start">Start ${this.mode === 'trials' ? 'the trials' : 'the match'}</button>`
       : `<p class="quiet">Waiting for the host to start.</p>`;
     const roomLine = this.solo
-      ? '<p class="quiet">Solo practice: bots fill the other seats. Pick a look, then start a round.</p>'
+      ? '<p class="quiet">Solo: bot dogs work alongside you. Practise on the flock while you choose your dog.</p>'
       : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
-    return `<h2>Threes a crowd</h2>${roomLine}
-      <label>Your name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>
-      <div class="label">Colour</div><div class="swatches">${colors}</div>
-      <div class="label">Hat</div><div class="row wrap">${hats}</div>
-      <div class="label">How to play</div><ul class="how-mini"><li>Each round is 3 tasks: fishing, archery, painting and more.</li><li>Everyone gets the exact ask, except the :( player, who has to fake it.</li><li>Get as close to the ask as you can; scores come out at the end.</li><li>Knowers: call out the :( at the board. Wrong? Off to the Pen. <b>Esc</b> for the full rules.</li></ul>
-      <div class="label">Villagers (${pub.players.length})</div><ul class="who">${who}</ul>${controls}`;
+    const best = this.best ? `<p class="quiet">Your best trials run: <b>${this.best}</b></p>` : '';
+    return `<button class="chip fold" data-act="fold">Practise</button><h2>Come Bye!</h2>${roomLine}
+      <label>Your dog's name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>
+      <div class="label">Breed</div><div class="row wrap">${breeds}</div>
+      <div class="label">Coat</div><div class="swatches">${coats}</div>
+      <div class="label">Eyes</div><div class="row wrap">${eyes}</div>
+      <div class="label">Collar</div><div class="swatches">${collars}</div>
+      <div class="label">How to herd</div><ul class="how-mini">
+        <li>Sheep move away from you. Get <b>behind</b> them, on the far side from the pen.</li>
+        <li><b>Crouch</b> (Space) and face them to give them <b>the eye</b>: they ease away calmly.</li>
+        <li>Hold still while crouched to <b>lie down</b> and settle them.</li>
+        <li><b>Bark</b> (E) sends them running, but the goat hates it. Bark too much and it comes to stare you down.</li>
+      </ul>${best}
+      <div class="label">The pack (${pub.dogs.filter((d) => !d.bot).length})</div><ul class="who">${pack}</ul>${controls}`;
   }
 
-  private boardHtml(pub: PublicView, me: PrivateView): string {
-    const suspects = pub.players.filter((p) => p.id !== me.you && !p.inPen && !p.spectator);
-    const accuse = me.role === 'sad'
-      ? '<p class="quiet">Only knowers can accuse. Keep faking it: if nobody calls you out, your points are doubled.</p>'
-      : me.accusationUsed
-      ? '<p class="quiet">You have used your accusation.</p>'
-      : `<ul class="suspects">${suspects.map((p) => `<li><i style="background:${p.look.color}"></i>${esc(p.look.name)}<button class="chip danger" data-act="accuse" data-v="${p.id}">Accuse</button></li>`).join('')}</ul><p class="quiet">One accusation per round. Right: they go to the Pen and lose their bonus. Wrong: you go to the Pen.</p>`;
-    return `<div class="sheet board"><button class="x" data-act="close">Close</button><h2>The Board</h2><h3>${me.role === 'sad' ? 'Accusations' : 'Who is faking it?'}</h3>${accuse}</div>`;
+  private resultsHtml(pub: PublicView, me: PrivateView): string {
+    const host = pub.hostId === me.you;
+    const again = host
+      ? `<div class="row"><button class="big" data-act="again" data-v="${pub.mode}">Play again</button><button class="big alt" data-act="lobby">Back to the lobby</button></div>`
+      : '<p class="quiet">The host picks what happens next.</p>';
+    if (pub.mode === 'versus') {
+      const [a, b] = [runTotal(pub.fieldScores, 0), runTotal(pub.fieldScores, 1)];
+      const wins = [0, 1].map((t) => pub.fieldScores.filter((f) => f[t].score > f[1 - t].score).length);
+      const winner = a === b ? null : a > b ? 0 : 1;
+      const mine = pub.dogs.find((d) => d.id === me.you)?.team;
+      const rows = pub.fieldScores.map((f, i) => `<tr style="--d:${i * 0.35}s"><td>Field ${i + 1}</td><td class="t0">${f[0].score}</td><td class="t1">${f[1].score}</td></tr>`).join('');
+      const banner = winner === null ? '<p class="banner">A draw!</p>' : `<p class="banner team${winner}">${TEAM_NAMES[winner]} wins${mine === winner ? '. Good dogs!' : ''}</p>`;
+      return `<div class="sheet results"><h4>Field Day</h4><h2>Final score</h2>${banner}
+        <table><thead><tr><th></th><th class="t0">${TEAM_NAMES[0]}</th><th class="t1">${TEAM_NAMES[1]}</th></tr></thead><tbody>${rows}
+        <tr class="total"><td>Total</td><td class="t0">${a}</td><td class="t1">${b}</td></tr><tr><td class="quiet">Fields won</td><td class="t0">${wins[0]}</td><td class="t1">${wins[1]}</td></tr></tbody></table>${again}</div>`;
+    }
+    const run = runTotal(pub.fieldScores, null);
+    const rows = pub.fieldScores.map((f, i) => {
+      const s = f[0];
+      return `<tr style="--d:${i * 0.35}s"><td>${TRIALS[i]?.name ?? `Field ${i + 1}`}</td><td>${s.penned}/${s.total}</td><td>+${s.timeBonus}</td><td>+${s.calmBonus}</td><td>${s.goatBonus ? '+' + s.goatBonus : ''}</td><td class="pts">${s.score}</td></tr>`;
+    }).join('');
+    const board = pub.leaderboard.map((r, i) => `<li class="${r.score === run && i === pub.leaderboard.findIndex((q) => q.score === run) ? 'this' : ''}"><b>${i + 1}</b><span>${r.names.map(esc).join(', ')}</span><span class="pts">${r.score}</span></li>`).join('');
+    return `<div class="sheet results"><h4>Co-op Trials</h4><h2>${run} points</h2>${this.newBest ? '<p class="banner">New best for this browser!</p>' : `<p class="quiet">Your best: ${this.best}</p>`}
+      <table><thead><tr><th>Field</th><th>Sheep</th><th>Time</th><th>Calm</th><th>Goat</th><th>Score</th></tr></thead><tbody>${rows}</tbody></table>
+      <h3>Leaderboard (this room)</h3><ol class="board">${board}</ol>${again}</div>`;
   }
+}
+
+function runTotal(fs: FieldScore[][], team: 0 | 1 | null): number {
+  return fs.reduce((n, f) => n + (f.find((s) => s.team === team)?.score ?? 0), 0);
+}
+
+/** After each field: the tally, row by row. */
+function fieldCard(pub: PublicView, me: PrivateView): string {
+  const f = pub.fieldScores[pub.fieldScores.length - 1];
+  if (!f) return '';
+  const field = fieldById(pub.fieldId);
+  const next = pub.fieldIdx + 1 < pub.fieldCount ? `<p class="quiet">Next field in a moment...</p>` : '<p class="quiet">Final scores in a moment...</p>';
+  const col = (s: FieldScore) => {
+    const rows = [
+      [`Sheep penned`, `${s.penned}/${s.total}`, s.penned * 100],
+      ['Time left', s.timeBonus ? '' : 'pen them all to earn it', s.timeBonus],
+      ['Calm herding', 'fewer barks', s.calmBonus],
+      ...(s.goatBonus ? [['The goat!', 'penned', s.goatBonus] as const] : []),
+    ];
+    return `<div class="tally ${s.team === null ? '' : `team${s.team}`}">${s.team === null ? '' : `<h3>${TEAM_NAMES[s.team]}</h3>`}
+      <ul>${rows.map(([a, b, c], i) => `<li style="--d:${0.2 + i * 0.35}s"><span>${a} <i>${b}</i></span><b>+${c}</b></li>`).join('')}</ul>
+      <div class="sum" style="--d:${0.2 + rows.length * 0.35}s">${s.score}</div></div>`;
+  };
+  const mine = pub.dogs.find((d) => d.id === me.you)?.team ?? 0;
+  const title = pub.mode === 'versus' ? (f[0].score === f[1].score ? 'Dead even!' : `${TEAM_NAMES[f[0].score > f[1].score ? 0 : 1]} takes the field${(f[0].score > f[1].score ? 0 : 1) === mine ? '!' : ''}`) : f[0].penned === f[0].total ? 'All in. Good dogs!' : `${f[0].penned} of ${f[0].total} in`;
+  return `<div class="sheet card-end"><h4>${esc(field.name)} &middot; field ${pub.fieldIdx + 1} of ${pub.fieldCount}</h4><h2>${title}</h2><div class="tallies">${f.map(col).join('')}</div>${next}</div>`;
 }
 
 function menuHtml(pub: PublicView, me: PrivateView): string {
   const host = pub.hostId === me.you && pub.phase !== 'lobby';
   const hostTools = host
-    ? `<div class="host"><h3>Host</h3>${pub.phase === 'playing' ? '<button class="big alt" data-act="endRound">End the round now (go to the reveal)</button>' : ''}<button class="big danger" data-act="lobby">Back to the lobby</button></div>`
+    ? `<div class="host"><h3>Host</h3>${pub.phase === 'playing' ? '<button class="big alt" data-act="endField">End this field now</button>' : ''}<button class="big danger" data-act="lobby">Back to the lobby</button></div>`
     : '';
-  return `<div class="sheet menu"><button class="x" data-act="close">Close</button><h2>How to play</h2><ol>
-    <li><b>Each round is 3 tasks</b>, one after another: fishing, fruit picking, baking, candle lighting, archery or painting. Everyone sees which activity it is.</li>
-    <li><b>Knowers get the exact ask</b> on the card at the top left ("Catch a small yellow fish"). The <b>:(</b> player gets nothing and has to fake it.</li>
-    <li><b>Do the task.</b> Walk to a free spot and press <b>E</b>. Things slide past; press <b>E</b> again when the one you want is under the marker. Painting: choose medium, colour and subject first, then keep your hand steady. Try as often as you like; your best try counts.</li>
-    <li><b>Everyone sees what you catch</b>, but not what you were asked for. The :( player copies what looks popular. Knowers watch for whoever keeps missing the mark.</li>
-    <li><b>The board</b> (walk up and press <b>Q</b>): knowers can accuse one player. <b>Right:</b> they go to the Pen and lose their bonus, and only you know it was a catch. <b>Wrong:</b> you go to the Pen with a sign.</li>
-    <li><b>The reveal</b> shows every ask and scores everyone's best tries by how close they came. An uncaught :( player's points are <b>doubled</b>.</li>
-    <li><b>In the Pen:</b> snowball fight. <b>E</b> throws. Knock the crows off the fence. Do not hit the goat.</li>
+  return `<div class="sheet menu"><button class="x" data-act="close">Close</button><h2>How to herd</h2><ol>
+    <li><b>Get the sheep into the pen</b>, through the gate. They count once they're inside. Every sheep in (and held for a moment) ends the field early, and the time left is bonus points.</li>
+    <li><b>Sheep move away from dogs.</b> Walking pushes them; sprinting scatters them. Circle wide to get <b>behind</b> them (on the far side from the gate) before you push.</li>
+    <li><b>Crouch</b> (<b>Space</b>, or <b>DOWN</b> on a phone) to stalk. Face the sheep and you give them <b>the eye</b> (the pale cone): they drift away calmly, without panicking.</li>
+    <li><b>Lie down</b>: crouch and hold still. Sheep near you settle (the green ring). Good for holding a flock or a gate.</li>
+    <li><b>Bark</b> (<b>E</b>) sends sheep running fast. It has a cooldown, costs calm-herding points, and <b>the goat hates it</b>: bark near it too often and it walks over, stares you down and you freeze. <i>NAUGHTY.</i></li>
+    <li><b>The goat</b> wanders, bleats and scatters sheep. It only gives way to a dog giving it the eye. Pen it for a bonus.</li>
+    <li><b>Versus:</b> blue sheep go in the blue pen, orange in the orange pen. Pen yours, or herd the goat over to their side and let it bleat.</li>
+    <li><b>Keys:</b> WASD or arrows move, Shift sprints, Space crouches, E barks, M mutes, Esc for this menu.</li>
   </ol>${hostTools}</div>`;
 }
 
-function choiceHtml(): string {
-  return `<div class="sheet choice"><h2>You caught one!</h2><p>Nobody else knows it was a catch. End the round now, or keep playing: your meter climbs every second until the reveal.</p>
-    <div class="row"><button class="big" data-act="end" data-v="1">End now</button><button class="big alt" data-act="end" data-v="0">Keep playing</button></div></div>`;
-}
-
-const ACT_NAME: Record<string, string> = { fish: 'Fishing', fruit: 'Fruit picking', bake: 'Baking', candle: 'Candles', archery: 'Archery', paint: 'Painting' };
-
-function revealHtml(pub: PublicView, me: PrivateView): string {
-  const r = pub.reveal!;
-  const asks = r.tasks.map((t, i) => `<li><b>${ACT_NAME[t.act]}</b>${esc(t.text)}<span class="quiet">task ${i + 1}</span></li>`).join('');
-  const head = r.tasks.map((t) => `<th>${ACT_NAME[t.act]}</th>`).join('');
-  const rows = [...r.rows].sort((a, b) => b.points - a.points).map((row, i) => `<tr style="--d:${i * 0.35}s">
-      <td>${name(pub, row.id)}${row.id === me.you ? ' (you)' : ''}${row.sad ? ` <b class="frown-s">:(</b>${row.caughtOut ? ' <span class="quiet">caught</span>' : ' <span class="x2">x2</span>'}` : ''}</td>
-      ${row.perTask.map((t) => `<td><div class="cell-pts">${t.pts}</div><div class="quiet">${t.desc ? esc(t.desc) : 'nothing'}</div></td>`).join('')}
-      <td class="pts">+${row.points}</td><td>${row.total}</td></tr>`).join('');
-  const lobby = pub.hostId === me.you ? '<button class="big" data-act="lobby">Back to the lobby</button>' : '<p class="quiet">The host will take everyone back.</p>';
-  return `<div class="sheet reveal"><h4>The asks were</h4><ul class="asks">${asks}</ul><p class="banner ${r.winner}">${r.winner === 'sad' ? 'The :( got away with it' : 'The village caught them'}</p>
-    <div class="table-wrap"><table><thead><tr><th>Villager</th>${head}<th>This round</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div>${lobby}</div>`;
-}

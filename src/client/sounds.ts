@@ -1,53 +1,64 @@
 /**
- * Plays sounds for things that show up in the public state (not private events): the round
- * starting, each new task, the reveal, the goat getting close, snowballs, crows.
- * It compares each snapshot with the last one; private events (pops, catches) play from main.ts.
+ * Sounds for things that show up in the public state: woofs (from Entities.onBark), the goat's
+ * bleats, a rising plink for each sheep that goes in, the odd worried baa, the goat heading your
+ * way, and the end of a field. It compares each snapshot with the last one.
  */
-import type { PrivateView, PublicView } from '../shared/protocol';
+import type { DogPub, PrivateView, PublicView } from '../shared/protocol';
 import { sfx } from './sfx';
+
+const PITCH: Record<string, number> = { pug: 1.6, corgi: 1.3, keeshond: 1.1, collie: 1, poodle: 0.95, husky: 0.92, golden: 0.88, malinois: 0.85 };
 
 export class SoundDirector {
   private phase = '';
-  private taskIdx = -1;
+  private penned = -1;
+  private step = 0;
+  private stepAt = 0;
+  private baaCd = 0;
   private goatMood = '';
-  private targets: boolean[] = [];
-  private snowballs = new Set<number>();
-  private bleatCd = 0;
 
-  update(pub: PublicView, me: PrivateView, dt: number): void {
-    const self = pub.players.find((p) => p.id === me.you);
-    if (!self) return;
-    this.bleatCd -= dt;
+  /** A dog barked at `at`; quieter the further it is from you. */
+  woof(d: DogPub, dist: number): void {
+    sfx.woof(PITCH[d.look.breed] ?? 1, Math.max(0.15, 1 - dist / 30));
+  }
 
+  bleat(dist: number): void {
+    sfx.bleat(Math.max(0.15, 1 - dist / 25));
+  }
+
+  update(pub: PublicView, me: PrivateView, dt: number, now: number): void {
+    const self = pub.dogs.find((d) => d.id === me.you);
+    this.baaCd -= dt;
     if (this.phase && pub.phase !== this.phase) {
-      if (pub.phase === 'playing' && this.phase === 'lobby') sfx.roundStart();
-      if (pub.phase === 'results' && pub.reveal) {
-        sfx.drumroll();
-        // One tick per tally row, in step with the rows sliding in (0.35 s apart).
-        pub.reveal.rows.forEach((_, i) => sfx.tick(0.8 + i * 0.35));
+      if (pub.phase === 'fieldEnd') {
+        const last = pub.fieldScores[pub.fieldScores.length - 1];
+        if (last?.some((s) => s.penned === s.total)) sfx.fanfare();
+        else sfx.sad();
       }
+      if (pub.phase === 'results') sfx.fanfare();
     }
     this.phase = pub.phase;
-    // A new task: the chapel bell.
-    if (pub.phase === 'playing' && this.taskIdx >= 0 && pub.taskIdx !== this.taskIdx) sfx.bell();
-    this.taskIdx = pub.phase === 'playing' ? pub.taskIdx : -1;
 
-    // The goat bleats when it starts bothering someone near you.
-    const g = pub.goat;
-    const d = Math.hypot(g.x - self.x, g.z - self.z);
-    if (g.mood !== this.goatMood && (g.mood === 'pester' || g.mood === 'stare') && d < 10 && this.bleatCd <= 0) {
-      sfx.bleat(Math.max(0.25, 1 - d / 10));
-      this.bleatCd = 4;
+    // Each sheep going in: a plink that climbs if they come in quick succession.
+    const n = pub.sheep.filter((s) => s.penned).length;
+    if (this.penned >= 0 && n > this.penned && (pub.phase === 'playing' || pub.phase === 'lobby')) {
+      this.step = now - this.stepAt < 4000 ? Math.min(this.step + 2, 14) : 0;
+      this.stepAt = now;
+      sfx.penned(this.step);
     }
-    this.goatMood = g.mood;
+    this.penned = n;
 
-    // Snowballs and crows, for whoever is near the Pen.
-    const ids = new Set(pub.snowballs.map((s) => s.id));
-    for (const s of pub.snowballs) if (!this.snowballs.has(s.id) && Math.hypot(s.x - self.x, s.z - self.z) < 8) sfx.whoosh();
-    this.snowballs = ids;
-    pub.targets.forEach((up, i) => {
-      if (this.targets[i] && !up && self.inPen) sfx.squawk();
-    });
-    this.targets = pub.targets.slice();
+    if (!self) return;
+    // A worried baa from a frightened sheep near you, now and then.
+    if (this.baaCd <= 0) {
+      const scared = pub.sheep.find((s) => s.fear > 0.7 && Math.hypot(s.x - self.x, s.z - self.z) < 10);
+      if (scared) {
+        sfx.baa(0.8, 0.9 + (scared.id % 5) * 0.06);
+        this.baaCd = 2.5 + (scared.id % 3);
+      }
+    }
+    // Uh oh: the goat has picked you.
+    const g = pub.goat;
+    if (g && g.mood === 'coming' && this.goatMood !== 'coming' && g.target === me.you) sfx.uhoh();
+    this.goatMood = g?.mood ?? '';
   }
 }

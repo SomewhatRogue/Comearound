@@ -26,6 +26,8 @@ export interface GameOptions {
   seed?: number;
   /** Test hook: run the clock faster so a full run fits in seconds. */
   timeScale?: number;
+  /** Test hook: human dogs are driven by the bot brain once a run starts (probes). */
+  autopilot?: boolean;
 }
 
 export class GameRoom implements Room {
@@ -50,10 +52,12 @@ export class GameRoom implements Room {
   private conns = new Map<string, string>();
   private nextId = 1;
   private timeScale: number;
+  private autopilot: boolean;
 
   constructor(private send: (connId: string, msg: string) => void, opts: GameOptions = {}) {
     this.rng = new Rng(opts.seed ?? Date.now());
     this.timeScale = opts.timeScale ?? 1;
+    this.autopilot = !!opts.autopilot;
     // The lobby is The Meadow with its flock out: practise while you wait.
     this.sheep = spawnFlock(this);
   }
@@ -143,13 +147,14 @@ export class GameRoom implements Room {
     for (const team of [0, 1] as const) {
       const bots = activeDogs(this).filter((d) => d.team === team && (d.bot || d.token.startsWith('bot-')));
       bots.forEach((d, i) => (d.bot = makeBrain([-1, 1, 0, -0.5, 0.5][i % 5], mode === 'versus' && i === 2)));
+      if (this.autopilot) activeDogs(this).filter((d) => d.team === team && !d.bot).forEach((d, i) => (d.auto = makeBrain([0, 1, -1][i % 3])));
     }
   }
 
   private toLobby(): void {
     for (const [id, d] of this.dogs) {
       if (d.bot || !d.connected) this.dogs.delete(id);
-      else Object.assign(d, { spectator: false, frozen: 0 });
+      else Object.assign(d, { spectator: false, frozen: 0, auto: null });
     }
     this.goat = null;
     this.field = TRIALS[0];
@@ -163,7 +168,7 @@ export class GameRoom implements Room {
     this.realClock += realDt;
     this.sweep();
     if (this.phase === 'playing') {
-      for (const d of this.dogs.values()) if (d.bot && !d.spectator) tickBot(this, d, dt);
+      for (const d of this.dogs.values()) if ((d.bot || d.auto) && !d.spectator) tickBot(this, d, dt);
     }
     for (const d of this.dogs.values()) if (!d.spectator) moveDog(this, d, this.phase === 'playing' || this.phase === 'lobby' ? dt : 0);
     separateDogs(this);

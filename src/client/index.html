@@ -2,31 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Threes a crowd</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#a9cbe0" />
+  <title>Come Bye</title>
 </head>
 <body>
   <div id="game"></div>
   <div id="hud">
     <div id="topbar">
       <div id="phase">Lobby</div>
-      <div id="clock"><div id="moon"><div id="moon-shadow"></div></div><span id="clock-text">0:00</span></div>
-      <div id="score-box"><span class="coin"></span><span id="score">0</span></div>
+      <div id="clock"><span class="clock-ico"></span><span id="clock-text">0:00</span></div>
+      <div id="pens"></div>
       <button id="mute" title="Mute (M)">Sound on</button>
+      <button id="menu-btn" title="Menu (Esc)">Menu</button>
     </div>
-    <div id="rolecard"></div>
-    <div id="meter" style="display:none"><span class="coin"></span> Your meter <b id="meter-n">0</b></div>
-    <div id="prompt" style="display:none"></div>
+    <div id="dogbar">
+      <div id="stamina"><div id="stamina-fill"></div></div>
+      <div id="bark-key">Bark <kbd>E</kbd></div>
+      <div id="posture"></div>
+    </div>
+    <div id="intro" hidden></div>
     <div id="toasts"></div>
     <div id="pops"></div>
-    <div id="controls">WASD move &middot; E use / press &middot; Q board &middot; M sound &middot; Esc menu</div>
+    <div id="controls" hidden>WASD move &middot; Shift sprint &middot; Space crouch (hold still: lie down) &middot; E bark &middot; M sound &middot; Esc menu</div>
   </div>
-  <div id="minigame" hidden><h3>Fishing</h3><p class="ask"></p><div class="picker" hidden></div><canvas></canvas></div>
+  <div id="touch" hidden>
+    <div class="stick-zone"></div>
+    <div class="stick"><div class="knob"></div></div>
+    <div class="buttons">
+      <button class="sprint">SPRINT</button>
+      <button class="down">DOWN</button>
+      <button class="bark">BARK</button>
+    </div>
+  </div>
+  <div id="rotate"><div class="phone"></div><p>Turn your phone sideways to herd</p></div>
   <div id="lobby" class="side"></div>
   <div id="modal" class="hidden"></div>
   <div id="naughty" class="hidden"><div class="goatface"><div class="ear l"></div><div class="ear r"></div><div class="horn l"></div><div class="horn r"></div><div class="head"></div><div class="eye l"></div><div class="eye r"></div><div class="snout"><i></i><i></i></div></div><div class="word">NAUGHTY</div></div>
-  <div id="bonk"></div>
-  <div id="conn">Connecting to the village&hellip;</div>
+  <div id="conn">Finding the field&hellip;</div>
   <script type="module" src="./main.ts"></script>
 </body>
 </html>

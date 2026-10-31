@@ -13,6 +13,8 @@ export class LocalNet implements NetLike {
   onEvent: (ev: PrivateEvent) => void = () => {};
   onState: () => void = () => {};
   readonly room: GameRoom;
+  /** Test hook: freeze the room's clock (screenshots on a slow machine). */
+  paused = false;
 
   constructor(look: () => Look) {
     this.room = new GameRoom((_conn, raw) => this.receive(raw), { seed: Math.floor(Math.random() * 1e9) });
@@ -21,7 +23,7 @@ export class LocalNet implements NetLike {
     let last = performance.now();
     setInterval(() => {
       const now = performance.now();
-      this.room.tick(Math.min(0.1, (now - last) / 1000));
+      if (!this.paused) this.room.tick(Math.min(0.1, (now - last) / 1000));
       last = now;
     }, 1000 / TICK_HZ);
   }

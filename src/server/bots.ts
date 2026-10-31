@@ -24,7 +24,7 @@ export function makeBrain(flank: number, raider = false): Dog['bot'] {
 }
 
 export function tickBot(room: Room, d: Dog, dt: number): void {
-  const b = d.bot!;
+  const b = (d.bot ?? d.auto)!;
   const wanted = Math.hypot(d.dx, d.dz) > 0.1 && d.posture !== 'crouch';
   d.dx = d.dz = 0;
   d.wantSprint = d.wantCrouch = false;
@@ -41,7 +41,7 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
   const g = gateOf(pen);
   const mine = room.sheep.filter((s) => team === null || s.team === team);
   const open = mine.filter((s) => !isPenned(room.field, s));
-  const mates = activeDogs(room).filter((o) => o.bot && o.team === d.team && !o.bot.raider);
+  const mates = activeDogs(room).filter((o) => (o.bot ?? o.auto) && o.team === d.team && !(o.bot ?? o.auto)!.raider);
 
   // The gate keeper: lies down beside the gate, outside, on the side away from the incoming sheep.
   const keeper = open.length && open.length < mine.length / 2 && mates.length > 1 ? nearestTo(mates, g.x + g.ox * 2.4, g.z + g.oz * 2.4) : undefined;
