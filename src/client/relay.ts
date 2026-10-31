@@ -16,9 +16,10 @@ import type { NetLike } from './net';
 export type RelayMsg =
   | { t: 'role'; role: 'host' | 'guest'; host?: string }
   | { t: 'nohost' }
-  | { t: 'hosted' | 'left'; id: string }
-  | { t: 'msg'; from: string; d: unknown }
-  | { t: 'info'; shared: boolean };
+  | { t: 'hosted' | 'left'; id: string; cn?: string }
+  | { t: 'msg'; from: string; d: unknown; cn?: string }
+  | { t: 'info'; shared: boolean }
+  | { t: 'pong' };
 
 const MAX_GUESTS = 7;
 
@@ -30,9 +31,37 @@ export class RelaySocket {
   private closed = false;
   private tries = 0;
   private timer = 0;
+  private heardAt = 0;
+  private beat = 0;
+  private unlisten = () => {};
 
   constructor(private room: string, private id: string, public want: 'host' | 'take' | 'join') {
     this.open();
+    // Heartbeat: a phone back from the background can hold a socket that looks open but is dead.
+    // Ping every 4 s; 10 s without hearing anything means reconnect.
+    this.beat = window.setInterval(() => {
+      if (this.ws?.readyState !== WebSocket.OPEN) return;
+      if (performance.now() - this.heardAt > 10000) return this.reconnect();
+      this.ws.send('{"ping":1}');
+    }, 4000);
+    // Back on screen (or back online): check at once rather than waiting for the next beat.
+    const check = () => {
+      if (document.visibilityState !== 'visible' || this.closed) return;
+      // Still opening (a page that just loaded): leave it be.
+      if (this.ws?.readyState === WebSocket.CONNECTING) return;
+      if (this.ws?.readyState !== WebSocket.OPEN) return this.reconnect();
+      const asked = performance.now();
+      this.ws.send('{"ping":1}');
+      window.setTimeout(() => this.heardAt < asked && !this.closed && this.reconnect(), 2500);
+    };
+    document.addEventListener('visibilitychange', check);
+    addEventListener('online', check);
+    addEventListener('pageshow', check);
+    this.unlisten = () => {
+      document.removeEventListener('visibilitychange', check);
+      removeEventListener('online', check);
+      removeEventListener('pageshow', check);
+    };
   }
 
   private url(): string {
@@ -44,10 +73,15 @@ export class RelaySocket {
     if (this.closed) return;
     const ws = new WebSocket(this.url());
     this.ws = ws;
-    ws.onopen = () => (this.tries = 0);
+    ws.onopen = () => {
+      this.tries = 0;
+      this.heardAt = performance.now();
+    };
     ws.onmessage = (e) => {
+      this.heardAt = performance.now();
       try {
-        this.onMessage(JSON.parse(String(e.data)) as RelayMsg);
+        const m = JSON.parse(String(e.data)) as RelayMsg;
+        if (m.t !== 'pong') this.onMessage(m);
       } catch { /* not ours */ }
     };
     ws.onclose = () => {
@@ -81,6 +115,8 @@ export class RelaySocket {
   close(): void {
     this.closed = true;
     clearTimeout(this.timer);
+    clearInterval(this.beat);
+    this.unlisten();
     this.ws?.close();
     this.ws = null;
   }
@@ -88,6 +124,8 @@ export class RelaySocket {
 
 export class RelayHost {
   readonly guests = new Set<string>();
+  /** Each guest's newest connection (from their messages), so a late goodbye from an old one is ignored. */
+  private conn = new Map<string, string>();
   private timer: number;
 
   constructor(private sock: RelaySocket, private local: LocalNet, private onGuests: () => void) {
@@ -99,8 +137,13 @@ export class RelayHost {
 
   /** A message from a friend (or a friend leaving), from the relay. */
   handle(m: RelayMsg): void {
-    if (m.t === 'left') return this.drop(m.id);
+    if (m.t === 'left') {
+      const newest = this.conn.get(m.id);
+      if (m.cn && newest && m.cn !== newest) return;
+      return this.drop(m.id);
+    }
     if (m.t !== 'msg') return;
+    if (m.cn) this.conn.set(m.from, m.cn);
     const d = m.d as ClientMsg | null;
     if (!d || typeof d !== 'object' || typeof d.t !== 'string') return;
     const raw = JSON.stringify(d);
@@ -119,6 +162,7 @@ export class RelayHost {
   }
 
   private drop(id: string): void {
+    this.conn.delete(id);
     if (!this.guests.delete(id)) return;
     this.local.room.disconnect(id);
     this.local.room.quietConns.delete(id);
@@ -149,6 +193,8 @@ export class RelayNet implements NetLike {
   onEvent: (ev: PrivateEvent) => void = () => {};
   onState: () => void = () => {};
   lastAt = 0;
+  /** The host's newest connection (from its messages). */
+  hostConn = '';
 
   constructor(private sock: RelaySocket, public hostId: string, private id: string, private look: () => Look) {}
 
@@ -158,6 +204,7 @@ export class RelayNet implements NetLike {
 
   handle(m: RelayMsg): void {
     if (m.t !== 'msg' || m.from !== this.hostId) return;
+    if (m.cn) this.hostConn = m.cn;
     const d = m.d as { s?: WireView; m?: Record<string, [string, number, number]>; ev?: PrivateEvent };
     if (d.ev) return this.onEvent(d.ev);
     if (!d.s) return;

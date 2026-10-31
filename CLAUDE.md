@@ -30,7 +30,7 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
   live room (`?fakeroom`): join, move, bark, start a run, host leaves.
 - `npm run test:online`: online rooms in real browsers, several players each in their own
   profile, the relay as two instances (memory, and real Redis if `redis-server` exists), host
-  frozen / dropped / leaving / closed. Boots its own servers. Run it after any change to
+  frozen / dropped / leaving / closed / holding a dead socket. Boots its own servers. Run it after any change to
   `src/client/{online,relay}.ts` or `api/`. `tests/relay.test.ts` covers the relay alone.
 - `npm run probe`: one blocking call, one JSON report. Boots the server with a fast clock
   (`TIMESCALE`) and `AUTOPILOT=1` (human seats herd with the bot brain), opens a laptop, a friend

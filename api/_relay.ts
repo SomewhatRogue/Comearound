@@ -35,8 +35,10 @@ export interface Sock {
   send(data: string): void;
   close(code?: number): void;
   on(ev: 'message', fn: (data: unknown) => void): void;
-  on(ev: 'close', fn: () => void): void;
+  on(ev: 'close' | 'pong', fn: () => void): void;
   readyState: number;
+  ping?(): void;
+  terminate?(): void;
 }
 
 const HOST_TTL = 30;
@@ -46,11 +48,15 @@ const ROOM = /^[A-Z0-9]{3,12}$/;
 const ID = /^[\w-]{6,64}$/;
 const MAX_MSG = 64_000;
 
-type Conn = { sock: Sock; id: string; room: string; host: boolean; touchedAt: number };
-type Envelope = { k: 'msg'; from: string; to: string; d: unknown; o: string } | { k: 'hosted' | 'left'; id: string; o: string };
+type Conn = { sock: Sock; id: string; room: string; host: boolean; touchedAt: number; nonce: string; alive: boolean };
+/** `cn`: the sender's connection, so a player can tell a stale goodbye (an old connection) from a real one. */
+type Envelope = { k: 'msg'; from: string; to: string; d: unknown; o: string; cn: string } | { k: 'hosted' | 'left'; id: string; o: string; cn?: string };
 
 const hostKey = (room: string) => `cb:host:${room}`;
 const seenKey = (room: string) => `cb:seen:${room}`;
+/** The newest connection of a player: a dead old one that closes late mustn't say they left. */
+const connKey = (room: string, id: string) => `cb:conn:${room}:${id}`;
+const log = (o: Record<string, unknown>) => console.log(JSON.stringify({ relay: 1, ...o }));
 const chan = (room: string) => `cb:room:${room}`;
 
 export class Relay {
@@ -69,7 +75,9 @@ export class Relay {
     const id = url.searchParams.get('id') ?? '';
     const want = url.searchParams.get('want') ?? 'join';
     if (!ROOM.test(room) || !ID.test(id)) return sock.close(4000);
-    const c: Conn = { sock, id, room, host: false, touchedAt: 0 };
+    const c: Conn = { sock, id, room, host: false, touchedAt: 0, nonce: Math.random().toString(36).slice(2, 10), alive: true };
+    await this.b.store.set(connKey(room, id), c.nonce, 3600);
+    log({ ev: 'join', room, id: id.slice(0, 8), want, inst: this.origin });
     let set = this.rooms.get(room);
     if (!set) {
       this.rooms.set(room, (set = new Set()));
@@ -77,7 +85,19 @@ export class Relay {
     }
     set.add(c);
     sock.on('message', (data) => void this.fromPlayer(c, String(data)));
-    sock.on('close', () => void this.gone(c));
+    sock.on('close', () => {
+      clearInterval(beat);
+      void this.gone(c);
+    });
+    // A phone can vanish without closing its socket: ping it, and drop it if it stops answering.
+    sock.on('pong', () => (c.alive = true));
+    const beat = setInterval(() => {
+      if (!c.alive) return void (sock.terminate ? sock.terminate() : sock.close());
+      c.alive = false;
+      try {
+        sock.ping?.();
+      } catch { /* closing */ }
+    }, 15000);
     this.tell(c, { t: 'info', shared: this.b.shared });
     await this.decide(c, want);
   }
@@ -97,6 +117,7 @@ export class Relay {
         holder = id;
       }
     } else if (holder && holder !== id && (await this.stale(room))) holder = null;
+    log({ ev: 'decide', room, id: id.slice(0, 8), want, holder: holder ? holder.slice(0, 8) : null });
     if (holder === id) return this.becomeHost(c);
     if (holder) return this.tell(c, { t: 'role', role: 'guest', host: holder });
     this.tell(c, { t: 'nohost' });
@@ -111,7 +132,7 @@ export class Relay {
     c.host = true;
     await this.touch(c, true);
     this.tell(c, { t: 'role', role: 'host' });
-    await this.send(c.room, { k: 'hosted', id: c.id, o: this.origin });
+    await this.send(c.room, { k: 'hosted', id: c.id, o: this.origin, cn: c.nonce });
   }
 
   /** The host is alive: keep its claim and its last-seen time fresh (at most every 2 s). */
@@ -129,10 +150,13 @@ export class Relay {
     } catch {
       return;
     }
+    c.alive = true;
+    // The game's own heartbeat: answered here, never relayed.
+    if ((m as { ping?: unknown }).ping) return this.tell(c, { t: 'pong' });
     const to = typeof m.to === 'string' ? m.to : '';
     if (!to) return;
     void this.touch(c);
-    await this.send(c.room, { k: 'msg', from: c.id, to, d: m.d, o: this.origin });
+    await this.send(c.room, { k: 'msg', from: c.id, to, d: m.d, o: this.origin, cn: c.nonce });
   }
 
   /** Deliver to this instance's sockets, then tell the other instances. */
@@ -154,9 +178,9 @@ export class Relay {
   private deliver(room: string, env: Envelope): void {
     for (const c of this.rooms.get(room) ?? []) {
       if (env.k === 'msg') {
-        if (c.id !== env.from && (env.to === '*' || env.to === c.id)) this.tell(c, { t: 'msg', from: env.from, d: env.d });
+        if (c.id !== env.from && (env.to === '*' || env.to === c.id)) this.tell(c, { t: 'msg', from: env.from, d: env.d, cn: env.cn });
       } else if (c.id !== env.id) {
-        this.tell(c, { t: env.k, id: env.id });
+        this.tell(c, { t: env.k, id: env.id, cn: env.cn });
         // Someone else hosts now: a host here that was replaced (it was away too long) steps down.
         if (env.k === 'hosted' && c.host) {
           c.host = false;
@@ -169,8 +193,14 @@ export class Relay {
   private async gone(c: Conn): Promise<void> {
     const set = this.rooms.get(c.room);
     set?.delete(c);
-    if (c.host && (await this.b.store.get(hostKey(c.room))) === c.id) await this.b.store.del(hostKey(c.room));
-    await this.send(c.room, { k: 'left', id: c.id, o: this.origin });
+    // Only the player's newest connection may say they left (and give up the room).
+    const newest = (await this.b.store.get(connKey(c.room, c.id))) === c.nonce;
+    log({ ev: 'gone', room: c.room, id: c.id.slice(0, 8), host: c.host, newest });
+    if (newest) {
+      await this.b.store.del(connKey(c.room, c.id));
+      if (c.host && (await this.b.store.get(hostKey(c.room))) === c.id) await this.b.store.del(hostKey(c.room));
+      await this.send(c.room, { k: 'left', id: c.id, o: this.origin, cn: c.nonce });
+    }
     if (set && !set.size) {
       this.rooms.delete(c.room);
       await this.b.bus.unsubscribe(chan(c.room));

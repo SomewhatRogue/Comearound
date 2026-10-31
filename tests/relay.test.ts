@@ -126,6 +126,37 @@ for (const be of backends) {
       [host, ava].forEach((p) => p.close());
     });
 
+    it("a player's old connection closing late (after they reconnected) doesn't say they left", async () => {
+      const room = code();
+      const host = player(A.port, room, 'kyle-0006', 'host');
+      await host.until((m) => m.t === 'role' && m.role === 'host');
+      const sam = player(B.port, room, 'sam-00006', 'join');
+      await sam.until((m) => m.t === 'role');
+      // The host's phone comes back: a new connection first, the dead old one closes afterwards.
+      const host2 = player(B.port, room, 'kyle-0006', 'host');
+      await host2.until((m) => m.t === 'role' && m.role === 'host');
+      host.close();
+      await wait(500);
+      expect(sam.msgs.some((m) => m.t === 'left')).toBe(false);
+      // And the room is still the host's: a joiner is sent to them.
+      const ava = player(A.port, room, 'ava-00006', 'join');
+      expect(await ava.until((m) => m.t === 'role')).toMatchObject({ role: 'guest', host: 'kyle-0006' });
+      [host2, sam, ava].forEach((p) => p.close());
+    });
+
+    it('answers the heartbeat without relaying it', async () => {
+      const room = code();
+      const host = player(A.port, room, 'kyle-0007', 'host');
+      await host.until((m) => m.t === 'role');
+      const sam = player(A.port, room, 'sam-00007', 'join');
+      await sam.until((m) => m.t === 'role');
+      sam.ws.send('{"ping":1}');
+      await sam.until((m) => m.t === 'pong');
+      await wait(200);
+      expect(host.msgs.some((m) => m.t === 'msg')).toBe(false);
+      [host, sam].forEach((p) => p.close());
+    });
+
     it("a friend who opened the code never takes the room, even when its host is away", async () => {
       const room = code();
       const sam = player(A.port, room, 'sam-00005', 'join');

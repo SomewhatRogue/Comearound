@@ -92,7 +92,8 @@ export class Online {
         return;
       case 'left':
         this.host?.handle(m);
-        if (this.guest && m.id === this.guest.hostId) this.hostGone();
+        // A goodbye from the host's old connection (it has already reconnected) isn't the host leaving.
+        if (this.guest && m.id === this.guest.hostId && !(m.cn && this.guest.hostConn && m.cn !== this.guest.hostConn)) this.hostGone();
         return;
       case 'msg':
         this.host?.handle(m);
@@ -150,9 +151,10 @@ export class Online {
     this.set('waiting');
     if (this.joiner) return;
     clearTimeout(this.takeTimer);
+    // Give a host who's only reconnecting (a phone back from the background) time to come back first.
     this.takeTimer = window.setTimeout(() => {
       if (this.state === 'waiting' && this.mode === 'friends') this.sock?.reconnect('take');
-    }, 800 + Math.random() * 2500);
+    }, 6000 + Math.random() * 3000);
   }
 
   private dropGuest(): void {

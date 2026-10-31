@@ -19,7 +19,9 @@ const procs = [];
 const only = (k) => !process.env.ONLY || process.env.ONLY === k;
 
 function serve(port, env) {
-  const p = spawn(path.join(ROOT, 'node_modules/.bin/tsx'), ['src/server/node-dev.ts'], { cwd: ROOT, env: { ...process.env, PORT: String(port), ...env }, stdio: 'ignore' });
+  // RELAY_LOG=dir keeps each server's relay log (joins, roles, goodbyes) for debugging.
+  const out = process.env.RELAY_LOG ? require('fs').openSync(path.join(process.env.RELAY_LOG, `relay-${port}.log`), 'w') : 'ignore';
+  const p = spawn(path.join(ROOT, 'node_modules/.bin/tsx'), ['src/server/node-dev.ts'], { cwd: ROOT, env: { ...process.env, PORT: String(port), ...env }, stdio: ['ignore', out, out] });
   procs.push(p);
 }
 async function up(port) {
@@ -38,8 +40,10 @@ const FREEZE = () => {
   window.__sockets = [];
   window.WebSocket = class extends W {
     constructor(...a) { super(...a); window.__sockets.push(this); }
-    set onmessage(f) { super.onmessage = (e) => { if (!window.__frozen) f(e); }; }
+    // __zombie: this socket looks open but is dead both ways (a phone back from the background).
+    set onmessage(f) { super.onmessage = (e) => { if (!window.__frozen && !this.__zombie) f(e); }; }
     get onmessage() { return super.onmessage; }
+    send(d) { if (!this.__zombie) super.send(d); }
   };
 };
 
@@ -86,6 +90,8 @@ const FREEZE = () => {
       return p;
     };
     const asGuest = (p, ms = 40000) => p.waitForFunction(() => window.__party.state === 'guest' && window.__GAME_STATE__.me, null, { timeout: ms });
+    // The host's view catches up a moment after the friend's: wait for it before reading who's in.
+    const hostHas = (h, n) => h.waitForFunction((k) => window.__party.friends === k && (window.__GAME_STATE__.pub?.dogs ?? []).filter((d) => !d.bot && d.connected).length === k + 1, n, { timeout: 15000 }).catch(() => {});
     const steer = async (h, f, name) => {
       const x = () => h.evaluate((n) => [...window.__solo_room.dogs.values()].find((d) => d.look.name === n).x, name);
       const before = await x();
@@ -107,6 +113,7 @@ const FREEZE = () => {
       const f2 = await joinByCode(port, 'Ava', code);
       await Promise.all([asGuest(f1), asGuest(f2)]);
       await h.waitForFunction(() => window.__party.friends === 2, null, { timeout: 15000 });
+      await hostHas(h, 2);
       s.hostSees = await humans(h);
       s.friendsSee = [await humans(f1), await humans(f2)];
       s.friendMoved = await steer(h, f2, 'Ava');
@@ -138,6 +145,7 @@ const FREEZE = () => {
       await h.evaluate(() => (window.__frozen = false));
       const back = Date.now();
       await asGuest(f, 30000);
+      await hostHas(h, 1);
       const c = { friendWhileHostAway: whileAway, joinedAfterHostCameBackSec: +((Date.now() - back) / 1000).toFixed(1), together: await humans(h) };
       c.ok = ['connecting', 'waiting'].includes(whileAway) && c.together === 'Kyle,Sam';
       report.scenarios['C: host frozen when the friend joins, then back'] = c;
@@ -151,10 +159,29 @@ const FREEZE = () => {
       await h.evaluate(() => window.__sockets.forEach((w) => w.close()));
       const f = await joinByLink(PORT_MEM, 'Sam', code);
       await asGuest(f, 30000);
+      await hostHas(h, 1);
       const e = { hostState: await state(h), together: await humans(h) };
       e.ok = e.hostState === 'host' && e.together === 'Kyle,Sam';
       report.scenarios['E: host connection dropped, reconnects, friend joins'] = e;
       note(`E: ${JSON.stringify(e)}`);
+      await Promise.all([h, f].map((p) => p.context().close().catch(() => {})));
+    }
+
+    // G: the host's phone comes back holding a dead socket (looks open, nothing gets through). The
+    // friend opens the code meanwhile; the host's heartbeat notices, it reconnects, the friend gets in.
+    if (only('G')) {
+      const { p: h, code } = await host(PORT_MEM, 'Kyle');
+      await h.evaluate(() => window.__sockets.forEach((w) => (w.__zombie = true)));
+      const f = await joinByLink(PORT_MEM, 'Sam', code);
+      const t = Date.now();
+      await asGuest(f, 40000);
+      await h.waitForFunction(() => window.__party.state === 'host' && window.__party.friends === 1, null, { timeout: 25000 }).catch(() => {});
+      await hostHas(h, 1);
+      const g = { joinedAfterSec: +((Date.now() - t) / 1000).toFixed(1), hostState: await state(h), together: await humans(h) };
+      g.debug = { hostDogs: await h.evaluate(() => [...window.__solo_room.dogs.values()].map((d) => `${d.look.name}:${d.connected ? 'on' : 'off'}:${d.bot ? 'bot' : ''}`).join(' ')), friends: await h.evaluate(() => window.__party.friends), hostSockets: await h.evaluate(() => window.__sockets.map((w) => w.readyState + (w.__zombie ? 'z' : '')).join(',')), samSockets: await f.evaluate(() => window.__sockets.map((w) => w.readyState).join(',')), samState: await state(f), samSees: await humans(f) };
+      g.ok = g.hostState === 'host' && g.together === 'Kyle,Sam';
+      report.scenarios['G: host holding a dead socket, heartbeat reconnects it, friend joins'] = g;
+      note(`G: ${JSON.stringify(g)}`);
       await Promise.all([h, f].map((p) => p.context().close().catch(() => {})));
     }
 
@@ -176,6 +203,7 @@ const FREEZE = () => {
       await hp2.goto(`http://127.0.0.1:${PORT_MEM}/?lowfx&norender&name=Kyle&room=${code}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
       await hp2.waitForFunction(() => window.__party?.state === 'host', null, { timeout: 20000 });
       await asGuest(f, 30000);
+      await hostHas(hp2, 1);
       const fr = { friendBeforeHost: friendFirst, together: await humans(hp2) };
       fr.ok = friendFirst === 'waiting' && fr.together === 'Kyle,Sam';
       report.scenarios['F: friend waits for a closed host, host reopens their link'] = fr;

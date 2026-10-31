@@ -2,6 +2,30 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (evening): a phone host that leaves to send the link (Claude Opus 5.5)
+
+Kyle hosted from his phone, tapped Share, sent the link from Messages and came back; his friend
+never got in, by link or by typed code. Kyle's read, which matches: leaving the game for the
+texting app quietly killed the host's connection, and coming back didn't revive it. iOS can hand
+back a socket that still says "open" but carries nothing, so the relay kept the room with a host
+nobody could reach.
+
+- **Heartbeat on every socket.** Each player pings the relay every 4 s (`{ping:1}`, answered with
+  a pong and never relayed); 10 s without hearing anything means reconnect. Coming back on screen
+  (visibilitychange, pageshow, online) pings at once and reconnects if there's no answer in 2.5 s,
+  so a phone back from Messages is live again in a few seconds. The relay pings each socket every
+  15 s and drops ones that stop answering.
+- **Only a player's newest connection can say goodbye.** A dead old socket that closes late used
+  to announce "left" and give up the room after the player had already reconnected. The relay
+  keeps the newest connection per player (`cb:conn:ROOM:ID`) and only that one may publish "left"
+  or drop the host claim; messages carry the connection id so clients ignore a stale goodbye too.
+- **Relay logs** (one JSON line per join, decision and goodbye) show in Vercel's runtime logs.
+- **Tests:** `tests/relay.test.ts` adds a late close from an old connection and the heartbeat;
+  `npm run test:online` adds (G) the host holding a dead socket when the friend joins. Two
+  timing waits in the browser test now wait for the host's own view to catch up before reading
+  it (the room has the friend a tick before the drawn view does). Full suite green four times in
+  a row.
+
 ## 2026-10-31 (afternoon, later): online rooms through a Vercel relay, per Vercel's docs (Claude Opus 5.5)
 
 Online play had never once connected on Kyle's real devices (same Wi-Fi, screens on), while a
