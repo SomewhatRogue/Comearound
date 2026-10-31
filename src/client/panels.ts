@@ -48,6 +48,13 @@ export class Panels {
     });
   }
 
+  /** Fold the lobby panel away (to practise) or open it again. */
+  fold(on: boolean): void {
+    if (this.collapsed === on) return;
+    this.collapsed = on;
+    this.keys.lobby = '';
+  }
+
   /** Draw the panels afresh (the friends list changed, or you joined someone's game). */
   refresh(): void {
     this.keys = { lobby: '', modal: '' };
@@ -158,7 +165,9 @@ export class Panels {
       : this.party
         ? this.party.html(pub, me)
         : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
-    const touchTip = document.body.classList.contains('touch') ? '<p class="touch-tip">Drag anywhere on the field to move; drag further, past the ring, to sprint. Tap <b>Practise</b> to fold this away and try the buttons.</p>' : '';
+    const touchTip = document.body.classList.contains('touch')
+      ? '<p class="touch-tip">Tap a dog to give it a pat. Drag on the field (or tap <b>Practise</b>) to go and run at the flock; drag past the ring to sprint.</p>'
+      : '<p class="touch-tip">Click a dog to give it a pat. Walk off (WASD) or press <b>Practise</b> to go and run at the flock.</p>';
     const best = this.bests.gentle || this.bests.tricky || this.bests.wild || this.bests.challenge ? `<p class="quiet">Your best runs: Gentle <b>${this.bests.gentle}</b> &middot; Tricky <b>${this.bests.tricky}</b> &middot; Wild <b>${this.bests.wild}</b> &middot; Challenge <b>${this.bests.challenge}</b></p>` : '';
     return `<button class="chip fold" data-act="fold">Practise</button><h2>Come Bye!</h2>${roomLine}
       <label>Your dog's name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>${touchTip}

@@ -246,8 +246,9 @@ export function followCamera(stage: Stage, x: number, z: number, dt: number, clo
   // `dress` is the dog's size, so a chihuahua gets a closer look than a malinois.
   if (dress) {
     const k = 0.45 + 0.55 * dress;
-    const back = (portrait ? 5.6 : 4.4) * k;
-    const want = new THREE.Vector3(x, (portrait ? 2.6 : 2.2) * k, z + back);
+    // Wide enough that the dogs either side of yours in the lobby's row show too.
+    const back = portrait ? 9.5 * (0.6 + 0.4 * dress) : 5.4 * k;
+    const want = new THREE.Vector3(x, portrait ? 4 * (0.6 + 0.4 * dress) : 2.5 * k, z + back);
     stage.camera.position.lerp(want, 1 - Math.exp(-dt * 3));
     stage.camera.lookAt(stage.camera.position.x, 0.5 * k, stage.camera.position.z - back);
     return;

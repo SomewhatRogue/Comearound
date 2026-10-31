@@ -22,6 +22,8 @@ export class Input {
   onBark = () => {};
   onEscape = () => {};
   onMute = () => {};
+  /** A quick tap on the field (no drag), at these screen coordinates: pets a dog in the lobby. */
+  onTap: (x: number, y: number) => void = () => {};
   /** Called whenever movement or posture input changes (so it reaches the room without waiting for a frame). */
   onChange = () => {};
   /** For the on-screen diagnostics. */
@@ -42,7 +44,7 @@ export class Input {
    * Never compare ids to zero: iOS hands out touch identifiers that can be negative, and an
    * `id >= 0` test once made every drag on an iPhone count as "not held".
    */
-  private stick: { id: string | null; ox: number; oz: number; x: number; z: number; full: boolean } = { id: null, ox: 0, oz: 0, x: 0, z: 0, full: false };
+  private stick: { id: string | null; ox: number; oz: number; x: number; z: number; full: boolean; at: number; far: number } = { id: null, ox: 0, oz: 0, x: 0, z: 0, full: false, at: 0, far: 0 };
   private touchCrouch = false;
 
   constructor() {
@@ -115,7 +117,7 @@ export class Input {
       // Only a focused text field needs letting go of; blurring anything else can blur the window.
       const focused = document.activeElement as HTMLElement | null;
       if (focused?.tagName === 'INPUT') focused.blur();
-      Object.assign(this.stick, { id, ox: x, oz: y, x: 0, z: 0, full: false });
+      Object.assign(this.stick, { id, ox: x, oz: y, x: 0, z: 0, full: false, at: performance.now(), far: 0 });
       base.style.left = `${x}px`;
       base.style.top = `${y}px`;
       base.classList.add('on');
@@ -127,6 +129,7 @@ export class Input {
       let x = cx - this.stick.ox;
       let z = cy - this.stick.oz;
       const l = Math.hypot(x, z);
+      this.stick.far = Math.max(this.stick.far, l);
       if (l > R) [x, z] = [(x / l) * R, (z / l) * R];
       knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${z}px))`;
       const m = Math.min(1, l / R);
@@ -143,6 +146,8 @@ export class Input {
       this.stick.id = null;
       base.classList.remove('on', 'sprint');
       this.update();
+      // Quick and barely moved: a tap, not a drag.
+      if (performance.now() - this.stick.at < 350 && this.stick.far < 14) this.onTap(this.stick.ox, this.stick.oz);
     };
     const opts = { passive: false } as const;
     zone.addEventListener('touchstart', (e) => {

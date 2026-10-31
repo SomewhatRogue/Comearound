@@ -11,6 +11,7 @@ import { gateOf, inMud, inPen, outOfField, type FieldDef } from '../shared/field
 import { DOG, GOAT, HAZARD, SHEEP, WEATHER } from '../shared/tuning';
 import { hazardForces } from './hazards';
 import { isDown } from './dogs';
+import { inLineup } from './lobby';
 import { clampLen, collide, separate } from './physics';
 import type { Room, Sheep } from './state';
 
@@ -35,7 +36,8 @@ export function isPenned(field: FieldDef, s: { x: number; z: number; team: 0 | 1
 }
 
 export function tickFlock(room: Room, dt: number): void {
-  const dogs = [...room.dogs.values()].filter((d) => !d.spectator);
+  // Dogs standing in the lobby's row are only waiting: the sheep pay them no attention.
+  const dogs = [...room.dogs.values()].filter((d) => !d.spectator && !inLineup(room, d));
   const flock = room.sheep;
   const before = flock.map((s) => ({ x: s.x, z: s.z }));
   const pennedNow = flock.map((s) => isPenned(room.field, s));
@@ -209,7 +211,9 @@ export function tickFlock(room: Room, dt: number): void {
   const live = flock.filter((s) => !s.lost);
   for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) separate(live[i], live[j], SHEEP.radius * 2);
   // Sheep give way to dogs entirely (a dog can stand in a gap and block it).
-  for (const s of live) for (const d of dogs) separate(s, d, SHEEP.radius + DOG.radius, 1);
+  // (Dogs waiting in the lobby's row included: sheep don't fear them, but don't walk through them.)
+  const bodies = [...room.dogs.values()].filter((d) => !d.spectator);
+  for (const s of live) for (const d of bodies) separate(s, d, SHEEP.radius + DOG.radius, 1);
   // Being shoved never puts a sheep through a fence.
   flock.forEach((s, i) => {
     if (s.lost) return;

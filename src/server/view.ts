@@ -6,6 +6,7 @@ import type { PrivateView, PublicView } from '../shared/protocol';
 import { isDown } from './dogs';
 import { isPenned } from './flock';
 import { goatPenned } from './goat';
+import { inLineup } from './lobby';
 import { penCounts } from './round';
 import type { Dog, Room } from './state';
 
@@ -23,6 +24,7 @@ export function publicView(room: Room): PublicView {
     dogs: [...room.dogs.values()].map((d) => ({
       id: d.id, look: d.look, team: d.team, x: r2(d.x), z: r2(d.z), rot: r2(d.rot), posture: d.posture,
       down: isDown(d), frozen: d.frozen > 0, cower: d.cower > 0, barks: d.barks, bot: !!d.bot, connected: d.connected || !!d.bot, spectator: d.spectator,
+      lineup: inLineup(room, d), pets: d.pets,
     })),
     sheep: room.sheep.map((s) => ({ id: s.id, x: r2(s.x), z: r2(s.z), rot: r2(s.rot), fear: r2(s.fear), team: s.team, penned: !s.lost && isPenned(room.field, s), lost: s.lost })),
     goats: room.goats.map((g) => ({ id: g.id, x: r2(g.x), z: r2(g.z), rot: r2(g.rot), mood: g.mood, annoy: r2(g.annoy), target: g.target, bleats: g.bleats, penned: goatPenned(room, g) })),

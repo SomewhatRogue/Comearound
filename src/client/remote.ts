@@ -17,7 +17,8 @@ import type { NetLike } from './net';
 const MAX_GUESTS = 7;
 const SEND_MS = 66;
 
-type Guest = { inKey: string; bk: number; lookKey: string };
+/** A guest as last heard: input, bark and pat counters, look, and whether they are practising. */
+type Guest = { inKey: string; bk: number; lookKey: string; pr: boolean; pt: number };
 
 export class HostEnd {
   readonly guests = new Map<string, Guest>();
@@ -61,7 +62,7 @@ export class HostEnd {
     let g = this.guests.get(p.peer);
     if (!g) {
       if (this.guests.size >= MAX_GUESTS) return;
-      g = { inKey: '', bk: Number(pr.bk) || 0, lookKey: JSON.stringify(look) };
+      g = { inKey: '', bk: Number(pr.bk) || 0, lookKey: JSON.stringify(look), pr: false, pt: Array.isArray(pr.pt) ? Number((pr.pt as unknown[])[1]) || 0 : 0 };
       this.guests.set(p.peer, g);
       this.local.room.quietConns.add(p.peer);
       this.local.room.connect(p.peer);
@@ -77,6 +78,16 @@ export class HostEnd {
     const bk = Number(pr.bk) || 0;
     if (bk > g.bk) this.say(p.peer, { t: 'bark' });
     g.bk = Math.max(g.bk, bk);
+    const practise = Number(pr.pr) === 1;
+    if (practise !== g.pr) {
+      g.pr = practise;
+      this.say(p.peer, { t: 'practise', on: practise });
+    }
+    const pt = Array.isArray(pr.pt) ? (pr.pt as unknown[]) : null;
+    if (pt && Number(pt[1]) > g.pt) {
+      g.pt = Number(pt[1]);
+      this.say(p.peer, { t: 'pet', id: String(pt[0]) });
+    }
     const lookKey = JSON.stringify(look);
     if (lookKey !== g.lookKey) {
       g.lookKey = lookKey;
@@ -125,6 +136,7 @@ export class RemoteNet implements NetLike {
   /** The host left or went quiet. */
   onGone: () => void = () => {};
   private bk = 0;
+  private pt = 0;
   private lastSeq = 0;
   private lastAt = performance.now();
   private seen: unknown = null;
@@ -169,7 +181,7 @@ export class RemoteNet implements NetLike {
 
   send(m: ClientMsg): void {
     const r = (n: number) => Math.round(n * 100) / 100;
-    const patch = m.t === 'input' ? { in: [r(m.dx), r(m.dz), m.sprint ? 1 : 0, m.crouch ? 1 : 0] } : m.t === 'bark' ? { bk: ++this.bk } : m.t === 'look' ? { look: m.look } : null;
+    const patch = m.t === 'input' ? { in: [r(m.dx), r(m.dz), m.sprint ? 1 : 0, m.crouch ? 1 : 0] } : m.t === 'bark' ? { bk: ++this.bk } : m.t === 'look' ? { look: m.look } : m.t === 'practise' ? { pr: m.on ? 1 : 0 } : m.t === 'pet' ? { pt: [m.id, ++this.pt] } : null;
     if (patch) void this.named.presence(patch).catch(() => {});
   }
 

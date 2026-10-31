@@ -17,6 +17,10 @@ export type ClientMsg =
   | { t: 'input'; dx: number; dz: number; sprint: boolean; crouch: boolean }
   | { t: 'bark' }
   | { t: 'look'; look: Look }
+  /** Lobby: run free at the practice flock (true), or go back and stand in the pack's row. */
+  | { t: 'practise'; on: boolean }
+  /** Lobby: give a dog a pat. */
+  | { t: 'pet'; id: string }
   | { t: 'start'; mode: Mode; fillBots: boolean; course?: CourseId }
   | { t: 'toLobby' }
   /** Host only: skip the rest of this field. */
@@ -41,6 +45,10 @@ export interface DogPub {
   bot: boolean;
   connected: boolean;
   spectator: boolean;
+  /** Lobby: standing in the pack's row (not practising). */
+  lineup: boolean;
+  /** Pats received: counts up, so each pat shows its hearts once. */
+  pets: number;
 }
 
 export interface SheepPub {

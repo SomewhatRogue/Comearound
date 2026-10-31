@@ -2,6 +2,33 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (late evening, later): the lobby pack (Claude Opus 5.5)
+
+Kyle: practising in the lobby is good, but he likes seeing the other dogs join; stop them moving
+there, give them idle animations, let you pet them, and show outfits changing.
+
+- **The lobby has a row.** Every dog that isn't practising stands in a row across the lower left
+  of The Meadow, facing the camera, in join order (`src/server/lobby.ts`). The room walks dogs to
+  their spot, so a friend who joins trots in from the corner and a dog done practising trots back.
+  Steering does nothing while you stand in the row. Sheep ignore dogs in the row (they still
+  bump into them rather than walking through).
+- **Practising is the panel folded.** Fold it (Practise), or just start steering, and your dog
+  runs free at the flock; open the panel and it trots back. Coming back from a run, everyone
+  gathers in the row with the panel open. New message `{t:'practise', on}`.
+- **Pats.** Tap (phone) or click (laptop) a dog in the lobby: hearts rise off it, it wiggles, tilts
+  its head and wags fast, everyone sees it, and its owner gets "Kyle gave you a pat". New message
+  `{t:'pet', id}`, at most one every 0.45 s per player; `DogPub.pets` counts up so each pat shows
+  once. Relay guests and the Claude artifact's live room pass both new messages to the host.
+- **Waiting dogs get up to things** (client-side, cosmetic): breathing, looking about, sitting,
+  lying down, now and then a play bow. **A new outfit poofs**: a ring in the collar colour, a hop
+  and a poof sound.
+- **Cameras.** The close-up while dressing pulls back a little so the dogs either side show; on
+  a phone held upright it pulls back further (the screen is narrow).
+- **Tests:** four room tests (the row, practising and back, sheep ignoring the row, pats and
+  their rate limit and toast); the browser online test now has a friend's pat reach the room.
+  The lightning test asserted every sheep panicked, which only held by luck of where the strike
+  landed; it now checks the sheep within the strike's reach.
+
 ## 2026-10-31 (late evening): phones, upright first; no sprint button (Claude Opus 5.5)
 
 Kyle: sideways "almost doesn't work as well"; upright plays better. And the SPRINT button is

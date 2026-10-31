@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COURSES, TRIALS, VERSUS, inPen, inWater } from '../src/shared/field';
-import { GOAT } from '../src/shared/tuning';
+import { GOAT, WEATHER } from '../src/shared/tuning';
 import { makeBrain } from '../src/server/bots';
 import { isPenned } from '../src/server/flock';
 import { GameRoom } from '../src/server/game';
@@ -355,7 +355,11 @@ describe('hazards, wind and weather', () => {
     h.room.weather.nextFlash = 0;
     h.run(0.1);
     expect(h.room.weather.flashes).toBe(1);
-    expect(h.room.sheep.every((s) => s.fear > 0.8 || s.lost)).toBe(true);
+    // Every sheep within the strike's reach panics (and there are some).
+    const { fx, fz } = h.room.weather;
+    const near = h.room.sheep.filter((s) => !s.lost && Math.hypot(s.x - fx, s.z - fz) < WEATHER.strikeRadius - 1);
+    expect(near.length).toBeGreaterThan(0);
+    expect(near.every((s) => s.fear > 0.8)).toBe(true);
     expect(h.dog(0).cower).toBeGreaterThan(0);
   });
 
@@ -412,5 +416,72 @@ describe('challenge: exact numbers per pen', () => {
     h.run(3);
     expect(h.room.phase).toBe('fieldEnd');
     expect(h.room.fieldScores[0][0].penned).toBe(10);
+  });
+});
+
+describe('the lobby pack', () => {
+  const row = (h: ReturnType<typeof harness>) => [...h.room.dogs.values()].map((d) => [+d.x.toFixed(1), +d.z.toFixed(1)]);
+
+  it('dogs walk to their own spot in the row and stand facing the camera', () => {
+    const h = harness(3);
+    h.run(8);
+    const spots = row(h);
+    const xs = spots.map(([x]) => x).sort((p, q) => p - q);
+    expect(xs[1] - xs[0]).toBeGreaterThan(1.1);
+    expect(xs[2] - xs[1]).toBeGreaterThan(1.1);
+    expect(spots.every(([, z]) => Math.abs(z - 8.5) < 0.15)).toBe(true);
+    for (const d of h.room.dogs.values()) expect(d.rot).toBe(0);
+    // Steering does nothing while you stand in the row.
+    h.say(0, { t: 'input', dx: 1, dz: 0, sprint: false, crouch: false });
+    h.run(1);
+    expect(row(h)).toEqual(spots);
+  });
+
+  it('practising sets your dog free; stopping walks it back to its spot', () => {
+    const h = harness(2);
+    h.run(8);
+    const home = { x: h.dog(0).x, z: h.dog(0).z };
+    h.say(0, { t: 'practise', on: true });
+    h.say(0, { t: 'input', dx: 0, dz: -1, sprint: false, crouch: false });
+    h.run(1.5);
+    expect(home.z - h.dog(0).z).toBeGreaterThan(5);
+    h.say(0, { t: 'practise', on: false });
+    h.run(6);
+    expect(Math.hypot(h.dog(0).x - home.x, h.dog(0).z - home.z)).toBeLessThan(0.2);
+  });
+
+  it('the sheep ignore dogs in the row, but not a practising dog', () => {
+    const h = harness(1);
+    h.run(8);
+    const d = h.dog(0);
+    const s = h.room.sheep[0];
+    // Put the dog right next to a sheep: standing in the row, nothing happens.
+    const fearNear = () => {
+      for (const o of h.room.sheep) Object.assign(o, { fear: 0, vx: 0, vz: 0 });
+      Object.assign(d, { x: s.x - 1.5, z: s.z });
+      h.room.tick(0.05);
+      return s.fear;
+    };
+    expect(fearNear()).toBe(0);
+    h.say(0, { t: 'practise', on: true });
+    expect(fearNear()).toBeGreaterThan(0);
+  });
+
+  it("a pat counts once per pat (not too fast), and tells the dog's owner who it was", () => {
+    const h = harness(2);
+    h.run(1);
+    const target = h.dog(1).id;
+    h.say(0, { t: 'pet', id: target });
+    h.say(0, { t: 'pet', id: target });
+    expect(h.dog(1).pets).toBe(1);
+    h.run(0.6);
+    h.say(0, { t: 'pet', id: target });
+    expect(h.dog(1).pets).toBe(2);
+    expect(h.events(1).filter((e) => e.kind === 'toast' && e.text === 'H0 gave you a pat').length).toBe(2);
+    // Mid-run, no pats.
+    h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+    h.toPlaying();
+    h.say(0, { t: 'pet', id: target });
+    expect(h.dog(1).pets).toBe(2);
   });
 });

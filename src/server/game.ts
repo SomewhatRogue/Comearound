@@ -16,6 +16,7 @@ import { spawnFlock, tickFlock } from './flock';
 import { tickGoats } from './goat';
 import { tickWind } from './wind';
 import { tickWeather } from './weather';
+import { ARRIVE, pet, setPractising, tickLobby } from './lobby';
 import { endField, startRun, tickRound } from './round';
 import { activeDogs, type Dog, type Room } from './state';
 import { privateView, publicView } from './view';
@@ -104,6 +105,12 @@ export class GameRoom implements Room {
       case 'look':
         if (this.phase === 'lobby') d.look = cleanLook(m.look);
         break;
+      case 'practise':
+        setPractising(this, d, !!m.on);
+        break;
+      case 'pet':
+        pet(this, d, this.dogs.get(String(m.id)));
+        break;
       case 'start':
         if (d.id === this.hostId && (this.phase === 'lobby' || this.phase === 'results')) {
           this.course = m.course === 'tricky' || m.course === 'wild' || m.course === 'challenge' ? m.course : 'gentle';
@@ -124,9 +131,8 @@ export class GameRoom implements Room {
     if (!d) {
       d = blankDog(`p${this.nextId++}`, String(token).slice(0, 64), cleanLook(look));
       d.spectator = this.phase !== 'lobby' && this.phase !== 'results';
-      // Lobby: start where field 1 starts, behind the practice flock.
-      d.x = this.rng.range(-16, -14);
-      d.z = this.rng.range(-4, 4);
+      // Lobby: appear at the meadow's corner and trot over to the pack's row.
+      [d.x, d.z] = [ARRIVE.x, ARRIVE.z];
       this.dogs.set(d.id, d);
     }
     d.connected = true;
@@ -163,7 +169,7 @@ export class GameRoom implements Room {
   private toLobby(): void {
     for (const [id, d] of this.dogs) {
       if (d.bot || !d.connected) this.dogs.delete(id);
-      else Object.assign(d, { spectator: false, frozen: 0, auto: null });
+      else Object.assign(d, { spectator: false, frozen: 0, auto: null, practising: false });
     }
     this.goats = [];
     this.field = TRIALS[0];
@@ -178,6 +184,7 @@ export class GameRoom implements Room {
     this.clock += dt;
     this.realClock += realDt;
     this.sweep();
+    tickLobby(this);
     if (this.phase === 'playing') {
       for (const d of this.dogs.values()) if ((d.bot || d.auto) && !d.spectator) tickBot(this, d, dt);
     }
@@ -244,5 +251,6 @@ function blankDog(id: string, token: string, look: Look): Dog {
   return {
     id, token, look, team: 0, x: 0, z: 0, dx: 0, dz: 0, rot: 0, wantSprint: false, wantCrouch: false, posture: 'walk', stillFor: 0,
     stamina: DOG.staminaMax, frozen: 0, cower: 0, barkCd: 0, barks: 0, fieldBarks: 0, connected: false, leftAt: 0, spectator: false, bot: null,
+    practising: false, pets: 0, petAt: -9,
   };
 }

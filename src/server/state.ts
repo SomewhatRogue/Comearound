@@ -48,6 +48,11 @@ export interface Dog {
   cower: number;
   /** Test hook (AUTOPILOT): a human seat driven by the bot brain, so probes can watch a real run. */
   auto?: BotBrain | null;
+  /** Lobby: running free at the practice flock, rather than standing in the pack's row. */
+  practising: boolean;
+  /** Pats received (counts up, so every client can show hearts once per pat), and when this dog last gave one. */
+  pets: number;
+  petAt: number;
 }
 
 export interface Sheep {

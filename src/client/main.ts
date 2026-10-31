@@ -4,7 +4,7 @@
  */
 import { fieldById, inMud, inWater } from '../shared/field';
 import { BREEDS, COLLARS, DEFAULT_COAT } from '../shared/looks';
-import type { Look } from '../shared/protocol';
+import type { DogPub, Look, PublicView } from '../shared/protocol';
 import { DOG, HAZARD } from '../shared/tuning';
 import { collide } from '../server/physics';
 import { Entities } from './entities';
@@ -14,11 +14,12 @@ import { LocalNet } from './local';
 import { Online } from './online';
 import { Party, SwitchNet } from './party';
 import { breedScale, dogMesh } from './models';
+import { pickDog } from './lobbypack';
 import { Net, type NetLike } from './net';
 import { audioState, Panels } from './panels';
 import { FieldView, followCamera, glLost, glRestored, makeStage } from './scene';
 import { sfx } from './sfx';
-import { SoundDirector } from './sounds';
+import { PITCH, SoundDirector } from './sounds';
 import { WeatherView } from './weatherview';
 import { Music } from './music';
 import { Minimap } from './minimap';
@@ -72,6 +73,8 @@ const lowfx = params.has('lowfx');
 const stage = makeStage(document.getElementById('game')!, lowfx, isTouch);
 const fieldView = new FieldView(stage, lowfx);
 const entities = new Entities(stage);
+entities.sizeOf = breedScale;
+entities.pitchOf = (b) => PITCH[b] ?? 1;
 const weather = new WeatherView(stage, lowfx);
 const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement);
 const tour = new IntroTour(stage);
@@ -161,6 +164,34 @@ const sendInput = () => {
   sent++;
 };
 input.onChange = sendInput;
+// The lobby: tap (or click) a dog to give it a pat.
+const tryPet = (x: number, y: number) => {
+  if (net.pub?.phase !== 'lobby' || input.blocked) return;
+  const id = pickDog(entities.pos, stage.camera, stage.renderer.domElement, x, y);
+  if (id) net.send({ t: 'pet', id });
+};
+input.onTap = tryPet;
+stage.renderer.domElement.addEventListener('click', (e) => tryPet(e.clientX, e.clientY));
+// Practising is the lobby panel folded away; otherwise your dog stands in the pack's row.
+let practiseSent: boolean | null = null;
+let practiseAt = 0;
+let lastPhase = '';
+function syncPractise(pub: PublicView, me: DogPub, now: number): void {
+  if (pub.phase === 'lobby') {
+    // Back from a run: everyone gathers in the row again, panel open.
+    if (lastPhase && lastPhase !== 'lobby') panels.fold(false);
+    // Steering with the panel open means you want to run about: fold it.
+    if (!panels.collapsed && Math.hypot(input.dx, input.dz) > 0.1) panels.fold(true);
+    const want = panels.collapsed;
+    if (me.lineup === want && (want !== practiseSent || now - practiseAt > 700)) {
+      net.send({ t: 'practise', on: want });
+      [practiseSent, practiseAt] = [want, now];
+      // The stick or keys you're already holding: send them again, now that the room will listen.
+      lastSent = '';
+    }
+  }
+  lastPhase = pub.phase;
+}
 // ?diag: a one-line readout of what the controls and the room are doing (it found the iPhone
 // negative-touch-id bug). Tap it to hide.
 const diag = document.getElementById('diag')!;
@@ -196,7 +227,8 @@ function frame(now: number) {
     // Predict our own run; ease back toward the server so we never drift far from the truth.
     if (!havePrediction) [predicted.x, predicted.z, predicted.rot, havePrediction] = [me.x, me.z, me.rot, true];
     const len = Math.hypot(input.dx, input.dz);
-    const canMove = !me.spectator && !me.frozen && (pub.phase === 'playing' || pub.phase === 'lobby');
+    syncPractise(pub, me, now);
+    const canMove = !me.spectator && !me.frozen && (pub.phase === 'playing' || (pub.phase === 'lobby' && panels.collapsed));
     if (canMove && len > 0.1) {
       const ground = inMud(field, predicted.x, predicted.z) ? HAZARD.mudSlow : inWater(field, predicted.x, predicted.z) ? HAZARD.wadeSlow : 1;
       const speed = (input.crouch ? DOG.crouch : input.sprint && net.me.stamina > 1 ? DOG.sprint : DOG.walk) * ground;
@@ -317,6 +349,14 @@ w.__debug_naughty = (words?: string) => hud.naughty(words);
 w.__music = music;
 w.__stage = stage;
 w.__game_actions__ = { send: (m: Parameters<NetLike['send']>[0]) => net.send(m), predicted: () => ({ ...predicted }) };
+/** Tests: where a dog is on screen (to tap or click it). */
+w.__dogOnScreen = (id: string) => {
+  const p = entities.pos.get(id);
+  if (!p) return null;
+  const v = p.clone().setY(0.55).project(stage.camera);
+  const r = stage.renderer.domElement.getBoundingClientRect();
+  return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+};
 
 /** Art review: every breed in a row, in a pose, with the camera close. `__lineup('crouch')`. */
 w.__lineup = (pose = 'walk') => {

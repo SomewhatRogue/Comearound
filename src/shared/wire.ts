@@ -40,7 +40,7 @@ export function encodeView(v: PublicView): WireView {
     p: v.pens.map((p) => [p.count, p.quota ?? -1, p.closed ? 1 : 0]),
     d: v.dogs.map((d) => [
       d.id, d.look.name, d.look.breed, d.look.coat, d.look.collar, d.look.eyes, d.team, q(d.x), q(d.z), a(d.rot), POSTURES.indexOf(d.posture),
-      (d.down ? 1 : 0) | (d.frozen ? 2 : 0) | (d.cower ? 4 : 0) | (d.bot ? 8 : 0) | (d.connected ? 16 : 0) | (d.spectator ? 32 : 0), d.barks,
+      (d.down ? 1 : 0) | (d.frozen ? 2 : 0) | (d.cower ? 4 : 0) | (d.bot ? 8 : 0) | (d.connected ? 16 : 0) | (d.spectator ? 32 : 0) | (d.lineup ? 64 : 0), d.barks, d.pets,
     ]),
     s: v.sheep.flatMap((s) => [s.id, q(s.x), q(s.z), a(s.rot), Math.round(s.fear * 20), (team(s.team) + 1) | (s.penned ? 4 : 0) | (s.lost ? 8 : 0)]),
     g: v.goats.map((g) => [g.id, q(g.x), q(g.z), a(g.rot), MOODS.indexOf(g.mood), a(g.annoy), g.target, g.bleats, g.penned ? 1 : 0]),
@@ -74,6 +74,7 @@ export function decodeView(w: WireView): PublicView {
         look: { name: d[1] as string, breed: d[2] as Breed, coat: d[3] as string, collar: d[4] as string, eyes: d[5] as string },
         team: d[6] as 0 | 1, x: uq(d[7] as number), z: uq(d[8] as number), rot: ua(d[9] as number), posture: POSTURES[d[10] as number] ?? 'walk',
         down: !!(f & 1), frozen: !!(f & 2), cower: !!(f & 4), bot: !!(f & 8), connected: !!(f & 16), spectator: !!(f & 32), barks: d[12] as number,
+        lineup: !!(f & 64), pets: (d[13] as number) || 0,
       };
     }),
     sheep,

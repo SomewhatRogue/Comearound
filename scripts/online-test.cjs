@@ -121,10 +121,14 @@ const FREEZE = () => {
       s.hostSees = await humans(h);
       s.friendsSee = [await humans(f1), await humans(f2)];
       s.friendMoved = await steer(h, f2, 'Ava');
+      // A pat from a friend reaches the host's room (and everyone sees it).
+      const kyleId = await h.evaluate(() => window.__GAME_STATE__.me.you);
+      await f1.evaluate((id) => window.__game_actions__.send({ t: 'pet', id }), kyleId);
+      s.patSeen = await f2.waitForFunction((id) => window.__GAME_STATE__.pub.dogs.find((d) => d.id === id)?.pets === 1, kyleId, { timeout: 8000 }).then(() => true).catch(() => false);
       await h.click('[data-act="start"]');
       await Promise.all([f1, f2].map((f) => f.waitForFunction(() => window.__GAME_STATE__.pub.phase === 'playing', null, { timeout: 30000 })));
       s.friendsInRun = true;
-      s.ok = s.hostSees === 'Ava,Kyle,Sam' && s.friendsSee.every((v) => v === 'Ava,Kyle,Sam') && s.friendMoved > 1;
+      s.ok = s.hostSees === 'Ava,Kyle,Sam' && s.friendsSee.every((v) => v === 'Ava,Kyle,Sam') && s.friendMoved > 1 && s.patSeen;
       report.scenarios[`${k}: ${label}`] = s;
       note(`${k}: ${JSON.stringify(s)}`);
       if (k === 'A') {

@@ -6,7 +6,7 @@
 import type { DogPub, PrivateView, PublicView } from '../shared/protocol';
 import { sfx } from './sfx';
 
-const PITCH: Record<string, number> = { pug: 1.6, corgi: 1.3, keeshond: 1.1, collie: 1, poodle: 0.95, husky: 0.92, golden: 0.88, malinois: 0.85 };
+export const PITCH: Record<string, number> = { pug: 1.6, corgi: 1.3, keeshond: 1.1, collie: 1, poodle: 0.95, husky: 0.92, golden: 0.88, malinois: 0.85 };
 
 export class SoundDirector {
   private phase = '';

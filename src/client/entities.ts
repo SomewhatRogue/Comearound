@@ -10,6 +10,8 @@ import { fieldById } from '../shared/field';
 import type { DogPub, PublicView } from '../shared/protocol';
 import { DOG, GOAT, SHEEP } from '../shared/tuning';
 import { GoatView } from './goatview';
+import { Hearts, newIdle, patSound, tickIdle, type Idle } from './lobbypack';
+import { sfx } from './sfx';
 import { dogMesh, sheepMesh, type DogRig, type SheepRig } from './models';
 import { TEAM_COLORS, label, type Stage } from './scene';
 
@@ -33,9 +35,13 @@ const POSES: Record<string, Pose> = {
   cower: { y: 0.45, front: 0.1, back: 0.15, head: 0.5, legFold: 0.5, frontLegs: 0.3, backLegs: -0.4, tail: -1.3 },
   // Frozen by the goat's stare: sitting, guilty.
   frozen: { y: 0.85, front: -0.35, back: -0.75, head: 0.15, legFold: 0.8, frontLegs: 0.2, backLegs: -1.2, tail: -1.1 },
+  // Waiting in the lobby: sitting nicely, head up, tail sweeping the grass.
+  sit: { y: 0.85, front: -0.35, back: -0.75, head: -0.15, legFold: 0.8, frontLegs: 0.2, backLegs: -1.2, tail: -0.3 },
+  // A play bow: elbows down, rear up, tail high. Let's play!
+  bow: { y: 0.85, front: 0.4, back: -0.2, head: -0.35, legFold: 0.9, frontLegs: -1.2, backLegs: 0, tail: 0.9 },
 };
 
-interface DogView { rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number }
+interface DogView { rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number }
 interface SheepView { rig: SheepRig; facing: number; phase: number; lastX: number; lastZ: number; speed: number; penned: boolean; hop: number; jitter: number }
 
 export class Entities {
@@ -47,6 +53,7 @@ export class Entities {
   private eyeGeo = new THREE.CircleGeometry(DOG.eyeRange, 24, -Math.PI / 2 - DOG.eyeCone, DOG.eyeCone * 2);
   private calmGeo = new THREE.RingGeometry(DOG.calmRadius - 0.15, DOG.calmRadius, 40);
   private ringGeo = new THREE.RingGeometry(0.85, 1, 40);
+  private hearts: Hearts;
   /** Smoothed render positions, for the HUD (pops) and sounds. */
   readonly pos = new Map<string, THREE.Vector3>();
   /** Fired when a dog barks or the goat bleats, with where (for sounds). */
@@ -54,13 +61,18 @@ export class Entities {
   onBleat: (at: THREE.Vector3) => void = () => {};
 
   constructor(private stage: Stage) {
+    this.hearts = new Hearts();
   }
+  /** Each dog's size and bark pitch (set by main.ts from the breed), for hearts and yips. */
+  sizeOf: (breed: string) => number = () => 1;
+  pitchOf: (breed: string) => number = () => 1;
 
   sync(pub: PublicView, you: string, predicted: { x: number; z: number; rot: number } | null, dt: number, time: number): void {
     const k = 1 - Math.exp(-dt * 14);
     this.syncDogs(pub, you, predicted, dt, k, time);
     this.syncSheep(pub, dt, k, time);
     this.syncGoat(pub, dt, k, time);
+    this.hearts.tick(dt);
     // Expanding rings for barks and bleats.
     for (const r of this.rings) {
       r.t += dt;
@@ -90,11 +102,19 @@ export class Entities {
       seen.add(d.id);
       const key = JSON.stringify(d.look) + d.team + pub.mode;
       let v = this.dogs.get(d.id);
+      // A new outfit (or team): rebuild the dog, with a poof if it was just a change of clothes.
+      let poof = false;
       if (v && v.key !== key) {
+        poof = pub.phase === 'lobby';
         this.removeDog(d.id);
         v = undefined;
       }
       if (!v) v = this.addDog(d, key, you, pub.mode === 'versus');
+      if (poof) {
+        v.idle.poof = 0.5;
+        sfx.poof();
+        this.ring(d.x, d.z, 1.6, d.look.collar);
+      }
       const mine = d.id === you && predicted;
       const tx = mine ? predicted.x : d.x;
       const tz = mine ? predicted.z : d.z;
@@ -109,8 +129,26 @@ export class Entities {
       root.rotation.y = v.facing;
       this.pos.set(d.id, root.position);
 
+      // Waiting in the lobby's row: get up to something now and then.
+      const waiting = d.lineup && v.speed < 0.3;
+      const idle = v.idle;
+      if (waiting) tickIdle(idle, time);
+      else idle.act = 'stand';
+      // A pat: hearts, a yip, and a happy wiggle for a moment.
+      if (d.pets > v.pets) {
+        this.hearts.burst(root, v.size);
+        patSound(v.pitch, d.id === you);
+        idle.happy = 1.6;
+        idle.act = 'stand';
+        idle.until = time + 2;
+      }
+      v.pets = d.pets;
+      idle.happy = Math.max(0, idle.happy - dt);
+      idle.poof = Math.max(0, idle.poof - dt);
+      const lobbyPose = waiting && !idle.happy ? ({ sit: 'sit', lie: 'down', bow: 'bow', stand: null } as const)[idle.act] : null;
+
       // Pose: ease toward the posture's shape.
-      const want = POSES[d.frozen ? 'frozen' : d.cower ? 'cower' : d.down ? 'down' : d.posture];
+      const want = POSES[d.frozen ? 'frozen' : d.cower ? 'cower' : d.down ? 'down' : lobbyPose ?? d.posture];
       const pk = 1 - Math.exp(-dt * 8);
       for (const f of Object.keys(want) as (keyof Pose)[]) v.pose[f] += (want[f] - v.pose[f]) * pk;
       const p = v.pose;
@@ -124,6 +162,12 @@ export class Entities {
       r.front.rotation.x = p.front + (gallop ? Math.sin(v.phase) * 0.12 : 0);
       r.back.rotation.x = p.back + (gallop ? -Math.sin(v.phase) * 0.1 : 0);
       r.head.rotation.x = p.head;
+      // Waiting: looking about, a head tilt when happy, a little hop, and breathing.
+      const happy = idle.happy > 0 ? Math.min(1, idle.happy) : 0;
+      r.head.rotation.y += ((waiting ? idle.glance : 0) - r.head.rotation.y) * Math.min(1, dt * 3);
+      r.head.rotation.z = happy * Math.sin(time * 3.2) * 0.3;
+      const hop = Math.abs(Math.sin(time * 11)) * 0.07 * happy + Math.sin(Math.min(1, idle.poof * 2) * Math.PI) * 0.25;
+      r.rig.position.y += hop + (waiting ? Math.sin(time * 2.4 + v.lastX) * 0.008 : 0);
       r.legs.forEach((leg, i) => {
         const isFront = i < 2;
         // Walk: diagonal pairs. Gallop: front pair together, back pair together, out of phase.
@@ -132,7 +176,7 @@ export class Entities {
         leg.scale.y = p.legFold;
       });
       r.tail.rotation.x = p.tail;
-      r.tail.rotation.y = Math.sin(time * (moving ? 9 : 4)) * (d.frozen || d.cower ? 0.05 : 0.35);
+      r.tail.rotation.y = Math.sin(time * (moving ? 9 : happy ? 15 : lobbyPose === 'bow' ? 11 : 4)) * (d.frozen || d.cower ? 0.05 : happy ? 0.6 : 0.35);
       // Cowering after lightning: a shiver.
       r.rig.position.x = d.cower ? Math.sin(time * 45) * 0.025 : 0;
       for (const e of r.ears) e.rotation.x = d.frozen ? -0.6 : d.posture === 'sprint' ? -0.35 : 0;
@@ -172,7 +216,7 @@ export class Entities {
     calm.position.y = 0.05;
     rig.root.add(calm);
     this.stage.scene.add(rig.root);
-    const v: DogView = { rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks };
+    const v: DogView = { rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look.breed) };
     this.dogs.set(d.id, v);
     return v;
   }

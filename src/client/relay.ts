@@ -252,6 +252,6 @@ export class RelayNet implements NetLike {
   }
 
   send(m: ClientMsg): void {
-    if (m.t === 'input' || m.t === 'bark' || m.t === 'look') this.sock.send(this.hostId, m);
+    if (m.t === 'input' || m.t === 'bark' || m.t === 'look' || m.t === 'practise' || m.t === 'pet') this.sock.send(this.hostId, m);
   }
 }
