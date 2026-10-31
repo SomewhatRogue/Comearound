@@ -22,6 +22,12 @@ export class Input {
   onBark = () => {};
   onEscape = () => {};
   onMute = () => {};
+  /** Called whenever movement or posture input changes (so it reaches the room without waiting for a frame). */
+  onChange = () => {};
+  /** For the on-screen diagnostics. */
+  debug(): string {
+    return `stick ${this.stick.id >= 0 ? `${this.stick.x.toFixed(2)},${this.stick.z.toFixed(2)}` : 'up'} in ${this.dx.toFixed(2)},${this.dz.toFixed(2)}${this.blocked ? ' BLOCKED' : ''}`;
+  }
   /** Set while a text field has focus or a panel is open, so typing doesn't walk you around. */
   blocked = false;
   private stick = { id: -1, ox: 0, oz: 0, x: 0, z: 0, full: false };
@@ -65,6 +71,7 @@ export class Input {
     crouch ||= this.touchCrouch;
     if (this.blocked) [dx, dz, sprint, crouch] = [0, 0, false, false];
     [this.dx, this.dz, this.sprint, this.crouch] = [dx, dz, sprint && !crouch, crouch];
+    this.onChange();
   }
 
   clear(): void {

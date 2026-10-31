@@ -101,6 +101,24 @@ const predicted = { x: 0, z: 0, rot: 0 };
 let havePrediction = false;
 let idleFor = 0;
 let lastSent = '';
+let sent = 0;
+const sendInput = () => {
+  const key = `${input.dx},${input.dz},${input.sprint},${input.crouch}`;
+  if (key === lastSent) return;
+  net.send({ t: 'input', dx: input.dx, dz: input.dz, sprint: input.sprint, crouch: input.crouch });
+  lastSent = key;
+  sent++;
+};
+input.onChange = sendInput;
+// On phones, a one-line readout of what the controls and the room are doing (temporary, while we
+// chase a phone-only movement bug). Tap it to hide.
+const diag = document.getElementById('diag')!;
+diag.hidden = !isTouch;
+diag.addEventListener('click', () => (diag.hidden = true));
+let diagAt = 0;
+let frames = 0;
+let fps = 0;
+let fpsAt = 0;
 let last = performance.now();
 // Low-effects mode also caps the frame rate, for weak machines and background test clients.
 const minFrameMs = lowfx ? 50 : 0;
@@ -118,11 +136,8 @@ function frame(now: number) {
   const pub = net.pub;
   const me = self();
   input.blocked = !!document.querySelector('#modal:not(.hidden):not(.glance)') || document.activeElement?.tagName === 'INPUT';
-  const key = `${input.dx},${input.dz},${input.sprint},${input.crouch}`;
-  if (key !== lastSent) {
-    net.send({ t: 'input', dx: input.dx, dz: input.dz, sprint: input.sprint, crouch: input.crouch });
-    lastSent = key;
-  }
+  sendInput();
+  if (net instanceof LocalNet) net.pump();
   if (pub && me && net.me) {
     const field = fieldById(pub.fieldId);
     fieldView.show(field, pub.mode);
@@ -165,6 +180,13 @@ function frame(now: number) {
     stage.labels.render(stage.scene, stage.camera);
   }
   stage.renderer.domElement.dataset.ready = pub ? '1' : '0';
+  frames++;
+  if (now - fpsAt > 1000) [fps, frames, fpsAt] = [frames, 0, now];
+  if (!diag.hidden && now - diagAt > 250 && pub && me) {
+    diagAt = now;
+    const srv = net instanceof LocalNet ? [...net.room.dogs.values()].find((d) => d.id === me.id) : null;
+    diag.textContent = `${input.debug()} | sent ${sent} | room dx ${srv ? `${srv.dx.toFixed(2)},${srv.dz.toFixed(2)}` : '?'} | dog ${me.x.toFixed(1)},${me.z.toFixed(1)} ${me.frozen ? 'frozen' : me.down ? 'down' : me.posture}${me.spectator ? ' SPECTATOR' : ''} | me ${predicted.x.toFixed(1)},${predicted.z.toFixed(1)} | ${pub.phase} | ${fps} fps${net instanceof LocalNet ? ` | ticks ${net.ticks}` : ''}`;
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

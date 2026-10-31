@@ -15,17 +15,35 @@ export class LocalNet implements NetLike {
   readonly room: GameRoom;
   /** Test hook: freeze the room's clock (screenshots on a slow machine). */
   paused = false;
+  ticks = 0;
 
   constructor(look: () => Look) {
     this.room = new GameRoom((_conn, raw) => this.receive(raw), { seed: Math.floor(Math.random() * 1e9) });
     this.room.connect('local');
     this.room.message('local', JSON.stringify({ t: 'hello', token: 'solo', look: look() } satisfies ClientMsg));
-    let last = performance.now();
-    setInterval(() => {
-      const now = performance.now();
-      if (!this.paused) this.room.tick(Math.min(0.1, (now - last) / 1000));
-      last = now;
-    }, 1000 / TICK_HZ);
+    this.last = performance.now();
+    setInterval(() => this.pump(), 1000 / TICK_HZ);
+  }
+
+  private last = 0;
+  private acc = 0;
+
+  /**
+   * Advance the room by however much real time has passed, in fixed 50 ms steps. Called by a timer
+   * and by every animation frame: phone web views (and iframes) can throttle timers to a crawl,
+   * and a room that only ticks when the timer fires would then barely move.
+   */
+  pump(): void {
+    const now = performance.now();
+    this.acc += Math.min(0.5, Math.max(0, now - this.last) / 1000);
+    this.last = now;
+    if (this.paused) return void (this.acc = 0);
+    const step = 1 / TICK_HZ;
+    while (this.acc >= step) {
+      this.room.tick(step);
+      this.ticks++;
+      this.acc -= step;
+    }
   }
 
   get connected(): boolean {
