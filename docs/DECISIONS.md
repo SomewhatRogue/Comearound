@@ -35,6 +35,10 @@ figure out the right way, even if we have to refactor."
   through real Redis, (C) host frozen when the friend joins, (D) host leaves mid-run, (E) host's
   connection drops, (F) friend waits while the host's game is closed, host reopens its link. All
   pass, twice.
+- **Verified live (2026-10-31, after Kyle added Upstash Redis):** from a Vercel Sandbox, two
+  separate browsers on comearound-lyart.vercel.app: HostDog hosted, TestPup joined by code in
+  about 19 s, both saw both, TestPup's steering moved it on the host, both entered the run; the
+  relay reported shared rooms (Redis). Kyle then joined a live sandbox-hosted room from his phone.
 - **Kyle needs to add Redis to the Vercel project** (Storage, Redis from the Marketplace) so
   instances share rooms. Function max duration is left at the 300 s default (all plans);
   clients reconnect on their own. 800 s is available on Pro if the reconnects are noticeable.
