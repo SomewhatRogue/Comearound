@@ -96,6 +96,19 @@ export const HAZARD = {
   lostPenalty: 75,
 };
 
+/** Weather. */
+export const WEATHER = {
+  /** In the rain sheep take fright at nothing this many times as often. */
+  rainSpook: 2,
+  /** Seconds between lightning strikes in a storm. */
+  strikeEvery: [13, 24] as [number, number],
+  /** A strike: how far the shock reaches, how hard sheep are kicked away, how long dogs cower. */
+  strikeRadius: 34,
+  strikeKick: 9,
+  cowerSec: 1.6,
+  cowerSlow: 0.3,
+};
+
 export const SCORE = {
   perSheep: 100,
   perSecondLeft: 4,

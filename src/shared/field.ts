@@ -15,7 +15,7 @@ export interface Pen extends Box {
   team: 0 | 1 | null;
 }
 /** Solid things. Brambles also frighten sheep that get close. Ponds are water: dogs can wade them. */
-export interface Obstacle { kind: 'tree' | 'rock' | 'pond' | 'hay' | 'bramble'; x: number; z: number; r: number }
+export interface Obstacle { kind: 'tree' | 'rock' | 'pond' | 'hay' | 'bramble' | 'windmill'; x: number; z: number; r: number }
 /** A stream: a line of water sheep and goats won't cross except at a bridge. Dogs wade it, slowly. */
 export interface Stream { pts: [number, number][]; w: number; bridges: { x: number; z: number; w: number }[] }
 /** A broken bit of the outer fence: sheep that wander out through it are lost. */
@@ -39,6 +39,10 @@ export interface FieldDef {
   mud?: Circle[];
   gaps?: FenceGap[];
   wind?: Wind;
+  /** Rain makes sheep jumpy; a storm adds lightning that panics them and makes dogs cower. */
+  weather?: 'rain' | 'storm';
+  /** Sorting: two colours of sheep (white = team 0, black = team 1), each with its own pen. */
+  sort?: boolean;
   /** Where dogs start, per team (co-op uses team 0). */
   starts: { x: number; z: number; team: 0 | 1 }[];
   timeLimit: number;

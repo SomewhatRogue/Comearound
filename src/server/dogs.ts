@@ -3,7 +3,7 @@
  * and still, and barking. What dogs do TO sheep lives in flock.ts.
  */
 import { inMud, inWater } from '../shared/field';
-import { DOG, HAZARD } from '../shared/tuning';
+import { DOG, HAZARD, WEATHER } from '../shared/tuning';
 import { collide, separate } from './physics';
 import type { Dog, Room } from './state';
 
@@ -12,10 +12,11 @@ export const DOWN_AFTER = 0.6;
 
 export function moveDog(room: Room, d: Dog, dt: number): void {
   d.frozen = Math.max(0, d.frozen - dt);
+  d.cower = Math.max(0, d.cower - dt);
   const len = d.frozen > 0 ? 0 : Math.hypot(d.dx, d.dz);
   const moving = len > 0.1;
   const canSprint = d.wantSprint && moving && d.stamina > 1;
-  d.posture = d.wantCrouch ? 'crouch' : canSprint ? 'sprint' : 'walk';
+  d.posture = d.wantCrouch || d.cower > 0 ? 'crouch' : canSprint ? 'sprint' : 'walk';
   d.stamina = Math.max(0, Math.min(DOG.staminaMax, d.stamina + (d.posture === 'sprint' ? -DOG.staminaDrain : DOG.staminaRegen) * dt));
   d.barkCd = Math.max(0, d.barkCd - dt);
   d.stillFor = moving ? 0 : d.stillFor + dt;
@@ -23,7 +24,9 @@ export function moveDog(room: Room, d: Dog, dt: number): void {
   if (moving) {
     // Mud slows you; so does wading a stream or pond.
     const ground = inMud(room.field, d.x, d.z) ? HAZARD.mudSlow : inWater(room.field, d.x, d.z) ? HAZARD.wadeSlow : 1;
-    const speed = (d.posture === 'sprint' ? DOG.sprint : d.posture === 'crouch' ? DOG.crouch : DOG.walk) * ground;
+    // Lightning: you cower, slow and low, for a moment.
+    const scared = d.cower > 0 ? WEATHER.cowerSlow : 1;
+    const speed = (d.posture === 'sprint' ? DOG.sprint : d.posture === 'crouch' ? DOG.crouch : DOG.walk) * ground * scared;
     const k = Math.min(1, len);
     d.x += (d.dx / len) * speed * k * dt;
     d.z += (d.dz / len) * speed * k * dt;

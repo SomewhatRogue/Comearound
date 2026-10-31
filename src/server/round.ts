@@ -11,6 +11,7 @@ import { DOG, HAZARD, SCORE } from '../shared/tuning';
 import { isPenned, spawnFlock } from './flock';
 import { goatPenned, makeGoats } from './goat';
 import { startWind } from './wind';
+import { startWeather } from './weather';
 import { activeDogs, type Room } from './state';
 
 export const INTRO_SEC = 3;
@@ -32,13 +33,14 @@ export function startField(room: Room): void {
   room.sheep = spawnFlock(room);
   room.goats = makeGoats(room);
   startWind(room);
+  startWeather(room);
   room.holdFor = [0, 0];
   room.doneAt = [null, null];
   const counts = [0, 0];
   for (const d of activeDogs(room)) {
     const starts = room.field.starts.filter((s) => s.team === d.team);
     const s = starts[counts[d.team]++ % starts.length];
-    Object.assign(d, { x: s.x + room.rng.range(-0.5, 0.5), z: s.z + room.rng.range(-0.5, 0.5), dx: 0, dz: 0, stamina: DOG.staminaMax, frozen: 0, barkCd: 0, fieldBarks: 0, stillFor: 0 });
+    Object.assign(d, { x: s.x + room.rng.range(-0.5, 0.5), z: s.z + room.rng.range(-0.5, 0.5), dx: 0, dz: 0, stamina: DOG.staminaMax, frozen: 0, cower: 0, barkCd: 0, fieldBarks: 0, stillFor: 0 });
   }
   room.phase = 'intro';
   room.timeLeft = INTRO_SEC;

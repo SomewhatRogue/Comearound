@@ -34,6 +34,8 @@ export interface DogPub {
   /** Lying down (crouched and still): calms nearby sheep. */
   down: boolean;
   frozen: boolean;
+  /** Cowering after a lightning strike. */
+  cower: boolean;
   /** Increments on every bark, so clients can play one woof per bark. */
   barks: number;
   bot: boolean;
@@ -100,6 +102,8 @@ export interface PublicView {
   course: CourseId;
   /** The direction the wind blows toward (unit x, z) and its strength 0..1. */
   wind: { x: number; z: number; s: number };
+  /** Weather, and a counter that ticks up on every lightning strike (with where it struck). */
+  weather: { kind: 'clear' | 'rain' | 'storm'; flashes: number; fx: number; fz: number };
   /** Scores per field so far this run; filled in as each field ends. */
   fieldScores: FieldScore[][];
   /** Best runs in this room (and, for solo, this browser keeps its own). */

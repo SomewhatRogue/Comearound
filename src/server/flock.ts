@@ -8,7 +8,7 @@
  * Penned sheep are calmer, so a held pen stays held.
  */
 import { gateOf, inMud, inPen, outOfField, type FieldDef } from '../shared/field';
-import { DOG, GOAT, HAZARD, SHEEP } from '../shared/tuning';
+import { DOG, GOAT, HAZARD, SHEEP, WEATHER } from '../shared/tuning';
 import { hazardForces } from './hazards';
 import { isDown } from './dogs';
 import { clampLen, collide, separate } from './physics';
@@ -147,6 +147,17 @@ export function tickFlock(room: Room, dt: number): void {
       const dx = s.x - nz.x;
       const dz = s.z - nz.z;
       const d = Math.hypot(dx, dz) || 1e-3;
+      if (nz.kind === 'thunder') {
+        // Lightning: everyone panics and runs from where it struck, pen or no pen.
+        if (d < WEATHER.strikeRadius) {
+          const k = WEATHER.strikeKick * (1 - d / WEATHER.strikeRadius) * (penned ? 0.5 : 1) + 1.5;
+          s.vx += (dx / d) * k;
+          s.vz += (dz / d) * k;
+          s.startle = 1;
+          s.fear = 1;
+        }
+        continue;
+      }
       const r = nz.kind === 'bark' ? SHEEP.barkRadius : GOAT.bleatRadius;
       if (d > r) continue;
       const kick = (nz.kind === 'bark' ? SHEEP.barkKick : GOAT.bleatKick) * (1 - d / r) * Math.min(1, calm * (nz.power ?? 1));

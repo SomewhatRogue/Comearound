@@ -37,15 +37,18 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
   const team = room.mode === 'versus' ? d.team : null;
   if (b.raider && raid(room, d, team, dt)) return;
 
-  const pen = room.field.pens.find((p) => p.team === null || p.team === d.team)!;
+  // Sorting fields have a pen per colour: each group of sheep goes to its own colour's pen.
+  const penOf = (t: 0 | 1 | null) => room.field.pens.find((p) => p.team === null || p.team === t) ?? room.field.pens[0];
+  const pen = penOf(room.field.sort ? null : d.team);
   const g = gateOf(pen);
-  const mine = room.sheep.filter((s) => team === null || s.team === team);
+  const mine = room.sheep.filter((s) => !s.lost && (team === null || s.team === team));
   const open = mine.filter((s) => !isPenned(room.field, s));
   const mates = activeDogs(room).filter((o) => (o.bot ?? o.auto) && o.team === d.team && !(o.bot ?? o.auto)!.raider);
 
   // The gate keeper: lies down beside the gate, outside, on the side away from the incoming sheep.
-  const keeper = open.length && open.length < mine.length / 2 && mates.length > 1 ? nearestTo(mates, g.x + g.ox * 2.4, g.z + g.oz * 2.4) : undefined;
+  const keeper = !room.field.sort && open.length && open.length < mine.length / 2 && mates.length > 1 ? nearestTo(mates, g.x + g.ox * 2.4, g.z + g.oz * 2.4) : undefined;
   if (!open.length || keeper === d) {
+    if (!open.length && room.field.sort) return;
     const k = open.length ? sideOf(open, g) : b.flank;
     // Tucked against the fence beside the opening, so incoming sheep pass it.
     const off = pen.gateW / 2 + 1;
@@ -57,7 +60,7 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
   }
 
   // The goat is standing in our gateway: the nearest bot eases it aside, crouched and staring.
-  const goat = room.goats.find((q) => q.mood === 'block' && Math.hypot(q.x - g.x, q.z - g.z) < 2.5);
+  const goat = room.goats.find((q) => q.mood === 'block' && room.field.pens.some((p) => Math.hypot(q.x - gateOf(p).x, q.z - gateOf(p).z) < 2.5));
   if (goat && nearestTo(mates, goat.x, goat.z) === d) {
     const side = (goat.x - g.x) * -g.oz + (goat.z - g.z) * g.ox >= 0 ? -1 : 1;
     const [sx, sz] = [goat.x - g.oz * side * 1.8 + g.ox * 0.6, goat.z + g.ox * side * 1.8 + g.oz * 0.6];
@@ -68,7 +71,8 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
     return;
   }
 
-  const groups = assign(groupsOf(open), mates.filter((o) => o !== keeper));
+  const byColour = room.field.sort ? [0, 1].map((t) => groupsOf(open.filter((s) => s.team === t))).flat().sort((a, z) => z.sheep.length - a.sheep.length) : groupsOf(open);
+  const groups = assign(byColour, mates.filter((o) => o !== keeper));
   const mineG = groups.find((gr) => gr.dogs.includes(d));
   if (!mineG) {
     // Spare: hang back wide behind the biggest group, crouched.
@@ -82,7 +86,8 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
   const i = mineG.dogs.indexOf(d);
   const n = mineG.dogs.length;
   const flank = n === 1 ? 0 : (i / (n - 1)) * 2 - 1;
-  const target = viaBridge(room.field, c, approach(pen, c));
+  const myPen = room.field.sort ? penOf(mineG.sheep[0].team) : pen;
+  const target = viaBridge(room.field, c, approach(myPen, c));
   const u = unit(target.x - c.x, target.z - c.z);
   const fan = flank * (spread * 0.9 + 1.2);
   const [px, pz] = behind(room.field, c, u, spread + 3, fan);
@@ -105,7 +110,7 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
   // Bark now and then, only from right behind a group that's still far from the pen, so the
   // scatter goes the right way (and the goat is listening, and barks cost calm points).
   const lined = d.posture === 'crouch' && close < 1.2;
-  if (lined && b.barkCd <= 0 && Math.hypot(pen.x - c.x, pen.z - c.z) > 10 && room.rng.next() < 0.08 * dt) {
+  if (lined && b.barkCd <= 0 && Math.hypot(myPen.x - c.x, myPen.z - c.z) > 10 && room.rng.next() < 0.08 * dt) {
     bark(room, d);
     b.barkCd = 10;
   }

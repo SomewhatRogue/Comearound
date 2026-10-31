@@ -15,6 +15,7 @@ import { bark, moveDog, separateDogs } from './dogs';
 import { spawnFlock, tickFlock } from './flock';
 import { tickGoats } from './goat';
 import { tickWind } from './wind';
+import { tickWeather } from './weather';
 import { endField, startRun, tickRound } from './round';
 import { activeDogs, type Dog, type Room } from './state';
 import { privateView, publicView } from './view';
@@ -48,6 +49,7 @@ export class GameRoom implements Room {
   goats: Room['goats'] = [];
   wind: Room['wind'] = { x: 1, z: 0, s: 0 };
   course: Room['course'] = 'gentle';
+  weather: Room['weather'] = { kind: 'clear', flashes: 0, nextFlash: 99, fx: 0, fz: 0 };
   fieldScores: Room['fieldScores'] = [];
   leaderboard: Room['leaderboard'] = [];
   noises: Room['noises'] = [];
@@ -103,7 +105,7 @@ export class GameRoom implements Room {
         break;
       case 'start':
         if (d.id === this.hostId && (this.phase === 'lobby' || this.phase === 'results')) {
-          this.course = m.course === 'tricky' ? 'tricky' : 'gentle';
+          this.course = m.course === 'tricky' || m.course === 'wild' ? m.course : 'gentle';
           this.start(m.mode === 'versus' ? 'versus' : 'trials', m.fillBots);
         }
         break;
@@ -165,6 +167,7 @@ export class GameRoom implements Room {
     this.goats = [];
     this.field = TRIALS[0];
     this.wind = { x: 1, z: 0, s: 0 };
+    this.weather = { kind: 'clear', flashes: this.weather.flashes, nextFlash: 99, fx: 0, fz: 0 };
     this.phase = 'lobby';
     this.sheep = spawnFlock(this);
   }
@@ -181,6 +184,7 @@ export class GameRoom implements Room {
     separateDogs(this);
     if (this.phase === 'playing') {
       tickWind(this, dt);
+      tickWeather(this, dt);
       tickGoats(this, dt);
     }
     if (this.phase === 'playing' || this.phase === 'lobby') tickFlock(this, dt);
@@ -229,6 +233,6 @@ function cleanLook(l: Partial<Look> | undefined): Look {
 function blankDog(id: string, token: string, look: Look): Dog {
   return {
     id, token, look, team: 0, x: 0, z: 0, dx: 0, dz: 0, rot: 0, wantSprint: false, wantCrouch: false, posture: 'walk', stillFor: 0,
-    stamina: DOG.staminaMax, frozen: 0, barkCd: 0, barks: 0, fieldBarks: 0, connected: false, leftAt: 0, spectator: false, bot: null,
+    stamina: DOG.staminaMax, frozen: 0, cower: 0, barkCd: 0, barks: 0, fieldBarks: 0, connected: false, leftAt: 0, spectator: false, bot: null,
   };
 }

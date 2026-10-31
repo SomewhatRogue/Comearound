@@ -3,7 +3,7 @@
  * scatter from a charging one), brambles (shy away; touch one and bolt), the wind carrying a
  * dog's scent (sheep downwind get nervous and drift away), and frights at nothing at all.
  */
-import { DOG, GOAT, HAZARD, SCENT, SHEEP } from '../shared/tuning';
+import { DOG, GOAT, HAZARD, SCENT, SHEEP, WEATHER } from '../shared/tuning';
 import { isDown } from './dogs';
 import type { Dog, Room, Sheep } from './state';
 
@@ -68,7 +68,8 @@ export function hazardForces(room: Room, s: Sheep, dogs: Dog[], penned: boolean,
   }
 
   // Now and then a sheep takes fright at nothing at all and bolts (not near a dog lying down).
-  if (!penned && room.phase === 'playing' && room.rng.next() < dt / SHEEP.spookEvery && !dogs.some((d) => isDown(d) && Math.hypot(d.x - s.x, d.z - s.z) < DOG.calmRadius)) {
+  const spookEvery = SHEEP.spookEvery / (room.weather.kind === 'clear' ? 1 : WEATHER.rainSpook);
+  if (!penned && room.phase === 'playing' && room.rng.next() < dt / spookEvery && !dogs.some((d) => isDown(d) && Math.hypot(d.x - s.x, d.z - s.z) < DOG.calmRadius)) {
     const a = room.rng.range(0, Math.PI * 2);
     s.vx += Math.cos(a) * SHEEP.spookKick;
     s.vz += Math.sin(a) * SHEEP.spookKick;

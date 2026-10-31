@@ -44,6 +44,8 @@ export interface Dog {
   leftAt: number;
   spectator: boolean;
   bot: BotBrain | null;
+  /** Scared by lightning: cowering, slow, for this many seconds. */
+  cower: number;
   /** Test hook (AUTOPILOT): a human seat driven by the bot brain, so probes can watch a real run. */
   auto?: BotBrain | null;
 }
@@ -116,10 +118,11 @@ export interface Room {
   /** Wind: the unit direction it blows toward, and strength 0..1 (gusts included). */
   wind: { x: number; z: number; s: number };
   course: CourseId;
+  weather: { kind: 'clear' | 'rain' | 'storm'; flashes: number; nextFlash: number; fx: number; fz: number };
   fieldScores: FieldScore[][];
   leaderboard: LeaderRow[];
   /** Barks and bleats this tick, for the flock to react to. */
-  noises: { kind: 'bark' | 'bleat'; x: number; z: number; by: string | null; power?: number }[];
+  noises: { kind: 'bark' | 'bleat' | 'thunder'; x: number; z: number; by: string | null; power?: number }[];
   rng: Rng;
   emit(dogId: string, ev: PrivateEvent): void;
 }
