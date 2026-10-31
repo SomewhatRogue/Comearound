@@ -2,6 +2,41 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-30 (late night): scenarios, hazards, weather, music (Claude Opus 5.5)
+
+Kyle: more scenarios; the goat isn't impactful enough (more chaos or more goats); things to avoid
+in later levels (streams, trees); wind on the grass that can spook the herd if you're upwind;
+then: windmills and cute things, bigger maps and flocks, sorting two colours, spring lofi music
+(several tracks), rain and lightning that really scares the sheep and the dog.
+
+- **Three trials courses.** Gentle (Meadow, Orchard, Windy Hillside), Tricky (Brook Farm, Bramble
+  Lane, Three Billy Goats), Wild (Black and White, Big Sky Pasture, Thunder Hill). The host picks
+  one; the room leaderboard and the browser's best are kept per course. Versus is now Field Day,
+  Riverside (your sheep start on the far bank), Field Day.
+- **Hazards are data on the field** (`src/shared/levels.ts`) and drawn from the same data:
+  streams sheep and goats can't cross except at bridges (dogs wade, slowly); mud slows everyone;
+  brambles are solid and make sheep shy away, and bolt if they touch; a broken fence lets sheep
+  out (lost: they no longer count toward "all in", and cost 75 each).
+- **Wind** drifts and gusts per field. A dog upwind of sheep (within range, roughly in line)
+  makes them nervous and drift downwind; crouching halves it, lying down stops it. Grass and
+  flowers sway with it (a vertex shader), white streaks blow across, the HUD shows an arrow.
+- **More goats, more chaos.** Fields can have several goats (different coats). New mischief:
+  charging through the flock ("HUP HUP") and raiding a pen to bleat sheep back out. Bleats are
+  louder and wider. The goat bonus is per goat.
+- **Weather.** Rain dims and cools the light, falls round the camera, and makes sheep bolt at
+  nothing twice as often. Storms add lightning: a bolt, a flash, thunder delayed by distance,
+  every sheep panics away from the strike (even penned ones, half as hard), every dog cowers for
+  1.6 s (slow, low, shivering, "Eek! Lightning!").
+- **Sorting.** Black and White: white sheep (team 0) and black sheep (team 1) graze together;
+  each colour has its own pen. Bots group by colour and drive each group to its pen.
+- **Big fields** (up to 72 by 48 m, 24 sheep) get a minimap in the corner (all fields do).
+- **Farm props** on the hills: windmills (sails turn with the wind; one stands in Big Sky), a
+  farmhouse with chimney smoke, scarecrow, well, beehives, hay cart, ducks on every pond.
+- **Music is synthesized live** (`src/client/music.ts`): six warm lofi tracks (electric piano
+  chords, round bass, swung brushed drums, a music-box melody through an echo, vinyl crackle,
+  tape wobble). Rain fields get "Rain on the Barn"; otherwise tracks take turns every 16 bars.
+  Music on/off is its own button (in the menu on phones); it dips for the NAUGHTY close-up.
+
 ## 2026-10-30 (night): first phone play, goat mischief, harder, prettier (Claude Opus 5.5)
 
 - **iPhone movement bug:** iOS hands out negative touch identifiers, and the stick treated

@@ -91,7 +91,7 @@ async function main() {
   await phone.page.screenshot({ path: 'shots/1b-phone-lobby.png' });
   mark(`phone stick moved +${phoneMoved.toFixed(2)} m`);
 
-  await host.page.click('[data-act="mode"][data-v="trials"]');
+  await host.page.click('[data-act="mode"][data-v="gentle"]');
   await host.page.click('[data-act="start"]');
   await until('intro', async () => (await state(host.page)).pub.phase === 'intro');
   await host.page.waitForTimeout(200);
@@ -111,7 +111,7 @@ async function main() {
   mark(`late joiner (phase ${lateSt.pub.phase}) spectator=${meIn(lateSt).spectator}`);
 
   const idBefore = (await state(friend.page)).me.you;
-  await friend.page.reload();
+  await friend.page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 });
   await until('friend back', async () => (await state(friend.page))?.me);
   const idAfter = (await state(friend.page)).me.you;
   mark(`rejoin same seat=${idBefore === idAfter}`);

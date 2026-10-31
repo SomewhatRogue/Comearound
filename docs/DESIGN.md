@@ -26,11 +26,20 @@ of chaos. As built, 2026-10-30.
 - Wanders and bleats now and then, scattering sheep near it. Only gives way to a dog giving it the eye.
 - **Barking near it annoys it** (the meter over its head). Too much and it walks over to whoever
   barked last, stares them down (frozen 4 s) and they get the NAUGHTY close-up.
-- Pen it for a bonus. In versus, walk it onto the other side and let it bleat there.
+- Pen it for a bonus (it has to still be in at the end: penned goats wander back out unless a dog lies by the gate). In versus, walk it onto the other side and let it bleat there.
+
+## Hazards, wind and weather (Tricky and Wild courses)
+
+- **Streams**: sheep and goats only cross at bridges; dogs wade, slowly. **Mud** slows everyone.
+  **Brambles** scare sheep (touch one and it bolts). A **broken fence** lets sheep out: lost, -75.
+- **Wind** carries your scent: sheep downwind of you drift away. Crouch to halve it, lie down to stop it.
+- **Rain** makes sheep jumpy. **Lightning** panics every sheep and makes every dog cower for a moment.
+- **Goats** (some fields have three) stroll into the flock to bleat, charge through it, block
+  gateways, raid pens, and come to stare down dogs that bark too much.
 
 ## Modes
 
-- **Co-op Trials:** three fields (The Meadow, Old Orchard, Windy Hillside). Score per field:
+- **Co-op Trials:** pick a course of three fields: Gentle (The Meadow, Old Orchard, Windy Hillside), Tricky (Brook Farm, Bramble Lane, Three Billy Goats) or Wild (Black and White sorting, Big Sky Pasture, Thunder Hill). Score per field:
   100 per sheep penned, 4 per second left (only once every sheep is in and held 2.5 s), up to 200
   for calm herding (fewer barks per sheep), 250 for the goat. Runs go on the room leaderboard;
   your browser keeps your best.

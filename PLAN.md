@@ -22,6 +22,14 @@ waiting on Kyle's first play. Spec: `docs/features/slice-02.md`.
 - [x] Lobby practice flock
 - [x] 12 unit tests; bot bench; probe with 3 browsers including a phone
 
+## Done (night of 2026-10-30)
+
+- [x] iPhone controls fixed (negative touch ids); portrait plays; `?diag` readout
+- [x] Goat mischief and several goats; harder herding; prettier fields
+- [x] Tricky and Wild courses: streams and bridges, mud, brambles, broken fences, wind and scent,
+      rain and lightning, black-and-white sorting, a 72 m pasture with 24 sheep; Riverside versus
+- [x] Farm props, minimap, six synthesized lofi tracks
+
 ## Next (in order)
 
 1. Kyle plays it with friends (solo link first, then a hosted room). Collect taste calls:
