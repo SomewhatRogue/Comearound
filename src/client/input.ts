@@ -2,7 +2,7 @@
  * Input: keyboard on desktop, a thumbstick and three buttons on phones (held sideways).
  * Keyboard: WASD or arrows to move, Shift to sprint, Space (or C) to crouch (hold still to lie
  * down), E (or B, or Enter) to bark, M for sound, Esc for the menu.
- * Touch: drag anywhere on the left half to steer (push to the edge to sprint), BARK, a DOWN
+ * Touch: drag anywhere (not on a button or panel) to steer (push to the edge to sprint), BARK, a DOWN
  * toggle for crouching, and a SPRINT button you hold.
  */
 export const isTouch = (() => {
@@ -45,7 +45,11 @@ export class Input {
     });
     addEventListener('blur', () => this.clear());
     if (isTouch) this.touchControls();
+    // Some phones and tablets don't report a coarse pointer: the first touch turns the controls on.
+    else addEventListener('touchstart', () => this.touchControls(), { once: true, passive: true });
   }
+
+  private touchOn = false;
 
   private update(): void {
     const has = (...k: string[]) => k.some((x) => this.keys.has(x));
@@ -70,9 +74,12 @@ export class Input {
     this.update();
   }
 
-  /** The thumbstick appears where your thumb lands on the left side of the screen. */
+  /** The thumbstick appears wherever your thumb lands (off the buttons and panels). */
   private touchControls(): void {
+    if (this.touchOn) return;
+    this.touchOn = true;
     document.body.classList.add('touch');
+    document.getElementById('controls')?.setAttribute('hidden', '');
     const pad = document.getElementById('touch')!;
     pad.hidden = false;
     const base = pad.querySelector<HTMLElement>('.stick')!;
@@ -111,6 +118,7 @@ export class Input {
     };
     zone.addEventListener('pointerup', end);
     zone.addEventListener('pointercancel', end);
+    zone.addEventListener('lostpointercapture', end);
 
     const btn = (sel: string) => pad.querySelector<HTMLElement>(sel)!;
     btn('.bark').addEventListener('pointerdown', (e) => {

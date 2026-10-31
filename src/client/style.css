@@ -84,7 +84,7 @@ input { -webkit-user-select: text; user-select: text; }
 #intro .team0 b { color: var(--t0); } #intro .team1 b { color: var(--t1); }
 
 /* Lobby side panel */
-.side { position: fixed; top: 60px; right: calc(14px + var(--safe-r)); width: 340px; max-height: calc(100% - 80px); overflow: auto; background: var(--paper); border-radius: var(--radius); padding: 16px 18px; box-shadow: 0 4px 0 #0002; -webkit-user-select: auto; user-select: auto; }
+.side { z-index: 15; position: fixed; top: 60px; right: calc(14px + var(--safe-r)); width: 340px; max-height: calc(100% - 80px); overflow: auto; background: var(--paper); border-radius: var(--radius); padding: 16px 18px; box-shadow: 0 4px 0 #0002; -webkit-user-select: auto; user-select: auto; }
 .side h2 { margin: 0 0 2px; font-size: 26px; }
 .side label { display: grid; gap: 4px; margin-top: 12px; font-weight: 600; font-size: 13px; }
 .side input { font: inherit; font-size: 16px; padding: 7px 10px; border: 2px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); }
@@ -115,12 +115,13 @@ input { -webkit-user-select: text; user-select: text; }
 .who i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; box-shadow: inset 0 -2px 0 #0003; }
 .who em { font-style: normal; font-size: 11px; background: var(--sun); border-radius: 6px; padding: 0 6px; }
 .quiet { color: var(--ink-soft); font-size: 13px; }
+.touch-tip { margin: 10px 0 0; background: #fff3c4; border-radius: 10px; padding: 7px 10px; font-size: 13px; }
 .how-mini { font-size: 13px; color: var(--ink-soft); margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; line-height: 1.35; }
 
 #lobby .fold { position: absolute; top: 14px; right: 14px; }
 #lobby.folded { background: none; box-shadow: none; padding: 0; width: auto; overflow: visible; }
 #lobby .unfold { font-size: 15px; padding: 7px 14px; box-shadow: 0 3px 0 #0003; }
-body.panel-open #touch .buttons, body.panel-open #touch .stick-zone { display: none; }
+body.panel-open #touch .buttons { display: none; }
 body:has(#modal:not(.hidden):not(.glance)) #touch { display: none; }
 
 /* Modals */
@@ -180,7 +181,8 @@ body:has(#modal:not(.hidden):not(.glance)) #touch { display: none; }
 
 /* Touch controls (phones, held sideways) */
 #touch { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
-#touch .stick-zone { position: absolute; left: 0; top: 50px; bottom: 0; width: 50%; pointer-events: auto; touch-action: none; }
+/* Drag anywhere that isn't a button or a panel to steer. */
+#touch .stick-zone { position: absolute; inset: 50px 0 0 0; pointer-events: auto; touch-action: none; }
 #touch .stick { position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%; background: #ffffff33; border: 3px solid #ffffff88; opacity: 0; pointer-events: none; transition: opacity 0.15s; }
 #touch .stick.on { opacity: 1; }
 #touch .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; border-radius: 50%; background: #fffbe8; box-shadow: 0 3px 0 #0003; transform: translate(-50%, -50%); }
@@ -194,10 +196,23 @@ body:has(#modal:not(.hidden):not(.glance)) #touch { display: none; }
 #touch button:active { transform: translateY(2px); box-shadow: 0 2px 0 #0003; }
 body.touch #dogbar { left: 50%; transform: translateX(-50%); bottom: calc(10px + var(--safe-b)); justify-items: center; }
 body.touch #bark-key { display: none; }
+/* Portrait still plays (the Claude app may not rotate); a tip suggests sideways, then fades. */
 #rotate { display: none; }
 @media (orientation: portrait) {
-  body.touch #rotate { display: grid; place-items: center; align-content: center; gap: 16px; position: fixed; inset: 0; z-index: 60; background: #2b2a22ee; color: #fff; font-size: 20px; font-weight: 600; text-align: center; padding: 24px; }
-  body.touch #rotate .phone { width: 46px; height: 80px; border: 4px solid #fff; border-radius: 10px; animation: turn 1.6s ease-in-out infinite; }
+  body.touch #rotate { display: flex; align-items: center; gap: 10px; position: fixed; left: 50%; top: 56px; translate: -50% 0; z-index: 20; background: #2b2a22e6; color: #fff; font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 999px; white-space: nowrap; pointer-events: none; animation: fade 0.6s 6s forwards; }
+  body.touch #rotate .phone { width: 12px; height: 20px; border: 2px solid #fff; border-radius: 3px; animation: turn 1.6s ease-in-out infinite; }
+  body.touch #rotate p { margin: 0; }
+  #touch .bark { width: 84px; height: 84px; }
+  #touch .sprint, #touch .down { width: 60px; height: 60px; }
+  body.touch #dogbar { left: calc(14px + var(--safe-l)); transform: none; justify-items: start; }
+  body.touch #stamina { width: 110px; }
+}
+@media (max-width: 560px) {
+  #topbar { gap: 4px; max-width: calc(100% - 12px); }
+  #topbar > div, #topbar > button, .pen-count { padding: 4px 8px; font-size: 12px; }
+  #phase { max-width: 128px; overflow: hidden; text-overflow: ellipsis; display: block !important; }
+  .pen-count b { font-size: 14px; }
+  .pen-count i { display: none; }
 }
 @media (max-height: 500px) {
   #topbar { top: 6px; gap: 6px; }

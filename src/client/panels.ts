@@ -121,9 +121,10 @@ export class Panels {
     const roomLine = this.solo
       ? '<p class="quiet">Solo: bot dogs work alongside you. Practise on the flock while you choose your dog.</p>'
       : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
+    const touchTip = document.body.classList.contains('touch') ? '<p class="touch-tip">Drag anywhere on the field to move. Tap <b>Practise</b> to fold this away and try the buttons.</p>' : '';
     const best = this.best ? `<p class="quiet">Your best trials run: <b>${this.best}</b></p>` : '';
     return `<button class="chip fold" data-act="fold">Practise</button><h2>Come Bye!</h2>${roomLine}
-      <label>Your dog's name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>
+      <label>Your dog's name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>${touchTip}
       <div class="label">Breed</div><div class="row wrap">${breeds}</div>
       <div class="label">Coat</div><div class="swatches">${coats}</div>
       <div class="label">Eyes</div><div class="row wrap">${eyes}</div>
