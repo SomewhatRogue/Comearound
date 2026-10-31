@@ -6,7 +6,17 @@
 import PartySocket from 'partysocket';
 import type { ClientMsg, Look, PrivateEvent, PrivateView, PublicView, ServerMsg } from '../shared/protocol';
 
-export class Net {
+/** What the client needs from a connection; Net (online) and LocalNet (solo) both provide it. */
+export interface NetLike {
+  pub: PublicView | null;
+  me: PrivateView | null;
+  onEvent: (ev: PrivateEvent) => void;
+  onState: () => void;
+  readonly connected: boolean;
+  send(m: ClientMsg): void;
+}
+
+export class Net implements NetLike {
   pub: PublicView | null = null;
   me: PrivateView | null = null;
   lastSnapshotAt = 0;

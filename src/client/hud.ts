@@ -25,7 +25,7 @@ export class Hud {
     const mm = Math.floor(pub.timeLeft / 60);
     $('clock-text').textContent = `${mm}:${String(pub.timeLeft % 60).padStart(2, '0')}`;
     // The moon wanes as the round runs out.
-    $('moon-shadow').style.transform = `translateX(${-100 + 100 * (pub.timeLeft / Math.max(1, Number($('clock').dataset.total) || pub.timeLeft))}%)`;
+    $('moon-shadow').style.transform = `translateX(${-100 * (pub.timeLeft / Math.max(1, Number($('clock').dataset.total) || pub.timeLeft))}%)`;
     if (pub.phase === 'playing' && !$('clock').dataset.total) $('clock').dataset.total = String(pub.timeLeft);
     if (!playing) delete $('clock').dataset.total;
 

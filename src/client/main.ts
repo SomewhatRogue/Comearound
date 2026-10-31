@@ -9,7 +9,8 @@ import type { Look } from '../shared/protocol';
 import { Entities } from './entities';
 import { Hud } from './hud';
 import { Input } from './input';
-import { Net } from './net';
+import { LocalNet } from './local';
+import { Net, type NetLike } from './net';
 import { COLORS, HATS, Panels } from './panels';
 import { followCamera, makeStage } from './scene';
 import { sfx } from './sfx';
@@ -24,16 +25,25 @@ const store = {
 };
 
 const params = new URLSearchParams(location.search);
-let room = (params.get('room') ?? '').replace(/[^\w-]/g, '').slice(0, 32);
+// Solo: the whole room runs in this tab with bots. The shareable solo build sets VITE_SOLO.
+const solo = import.meta.env.VITE_SOLO === '1' || params.has('solo');
+let room = solo ? 'solo' : (params.get('room') ?? '').replace(/[^\w-]/g, '').slice(0, 32);
 if (!room) {
   room = Array.from({ length: 4 }, () => 'BCDFGHJKLMNPQRSTVWXZ'[Math.floor(Math.random() * 20)]).join('');
   params.set('room', room);
-  history.replaceState(null, '', `?${params}`);
+  try { history.replaceState(null, '', `?${params}`); } catch { /* sandboxed frame */ }
 }
 // A token per tab-session lets a reload rejoin your seat; ?as= gives tests distinct players.
 const tokenKey = `tac-token-${room}-${params.get('as') ?? ''}`;
-const token = sessionStorage.getItem(tokenKey) ?? crypto.randomUUID();
-sessionStorage.setItem(tokenKey, token);
+const token = (() => {
+  try {
+    const t = sessionStorage.getItem(tokenKey) ?? crypto.randomUUID();
+    sessionStorage.setItem(tokenKey, t);
+    return t;
+  } catch {
+    return crypto.randomUUID();
+  }
+})();
 
 let look: Look = (() => {
   try { return JSON.parse(store.get('tac-look') ?? ''); } catch { return null; }
@@ -44,8 +54,8 @@ const stage = makeStage(document.getElementById('game')!, params.has('lowfx'));
 const entities = new Entities(stage);
 const hud = new Hud();
 const input = new Input();
-const net = new Net(room, token, () => look);
-const panels = new Panels((m) => net.send(m), look, (l) => { look = l; store.set('tac-look', JSON.stringify(l)); }, room);
+const net: NetLike = solo ? new LocalNet(() => look) : new Net(room, token, () => look);
+const panels = new Panels((m) => net.send(m), look, (l) => { look = l; store.set('tac-look', JSON.stringify(l)); }, room, solo);
 
 const predicted = new THREE.Vector3();
 let havePrediction = false;
@@ -153,4 +163,4 @@ w.render_game_to_text = () => {
   return JSON.stringify({ phase: net.pub.phase, timeLeft: net.pub.timeLeft, you: s?.look.name, role: net.me.role, thing: net.me.thingId, inPen: s?.inPen, carrying: s?.carrying, score: net.me.score, players: net.pub.players.length, prompt: promptText() });
 };
 w.__debug_naughty = () => hud.naughty();
-w.__game_actions__ = { send: (m: Parameters<Net['send']>[0]) => net.send(m), teleportHint: () => predicted.toArray() };
+w.__game_actions__ = { send: (m: Parameters<NetLike['send']>[0]) => net.send(m), teleportHint: () => predicted.toArray() };

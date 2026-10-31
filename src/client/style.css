@@ -10,6 +10,7 @@
   --dusk: #2b3550;
   --radius: 14px;
   --font: 'Fredoka', ui-rounded, system-ui, sans-serif;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--dusk); font-family: var(--font); color: var(--ink); }

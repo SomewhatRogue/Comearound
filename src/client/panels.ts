@@ -20,7 +20,7 @@ export class Panels {
   private roundSec = 420;
   private bots = true;
 
-  constructor(private send: (m: ClientMsg) => void, private look: Look, private saveLook: (l: Look) => void, private room: string) {
+  constructor(private send: (m: ClientMsg) => void, private look: Look, private saveLook: (l: Look) => void, private room: string, private solo = false) {
     document.addEventListener('click', (e) => {
       const el = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
       if (!el) return;
@@ -91,9 +91,12 @@ export class Panels {
     const who = pub.players.map((p) => `<li><i style="background:${p.look.color}"></i>${esc(p.look.name)}${p.id === pub.hostId ? ' <em>host</em>' : ''}</li>`).join('');
     const lens = [300, 420, 600].map((s) => `<button class="chip ${s === this.roundSec ? 'on' : ''}" data-act="len" data-v="${s}">${s / 60} min</button>`).join('');
     const controls = host
-      ? `<div class="row">${lens}</div><button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty seats with bots</button><button class="big" data-act="start">Start the round</button>`
+      ? `<div class="row">${lens}</div>${this.solo ? '' : `<button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty seats with bots</button>`}<button class="big" data-act="start">Start the round</button>`
       : `<p class="quiet">Waiting for the host to start.</p>`;
-    return `<h2>Threes a crowd</h2><p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>
+    const roomLine = this.solo
+      ? '<p class="quiet">Solo practice: bots fill the other seats. Walk around, pick up things, then start a round.</p>'
+      : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
+    return `<h2>Threes a crowd</h2>${roomLine}
       <label>Your name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>
       <div class="label">Colour</div><div class="swatches">${colors}</div>
       <div class="label">Hat</div><div class="row wrap">${hats}</div>
