@@ -1,110 +1,113 @@
 /**
  * Server-side state. Everything here is authoritative and lives only on the server.
- * Clients get a filtered copy built by view.ts.
  */
-import type { ActId, Attrs, Catch, Lane } from '../shared/activities';
-import type { Task } from '../shared/tasks';
-import type { Look, Phase, PrivateEvent } from '../shared/protocol';
+import type { FieldDef } from '../shared/field';
+import type { FieldScore, LeaderRow, Look, Mode, Phase, Posture, PrivateEvent } from '../shared/protocol';
 import type { Rng } from '../shared/rng';
 
 export interface BotBrain {
-  target: { x: number; z: number } | null;
-  wait: number;
-  /** :( bots: how often each attribute value has been seen in others' catches this task. */
-  belief: Record<string, number>;
-  /** Last catch seq seen per player, so a watched catch is counted once. */
-  seen: Record<string, number>;
-  /** When to press in the current minigame (ms into the lane), decided at the start. */
-  pressAt: number | null;
-  /** Painting: the medium, colour and subject the bot will choose. */
-  pick: Attrs | null;
+  /** Which side of the flock this bot covers (-1 left, 0 behind, 1 right). */
+  flank: number;
+  barkCd: number;
+  /** Versus: some bots go and make trouble on the other side. */
+  raider: boolean;
+  /** Stuck detection: where we were, how long we've been wedged, and how long to circle the other way. */
+  lastX: number;
+  lastZ: number;
+  stuckT: number;
+  flipT: number;
 }
 
-/** A minigame in progress. */
-export interface Attempt { spot: string; lane: Lane; startedAt: number }
-
-export interface Player {
+export interface Dog {
   id: string;
   token: string;
   look: Look;
+  team: 0 | 1;
   x: number;
   z: number;
   dx: number;
   dz: number;
-  /** Last direction moved: where a snowball goes. */
-  fx: number;
-  fz: number;
-  throwCd: number;
-  /** The minigame you are in, if any (you cannot walk while in one). */
-  attempt: Attempt | null;
-  /** Attempts at the current task. */
-  basket: Catch[];
-  /** Best attempt per task so far (scored only at the reveal). */
-  best: (Catch | null)[];
-  last: { act: ActId; attrs: Attrs | null; seq: number; at: number } | null;
-  inPen: boolean;
-  sign: string | null;
-  spectator: boolean;
+  rot: number;
+  wantSprint: boolean;
+  wantCrouch: boolean;
+  posture: Posture;
+  /** Seconds crouched and still: past a moment, the dog lies down and gives the sheep "eye". */
+  stillFor: number;
+  stamina: number;
+  /** Seconds left frozen under the goat's stare. */
+  frozen: number;
+  barkCd: number;
+  barks: number;
+  /** Barks this field, for the calm-herding bonus. */
+  fieldBarks: number;
   connected: boolean;
-  /** Real seconds (room clock) when the last connection closed. */
   leftAt: number;
-  role: 'knower' | 'sad' | null;
-  accusationUsed: boolean;
-  score: number;
-  /** Score when this round started, so the reveal can show points earned this round. */
-  roundStart: number;
-  meter: number;
-  meterActive: boolean;
-  awaitingChoice: boolean;
-  /** For a jailed :( player: who caught them. */
-  caughtBy: string | null;
+  spectator: boolean;
   bot: BotBrain | null;
 }
 
-export interface Spot { id: string; area: string; act: ActId; x: number; z: number; busyBy: string | null }
+export interface Sheep {
+  id: number;
+  x: number;
+  z: number;
+  vx: number;
+  vz: number;
+  rot: number;
+  fear: number;
+  /** A bark or bleat just went off nearby: keeps them galloping for a moment. */
+  startle: number;
+  team: 0 | 1 | null;
+  /** Each sheep wanders toward its own idea of a nice patch of grass. */
+  wx: number;
+  wz: number;
+  wanderT: number;
+}
 
 export interface Goat {
   x: number;
   z: number;
-  mood: 'wander' | 'eat' | 'stare' | 'pester';
+  vx: number;
+  vz: number;
+  rot: number;
+  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee';
   target: string | null;
-  tx: number;
-  tz: number;
   timer: number;
-  stareCooldown: number;
-  pesterCd: number;
-  /** Cooldown on staring down someone who is NOT in the Pen. */
-  freeStareCd: number;
+  bleatIn: number;
+  bleats: number;
+  /** Seconds since a dog barked near it: the goat only really moves for barking. */
+  annoy: number;
+  /** The last dog to bark within earshot: the one the goat comes for. */
+  lastBarker: string | null;
+  stareCd: number;
+  wx: number;
+  wz: number;
 }
-
-export interface Snowball { id: number; x: number; z: number; vx: number; vz: number; owner: string; life: number }
-export interface PenTarget { x: number; z: number; up: boolean; downUntil: number }
 
 export interface Room {
   phase: Phase;
+  mode: Mode;
   clock: number;
-  /** Unscaled seconds: minigames run in real time even when tests speed up the round clock. */
   realClock: number;
   timeLeft: number;
-  roundSec: number;
+  /** Seconds all sheep have been penned (finishes the field early when held). */
+  /** Per team: how long every sheep has been in, and the time left when that first held (finished). */
+  holdFor: [number, number];
+  doneAt: [number | null, number | null];
   hostId: string | null;
-  tasks: Task[];
-  taskIdx: number;
-  taskTime: number;
-  players: Map<string, Player>;
-  spots: Spot[];
-  goat: Goat;
-  snowballs: Snowball[];
-  targets: PenTarget[];
+  field: FieldDef;
+  fieldIdx: number;
+  fieldCount: number;
+  dogs: Map<string, Dog>;
+  sheep: Sheep[];
+  goat: Goat | null;
+  fieldScores: FieldScore[][];
+  leaderboard: LeaderRow[];
+  /** Barks and bleats this tick, for the flock to react to. */
+  noises: { kind: 'bark' | 'bleat'; x: number; z: number; by: string | null }[];
   rng: Rng;
-  reveal: import('../shared/protocol').PublicView['reveal'];
-  emit(playerId: string, ev: PrivateEvent): void;
+  emit(dogId: string, ev: PrivateEvent): void;
 }
 
-export function freePlayers(room: Room): Player[] {
-  return [...room.players.values()].filter((p) => !p.spectator && !p.inPen);
-}
-
-export function activePlayers(room: Room): Player[] {
-  return [...room.players.values()].filter((p) => !p.spectator);
+export function activeDogs(room: Room): Dog[] {
+  return [...room.dogs.values()].filter((d) => !d.spectator);
 }

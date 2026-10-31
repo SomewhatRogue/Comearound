@@ -1,133 +1,122 @@
 /**
- * The goat. A menace with a schedule:
- * - pester: walks up to someone. Mid-minigame? It spooks them and the attempt fails. Otherwise it
- *   may eat something from their basket, or give them a WHAT ARE YOU DOING close-up.
- * - stare: now and then, stares down someone in the Pen (NAUGHTY).
- * - wander, and stand in the way: players can't walk through the goat.
+ * The goat: an agent of chaos among the sheep.
+ * - It ambles about and every so often bleats, scattering the sheep near it.
+ * - It barely gives way to dogs: only a dog giving it the eye (crouched, facing it) moves it.
+ * - Barking annoys it. Bark too much within earshot and it marches over to whoever barked last,
+ *   freezes them with a stare, and they get the NAUGHTY close-up. Time lost.
+ * Pen it for a bonus. In versus, drive it onto the other team's side and let it bleat there.
  */
-import { describe } from '../shared/activities';
-import { PEN, WORLD, inRect } from '../shared/map';
-import type { Goat, Player, Room } from './state';
-import { endAttempt } from './world';
+import { DOG, GOAT } from '../shared/tuning';
+import { isPenned } from './flock';
+import { clampLen, collide, separate } from './physics';
+import type { Goat, Room } from './state';
 
-const SPEED = 2.2;
-const PESTER_SPEED = 3.4;
-const RADIUS = 0.75;
-const STARE_SEC = 3.5;
-const STARE_EVERY = 70;
-const FREE_STARE_EVERY = 35;
-const PESTER_EVERY: [number, number] = [9, 16];
-/** Chance the goat eats from a basket when it reaches someone who isn't busy. */
-const NIBBLE_CHANCE = 0.45;
-
-export function makeGoat(): Goat {
-  return { x: 4, z: 6, mood: 'wander', target: null, tx: 4, tz: 6, timer: 0, stareCooldown: 40, pesterCd: 8, freeStareCd: 20 };
+export function makeGoat(room: Room): Goat | null {
+  const g = room.field.goat;
+  if (!g) return null;
+  return { x: g.x, z: g.z, vx: 0, vz: 0, rot: 0, mood: 'wander', target: null, timer: 0, bleatIn: room.rng.range(...GOAT.bleatEvery), bleats: 0, annoy: 0, lastBarker: null, stareCd: 6, wx: g.x, wz: g.z };
 }
 
-function walk(g: Goat, dt: number, speed = SPEED): boolean {
-  const dx = g.tx - g.x;
-  const dz = g.tz - g.z;
-  const d = Math.hypot(dx, dz);
-  if (d < 0.3) return true;
-  g.x += (dx / d) * Math.min(d, speed * dt);
-  g.z += (dz / d) * Math.min(d, speed * dt);
-  if (inRect(PEN, g.x, g.z, RADIUS)) g.z = Math.min(g.z, PEN.z - PEN.d / 2 - RADIUS);
-  return false;
-}
-
-/** Nobody walks through the goat. */
-export function pushOffGoat(room: Room, p: Player): void {
-  if (p.inPen || p.spectator || p.attempt) return;
+export function goatPenned(room: Room): boolean {
   const g = room.goat;
-  const dx = p.x - g.x;
-  const dz = p.z - g.z;
-  const d = Math.hypot(dx, dz);
-  const min = RADIUS + 0.4;
-  if (d < min && d > 1e-4) [p.x, p.z] = [g.x + (dx / d) * min, g.z + (dz / d) * min];
-}
-
-/** The goat reached its target. Something happens. */
-function mischief(room: Room, g: Goat, t: Player): void {
-  // Spook someone mid-minigame (not at the easel: choosing colours is not fair game).
-  if (t.attempt && t.attempt.lane.act !== 'paint') {
-    endAttempt(room, t, null, true);
-    room.emit(t.id, { kind: 'knocked' });
-    room.emit(t.id, { kind: 'toast', text: 'The goat spooked you. That one did not count.' });
-    return;
-  }
-  if (t.basket.length && room.rng.next() < NIBBLE_CHANCE) {
-    const [eaten] = t.basket.splice(room.rng.int(t.basket.length), 1);
-    room.emit(t.id, { kind: 'knocked' });
-    room.emit(t.id, { kind: 'toast', text: `The goat ate your ${describe(eaten.act, eaten.attrs)}!` });
-    return;
-  }
-  if (g.freeStareCd <= 0) {
-    g.mood = 'stare';
-    g.timer = STARE_SEC;
-    g.freeStareCd = FREE_STARE_EVERY;
-    room.emit(t.id, { kind: 'naughty', words: 'WHAT ARE YOU DOING' });
-  }
+  return !!g && room.field.pens.some((p) => isPenned(room.field, { x: g.x, z: g.z, team: p.team }));
 }
 
 export function tickGoat(room: Room, dt: number): void {
   const g = room.goat;
-  g.stareCooldown -= dt;
-  g.pesterCd -= dt;
-  g.freeStareCd -= dt;
-  const live = room.phase === 'playing';
+  if (!g || room.phase !== 'playing') return;
+  const from = { x: g.x, z: g.z };
+  g.stareCd -= dt;
+  g.annoy = Math.max(0, g.annoy - GOAT.annoyDecay * dt);
+
+  for (const nz of room.noises) {
+    if (nz.kind !== 'bark' || Math.hypot(nz.x - g.x, nz.z - g.z) > GOAT.earshot) continue;
+    g.annoy = Math.min(1, g.annoy + GOAT.annoyPerBark);
+    g.lastBarker = nz.by;
+  }
+
+  let ax = 0;
+  let az = 0;
+  let speed = GOAT.wander;
 
   if (g.mood === 'stare') {
     g.timer -= dt;
-    const t = g.target ? room.players.get(g.target) : null;
-    // A Pen stare ends if they leave the Pen; a free stare ends if they walk away.
-    if (!t || (!t.inPen && Math.hypot(t.x - g.x, t.z - g.z) > 3.5)) g.timer = 0;
     if (g.timer <= 0) [g.mood, g.target] = ['wander', null];
+    g.vx = g.vz = 0;
     return;
   }
 
-  // Stare at the Pen, rarely (or at once, at whoever hit it with a snowball).
-  const jailed = [...room.players.values()].filter((p) => p.inPen);
-  if (live && jailed.length && g.stareCooldown <= 0 && g.mood !== 'pester') {
-    const marked = g.target ? room.players.get(g.target) : undefined;
-    const t = marked?.inPen ? marked : room.rng.pick(jailed);
-    g.target = t.id;
-    g.tx = Math.max(PEN.x - PEN.w / 2, Math.min(PEN.x + PEN.w / 2, t.x));
-    g.tz = PEN.z - PEN.d / 2 - RADIUS - 0.1;
-    if (walk(g, dt, PESTER_SPEED)) {
-      g.mood = 'stare';
-      g.timer = STARE_SEC;
-      g.stareCooldown = STARE_EVERY;
-      room.emit(t.id, { kind: 'naughty', words: 'NAUGHTY' });
+  // Too much barking: march over and stare the barker down.
+  if (g.mood !== 'coming' && g.annoy >= 1 && g.stareCd <= 0 && g.lastBarker && room.dogs.has(g.lastBarker)) {
+    [g.mood, g.target] = ['coming', g.lastBarker];
+  }
+  if (g.mood === 'coming') {
+    const t = room.dogs.get(g.target ?? '');
+    if (!t) g.mood = 'wander';
+    else {
+      const dx = t.x - g.x;
+      const dz = t.z - g.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 1.6) {
+        g.mood = 'stare';
+        g.timer = GOAT.stareSec;
+        g.stareCd = GOAT.stareCooldown;
+        g.annoy = 0;
+        g.rot = Math.atan2(dx, dz);
+        t.frozen = GOAT.stareSec;
+        room.emit(t.id, { kind: 'naughty', words: 'NAUGHTY' });
+        return;
+      }
+      ax += (dx / d) * 6;
+      az += (dz / d) * 6;
+      speed = GOAT.speed;
     }
-    return;
-  }
-
-  if (g.mood === 'pester') {
-    g.timer -= dt;
-    const t = g.target ? room.players.get(g.target) : null;
-    if (!t || t.inPen || g.timer <= 0) return void ([g.mood, g.target] = ['wander', null]);
-    // Get in front of them, the way they are heading.
-    const len = Math.hypot(t.dx, t.dz);
-    [g.tx, g.tz] = len > 0.1 ? [t.x + (t.dx / len) * 1.1, t.z + (t.dz / len) * 1.1] : [t.x + 0.9, t.z + 0.4];
-    walk(g, dt, PESTER_SPEED);
-    if (Math.hypot(t.x - g.x, t.z - g.z) < RADIUS + 0.7) {
-      mischief(room, g, t);
-      if (g.mood === 'pester') [g.mood, g.target] = ['wander', null];
+  } else {
+    // Bleat now and then.
+    g.bleatIn -= dt;
+    if (g.bleatIn <= 0) {
+      g.bleatIn = room.rng.range(...GOAT.bleatEvery);
+      g.bleats++;
+      g.mood = 'bleat';
+      g.timer = 1;
+      room.noises.push({ kind: 'bleat', x: g.x, z: g.z, by: null });
     }
-    return;
+    if (g.mood === 'bleat' && (g.timer -= dt) <= 0) g.mood = 'wander';
+    // Only the eye moves the goat.
+    let fled = false;
+    for (const d of room.dogs.values()) {
+      if (d.spectator || d.posture !== 'crouch') continue;
+      const dx = g.x - d.x;
+      const dz = g.z - d.z;
+      const dist = Math.hypot(dx, dz) || 1e-3;
+      const facing = (Math.sin(d.rot) * -dx + Math.cos(d.rot) * -dz) / dist < -Math.cos(DOG.eyeCone);
+      if (dist < GOAT.flight && facing) {
+        ax += (dx / dist) * 5;
+        az += (dz / dist) * 5;
+        speed = GOAT.speed * 0.6;
+        fled = true;
+      }
+    }
+    if (fled && g.mood === 'wander') g.mood = 'flee';
+    if (!fled && g.mood === 'flee') g.mood = 'wander';
+    if (!fled) {
+      if (Math.hypot(g.wx - g.x, g.wz - g.z) < 0.5 || room.rng.next() < 0.1 * dt) [g.wx, g.wz] = [g.x + room.rng.range(-5, 5), g.z + room.rng.range(-5, 5)];
+      const gx = g.wx - g.x;
+      const gz = g.wz - g.z;
+      const gd = Math.hypot(gx, gz) || 1;
+      ax += (gx / gd) * 1.5;
+      az += (gz / gd) * 1.5;
+    }
   }
 
-  if (live && g.pesterCd <= 0) {
-    g.pesterCd = room.rng.range(...PESTER_EVERY);
-    const free = [...room.players.values()].filter((p) => !p.inPen && !p.spectator);
-    // Busy players are the most fun to bother.
-    const busy = free.filter((p) => p.attempt);
-    if (free.length) [g.mood, g.target, g.timer] = ['pester', (busy.length && room.rng.next() < 0.6 ? room.rng.pick(busy) : room.rng.pick(free)).id, 7];
-    return;
-  }
-
-  if (walk(g, dt)) {
-    g.tx = room.rng.range(-WORLD.w / 2 + 3, WORLD.w / 2 - 3);
-    g.tz = room.rng.range(-WORLD.d / 2 + 3, PEN.z - PEN.d);
-  }
+  g.vx = (g.vx + ax * dt) * Math.exp(-dt * 2);
+  g.vz = (g.vz + az * dt) * Math.exp(-dt * 2);
+  [g.vx, g.vz] = clampLen(g.vx, g.vz, speed);
+  g.x += g.vx * dt;
+  g.z += g.vz * dt;
+  [g.x, g.z] = collide(room.field, g.x, g.z, GOAT.radius, { from });
+  if (Math.hypot(g.vx, g.vz) > 0.1) g.rot = Math.atan2(g.vx, g.vz);
+  for (const s of room.sheep) separate(g, s, GOAT.radius + 0.5, 0.3);
+  for (const d of room.dogs.values()) if (!d.spectator) separate(g, d, GOAT.radius + DOG.radius, 0.2);
+  [g.x, g.z] = collide(room.field, g.x, g.z, GOAT.radius, { from });
 }

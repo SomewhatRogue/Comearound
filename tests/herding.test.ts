@@ -1,0 +1,221 @@
+import { describe, expect, it } from 'vitest';
+import { TRIALS, VERSUS, inPen } from '../src/shared/field';
+import { GOAT } from '../src/shared/tuning';
+import { makeBrain } from '../src/server/bots';
+import { isPenned } from '../src/server/flock';
+import { GameRoom } from '../src/server/game';
+import type { Dog } from '../src/server/state';
+
+/** A room with a fake transport that records every message per connection. */
+function harness(humans: number, seed = 7) {
+  const inbox = new Map<string, string[]>();
+  const room = new GameRoom((id, msg) => inbox.get(id)!.push(msg), { seed });
+  for (let i = 0; i < humans; i++) {
+    inbox.set(`c${i}`, []);
+    room.connect(`c${i}`);
+    room.message(`c${i}`, JSON.stringify({ t: 'hello', token: `tok${i}`, look: { name: `H${i}`, breed: 'collie', eyes: 'blue' } }));
+  }
+  const dog = (i: number) => [...room.dogs.values()].find((d) => d.token === `tok${i}`)!;
+  const say = (i: number, m: object) => room.message(`c${i}`, JSON.stringify(m));
+  const run = (sec: number) => { for (let t = 0; t < sec; t += 0.05) room.tick(0.05); };
+  const toPlaying = () => { while (room.phase !== 'playing') room.tick(0.05); };
+  const events = (i: number) => inbox.get(`c${i}`)!.map((m) => JSON.parse(m)).filter((m) => m.t === 'event').map((m) => m.ev);
+  return { room, inbox, dog, say, run, toPlaying, events };
+}
+
+const centroid = (s: { x: number; z: number }[]) => ({ x: s.reduce((a, o) => a + o.x, 0) / s.length, z: s.reduce((a, o) => a + o.z, 0) / s.length });
+/** Park every dog except one far out of the way, so a test sees one dog's effect. */
+const parkOthers = (h: ReturnType<typeof harness>, keep: Dog) => { for (const d of h.room.dogs.values()) if (d !== keep) Object.assign(d, { x: -19, z: -14, bot: null, dx: 0, dz: 0 }); };
+
+describe('the flock', () => {
+  it('sheep move away from a walking dog, and much less from a dog lying down', () => {
+    const away = (crouch: boolean) => {
+      const h = harness(1);
+      h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+      h.toPlaying();
+      const d = h.dog(0);
+      parkOthers(h, d);
+      const c = centroid(h.room.sheep);
+      Object.assign(d, { x: c.x - 3.5, z: c.z });
+      h.say(0, { t: 'input', dx: 0, dz: 0, sprint: false, crouch });
+      h.run(2);
+      return centroid(h.room.sheep).x - c.x;
+    };
+    const walk = away(false);
+    const down = away(true);
+    expect(walk).toBeGreaterThan(1);
+    expect(down).toBeLessThan(walk / 2);
+  });
+
+  it('a bark moves the sheep away much faster than quietly waiting, and has a cooldown', () => {
+    const moved = (barkIt: boolean) => {
+      const h = harness(1);
+      h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+      h.toPlaying();
+      const d = h.dog(0);
+      parkOthers(h, d);
+      const c = centroid(h.room.sheep);
+      Object.assign(d, { x: c.x - 4, z: c.z });
+      h.say(0, { t: 'input', dx: 0, dz: 0, sprint: false, crouch: true });
+      h.run(1);
+      const before = centroid(h.room.sheep).x;
+      if (barkIt) {
+        h.say(0, { t: 'bark' });
+        h.say(0, { t: 'bark' });
+        expect(d.barks).toBe(1);
+      }
+      h.run(1.5);
+      return centroid(h.room.sheep).x - before;
+    };
+    const quiet = moved(false);
+    const loud = moved(true);
+    expect(loud).toBeGreaterThan(1.5);
+    expect(loud).toBeGreaterThan(quiet * 2);
+  });
+
+  it('sheep never end up inside a pen fence, even when shoved at it', () => {
+    const h = harness(1);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+    h.toPlaying();
+    const pen = TRIALS[0].pens[0];
+    const s = h.room.sheep[0];
+    // Just outside the north fence, running hard at it.
+    Object.assign(s, { x: pen.x + 1, z: pen.z - pen.d / 2 - 0.7, vx: 0, vz: 40 });
+    h.run(0.5);
+    expect(s.z).toBeLessThan(pen.z - pen.d / 2);
+    expect(isPenned(h.room.field, s)).toBe(false);
+  });
+
+  it('dogs cannot walk into the pen through the gate', () => {
+    const h = harness(1);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+    h.toPlaying();
+    const d = h.dog(0);
+    const pen = TRIALS[0].pens[0];
+    Object.assign(d, { x: pen.x - pen.w / 2 - 2, z: pen.z });
+    h.say(0, { t: 'input', dx: 1, dz: 0, sprint: false, crouch: false });
+    h.run(2);
+    expect(inPen(pen, d.x, d.z, -0.5)).toBe(false);
+  });
+});
+
+describe('the goat', () => {
+  it('barking near it annoys it until it comes over, stares, freezes you and says NAUGHTY', () => {
+    const h = harness(2);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+    // Field 2 has the goat.
+    h.room.fieldIdx = 1;
+    (h.room as any).phase = 'fieldEnd';
+    h.room.timeLeft = 0;
+    h.toPlaying();
+    const [a, b] = [h.dog(0), h.dog(1)];
+    const g = h.room.goat!;
+    Object.assign(a, { x: g.x - 6, z: g.z });
+    Object.assign(b, { x: -19, z: -14 });
+    g.stareCd = 0;
+    for (let i = 0; i < Math.ceil(1 / GOAT.annoyPerBark); i++) {
+      h.say(0, { t: 'bark' });
+      h.run(1.7);
+    }
+    let t = 0;
+    while (g.mood !== 'stare' && t < 15) { h.run(0.25); t += 0.25; }
+    expect(g.mood).toBe('stare');
+    expect(g.target).toBe(a.id);
+    expect(a.frozen).toBeGreaterThan(0);
+    expect(h.events(0).some((e) => e.kind === 'naughty')).toBe(true);
+    expect(h.events(1).some((e) => e.kind === 'naughty')).toBe(false);
+    // Frozen: input does nothing, and you can't bark.
+    const x = a.x;
+    h.say(0, { t: 'input', dx: 1, dz: 0, sprint: true, crouch: false });
+    h.say(0, { t: 'bark' });
+    h.run(0.5);
+    expect(a.x).toBeCloseTo(x, 1);
+  });
+});
+
+describe('fields, scores and bots', () => {
+  it('a field ends once every sheep is in and held; you score sheep, time and calm', () => {
+    const h = harness(1);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+    h.toPlaying();
+    const pen = h.room.field.pens[0];
+    h.room.sheep.forEach((s, i) => Object.assign(s, { x: pen.x + ((i % 3) - 1) * 1.2, z: pen.z + (Math.floor(i / 3) - 1) * 1.2, vx: 0, vz: 0 }));
+    for (const d of h.room.dogs.values()) Object.assign(d, { x: -15, z: 10, bot: null });
+    h.run(3.5);
+    expect(h.room.phase).toBe('fieldEnd');
+    const s = h.room.fieldScores[0][0];
+    expect(s.penned).toBe(s.total);
+    expect(s.timeBonus).toBeGreaterThan(0);
+    expect(s.calmBonus).toBe(200);
+    expect(s.score).toBe(s.penned * 100 + s.timeBonus + s.calmBonus + s.goatBonus);
+  });
+
+  it('bots alone clear The Meadow in time, on several seeds', () => {
+    for (const seed of [1, 2, 3]) {
+      const h = harness(1, seed);
+      h.say(0, { t: 'start', mode: 'trials', fillBots: true });
+      h.dog(0).bot = makeBrain(0);
+      while (h.room.phase !== 'fieldEnd') h.room.tick(0.05);
+      const s = h.room.fieldScores[0][0];
+      expect(s.penned, `seed ${seed}`).toBe(s.total);
+    }
+  });
+
+  it('versus: teams are even, sheep only count in their own pen, and three fields make a match', () => {
+    const h = harness(3);
+    h.say(0, { t: 'start', mode: 'versus', fillBots: true });
+    const dogs = [...h.room.dogs.values()];
+    expect(dogs.length).toBe(4);
+    expect(dogs.filter((d) => d.team === 0).length).toBe(2);
+    expect(h.room.fieldCount).toBe(3);
+    const s = h.room.sheep.find((o) => o.team === 0)!;
+    const theirs = VERSUS.pens.find((p) => p.team === 1)!;
+    Object.assign(s, { x: theirs.x, z: theirs.z });
+    expect(isPenned(h.room.field, s)).toBe(false);
+  });
+});
+
+describe('joining', () => {
+  it('a rejoin with the same token gets the same seat back, mid-run', () => {
+    const h = harness(2);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: true });
+    h.toPlaying();
+    const id = h.dog(1).id;
+    h.room.disconnect('c1');
+    h.run(5);
+    h.inbox.set('c9', []);
+    h.room.message('c9', JSON.stringify({ t: 'hello', token: 'tok1', look: { name: 'H1' } }));
+    expect(h.dog(1).id).toBe(id);
+    expect(h.dog(1).connected).toBe(true);
+    expect(h.dog(1).spectator).toBe(false);
+  });
+
+  it('someone new mid-run watches until the next run', () => {
+    const h = harness(1);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: true });
+    h.inbox.set('c5', []);
+    h.room.message('c5', JSON.stringify({ t: 'hello', token: 'late', look: { name: 'Late' } }));
+    expect([...h.room.dogs.values()].find((d) => d.token === 'late')!.spectator).toBe(true);
+  });
+
+  it('a host who drops in the lobby keeps host within the grace, and hands it on after', () => {
+    const h = harness(2);
+    expect(h.room.hostId).toBe(h.dog(0).id);
+    h.room.disconnect('c0');
+    h.run(10);
+    expect(h.room.hostId).toBe(h.dog(0).id);
+    h.run(25);
+    expect(h.room.hostId).toBe(h.dog(1).id);
+  });
+
+  it('looks are checked: unknown breeds, coats and eyes fall back to defaults', () => {
+    const h = harness(0);
+    h.inbox.set('x', []);
+    h.room.message('x', JSON.stringify({ t: 'hello', token: 't', look: { name: '<b>Rex</b>', breed: 'dragon', coat: 'plaid', eyes: 'laser', collar: 'x' } }));
+    const d = [...h.room.dogs.values()][0];
+    expect(d.look.breed).toBe('collie');
+    expect(d.look.coat).toBe('black-white');
+    expect(d.look.eyes).toBe('brown');
+    expect(d.look.name).toBe('bRexb');
+  });
+});

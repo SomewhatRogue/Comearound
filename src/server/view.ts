@@ -1,52 +1,35 @@
 /**
- * Builds what each client may see. The public half is built once per tick and shared;
- * the private half is per player. Nothing secret goes in the public half, ever:
- * no roles, no thing id (until the reveal), no reasons for the Pen.
+ * What each client sees. Herding has no secrets, so the public half is nearly everything;
+ * the private half is your own stamina and bark cooldown.
  */
 import type { PrivateView, PublicView } from '../shared/protocol';
-import type { Player, Room } from './state';
+import { isDown } from './dogs';
+import { isPenned } from './flock';
+import { goatPenned } from './goat';
+import type { Dog, Room } from './state';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export function publicView(room: Room): PublicView {
+  const g = room.goat;
   return {
     phase: room.phase,
+    mode: room.mode,
     hostId: room.hostId,
+    fieldIdx: room.fieldIdx,
+    fieldCount: room.fieldCount,
     timeLeft: Math.max(0, Math.ceil(room.timeLeft)),
-    sadCount: [...room.players.values()].filter((p) => p.role === 'sad').length,
-    players: [...room.players.values()].map((p) => ({
-      id: p.id,
-      look: p.look,
-      x: r2(p.x),
-      z: r2(p.z),
-      doing: p.attempt?.lane.act ?? null,
-      // A catch shows above your head for a few seconds; after that it is your secret.
-      last: p.last && room.realClock - p.last.at < 3 ? { act: p.last.act, attrs: p.last.attrs, seq: p.last.seq } : null,
-      inPen: p.inPen,
-      sign: p.sign,
-      spectator: p.spectator,
-      connected: p.connected || !!p.bot,
+    dogs: [...room.dogs.values()].map((d) => ({
+      id: d.id, look: d.look, team: d.team, x: r2(d.x), z: r2(d.z), rot: r2(d.rot), posture: d.posture,
+      down: isDown(d), frozen: d.frozen > 0, barks: d.barks, bot: !!d.bot, connected: d.connected || !!d.bot, spectator: d.spectator,
     })),
-    taskIdx: room.taskIdx,
-    taskCount: room.tasks.length,
-    taskAct: room.phase === 'playing' ? room.tasks[room.taskIdx]?.act ?? null : null,
-    busy: room.spots.filter((s) => s.busyBy).map((s) => s.id),
-    goat: { x: r2(room.goat.x), z: r2(room.goat.z), mood: room.goat.mood, target: room.goat.target },
-    snowballs: room.snowballs.map((s) => ({ id: s.id, x: r2(s.x), z: r2(s.z) })),
-    targets: room.targets.map((t) => t.up),
-    reveal: room.phase === 'results' ? room.reveal : null,
+    sheep: room.sheep.map((s) => ({ id: s.id, x: r2(s.x), z: r2(s.z), rot: r2(s.rot), fear: r2(s.fear), team: s.team, penned: isPenned(room.field, s) })),
+    goat: g ? { x: r2(g.x), z: r2(g.z), rot: r2(g.rot), mood: g.mood, annoy: r2(g.annoy), target: g.target, bleats: g.bleats, penned: goatPenned(room) } : null,
+    fieldScores: room.fieldScores,
+    leaderboard: room.leaderboard,
   };
 }
 
-export function privateView(room: Room, p: Player): PrivateView {
-  return {
-    you: p.id,
-    role: p.role,
-    task: p.role === 'knower' && room.phase === 'playing' && room.tasks[room.taskIdx] ? { text: room.tasks[room.taskIdx].text, want: room.tasks[room.taskIdx].want } : null,
-    basket: p.basket,
-    accusationUsed: p.accusationUsed,
-    score: p.score,
-    meter: Math.floor(p.meter),
-    awaitingChoice: p.awaitingChoice,
-  };
+export function privateView(_room: Room, d: Dog): PrivateView {
+  return { you: d.id, stamina: Math.round(d.stamina), barkReady: d.barkCd <= 0 };
 }

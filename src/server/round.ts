@@ -1,145 +1,113 @@
 /**
- * Round rules: a sequence of tasks, accusations at the board, the accuser's choice, the Pen,
- * and the reveal, where every best attempt is scored by how close it came to the ask.
- * The :( player never sees the ask; if nobody calls them out, their points are multiplied.
+ * Runs: Co-op Trials (three fields, scores add up, best runs go on the leaderboard) and Versus
+ * (two teams, one field, own-colour sheep only count in your own pen).
+ * Each field: a 3-second intro, play until every sheep is penned and held (or time runs out),
+ * then a score card. Score = penned sheep + time left (only if you penned them all) + calm
+ * herding (fewer barks per sheep) + the goat, if you managed to pen it.
  */
-import { describe } from '../shared/activities';
-import { BOARD, REACH, dist } from '../shared/map';
-import { SAD_MULTIPLIER, TASK_POINTS, closeness, makeTasks } from '../shared/tasks';
-import { activePlayers, type Player, type Room } from './state';
-import { endAttempt, makeSpots, placeInSquare, sendToPen } from './world';
+import { TRIALS, VERSUS } from '../shared/field';
+import type { FieldScore, Mode } from '../shared/protocol';
+import { DOG, SCORE } from '../shared/tuning';
+import { isPenned, spawnFlock } from './flock';
+import { goatPenned, makeGoat } from './goat';
+import { activeDogs, type Room } from './state';
 
-/** One pool for everyone sent to the Pen, so the sign never says why they are there. */
-export const SIGNS = ['Rabble Rouser', 'Known Goat Associate', 'Ask Me About My Crimes', 'Professional Nuisance', 'Under Review', 'Sus'];
+export const INTRO_SEC = 3;
+export const CARD_SEC = 6;
 
-export const POINTS = { catch: 150, knowersWin: 50, meterPerSec: 2 };
-export const TASKS_PER_ROUND = 3;
-
-export function sadCountFor(n: number): number {
-  return n <= 6 ? 1 : n <= 9 ? 2 : 3;
+export function startRun(room: Room, mode: Mode): void {
+  room.mode = mode;
+  room.fieldIdx = 0;
+  room.fieldCount = mode === 'trials' ? TRIALS.length : 3;
+  room.fieldScores = [];
+  const dogs = room.rng.shuffle(activeDogs(room));
+  // Versus: alternate so teams stay even (humans were added first, so they spread across teams).
+  dogs.sort((a, b) => Number(!!a.bot) - Number(!!b.bot)).forEach((d, i) => (d.team = mode === 'versus' ? ((i % 2) as 0 | 1) : 0));
+  startField(room);
 }
 
-export function startRound(room: Room, roundSec: number): void {
-  const players = activePlayers(room);
-  room.roundSec = roundSec;
-  room.tasks = makeTasks(room.rng, TASKS_PER_ROUND);
-  room.taskIdx = 0;
-  room.taskTime = roundSec / TASKS_PER_ROUND;
-  room.timeLeft = room.taskTime;
-  room.spots = makeSpots();
-  room.reveal = null;
-  const sadIds = new Set(room.rng.shuffle(players.map((p) => p.id)).slice(0, sadCountFor(players.length)));
-  for (const p of players) {
-    p.role = sadIds.has(p.id) ? 'sad' : 'knower';
-    p.accusationUsed = false;
-    p.inPen = false;
-    p.sign = null;
-    p.attempt = null;
-    p.basket = [];
-    p.best = room.tasks.map(() => null);
-    p.last = null;
-    p.meter = 0;
-    p.meterActive = false;
-    p.awaitingChoice = false;
-    p.caughtBy = null;
-    p.roundStart = p.score;
-    if (p.bot) p.bot = { target: null, wait: room.rng.range(0.5, 2), belief: {}, seen: {}, pressAt: null, pick: null };
-    placeInSquare(room, p);
+export function startField(room: Room): void {
+  room.field = room.mode === 'trials' ? TRIALS[room.fieldIdx] : VERSUS;
+  room.sheep = spawnFlock(room);
+  room.goat = makeGoat(room);
+  room.holdFor = [0, 0];
+  room.doneAt = [null, null];
+  const counts = [0, 0];
+  for (const d of activeDogs(room)) {
+    const starts = room.field.starts.filter((s) => s.team === d.team);
+    const s = starts[counts[d.team]++ % starts.length];
+    Object.assign(d, { x: s.x + room.rng.range(-0.5, 0.5), z: s.z + room.rng.range(-0.5, 0.5), dx: 0, dz: 0, stamina: DOG.staminaMax, frozen: 0, barkCd: 0, fieldBarks: 0, stillFor: 0 });
   }
-  room.phase = 'playing';
+  room.phase = 'intro';
+  room.timeLeft = INTRO_SEC;
 }
 
-/** Keep each player's best attempt at the current task. Scored only at the reveal. */
-export function recordBest(room: Room, p: Player): void {
-  const task = room.tasks[room.taskIdx];
-  if (!task) return;
-  for (const c of p.basket) if (closeness(task, c) >= closeness(task, p.best[room.taskIdx])) p.best[room.taskIdx] = c;
-}
-
-function atBoard(p: Player): boolean {
-  return dist(p.x, p.z, BOARD.x, BOARD.z) <= REACH.board;
-}
-
-export function accuse(room: Room, p: Player, targetId: string): void {
-  const target = room.players.get(targetId);
-  // :( players only fake it; accusing is for knowers (Kyle, 2026-10-30).
-  if (room.phase !== 'playing' || p.role === 'sad' || p.inPen || p.spectator || p.accusationUsed || !atBoard(p)) return;
-  if (!target || target === p || target.inPen || target.spectator) return;
-  p.accusationUsed = true;
-  if (target.role === 'sad') {
-    sendToPen(room, target);
-    target.sign = room.rng.pick(SIGNS);
-    target.caughtBy = p.id;
-    p.score += POINTS.catch;
-    p.meterActive = true;
-    p.awaitingChoice = true;
-    room.emit(p.id, { kind: 'pop', amount: POINTS.catch, label: 'You caught one!' });
-    room.emit(p.id, { kind: 'caught' });
-  } else {
-    sendToPen(room, p);
-    p.sign = room.rng.pick(SIGNS);
-    room.emit(p.id, { kind: 'wrongAccusation' });
-  }
-}
-
-export function choose(room: Room, p: Player, endNow: boolean): void {
-  if (!p.awaitingChoice) return;
-  p.awaitingChoice = false;
-  if (endNow) finishRound(room);
+/** Sheep a team still has to pen, and how many it has penned. */
+export function tally(room: Room, team: 0 | 1 | null): { penned: number; total: number } {
+  const mine = room.sheep.filter((s) => team === null || s.team === team);
+  return { penned: mine.filter((s) => isPenned(room.field, s)).length, total: mine.length };
 }
 
 export function tickRound(room: Room, dt: number): void {
+  if (room.phase === 'intro') {
+    room.timeLeft -= dt;
+    if (room.timeLeft <= 0) [room.phase, room.timeLeft] = ['playing', room.field.timeLimit];
+    return;
+  }
+  if (room.phase === 'fieldEnd') {
+    room.timeLeft -= dt;
+    if (room.timeLeft > 0) return;
+    room.fieldIdx++;
+    if (room.fieldIdx < room.fieldCount) return startField(room);
+    return finishRun(room);
+  }
   if (room.phase !== 'playing') return;
   room.timeLeft -= dt;
-  for (const p of room.players.values()) if (p.meterActive) p.meter += POINTS.meterPerSec * dt;
-  if (room.timeLeft > 0) return;
-  nextTask(room);
+  const teams: (0 | 1 | null)[] = room.mode === 'versus' ? [0, 1] : [null];
+  for (const t of teams) {
+    const i = t ?? 0;
+    const { penned, total } = tally(room, t);
+    room.holdFor[i] = total > 0 && penned === total ? room.holdFor[i] + dt : 0;
+    if (room.holdFor[i] >= SCORE.holdToFinish && room.doneAt[i] === null) {
+      room.doneAt[i] = Math.max(0, room.timeLeft);
+      // Versus: the other team plays on. Tell everyone who's in.
+      if (room.mode === 'versus') for (const d of activeDogs(room)) room.emit(d.id, { kind: 'toast', text: d.team === i ? 'All yours are in! Hold the gate, or go make mischief.' : 'They have all theirs in. Hurry!' });
+    }
+  }
+  if (teams.every((t) => room.doneAt[t ?? 0] !== null) || room.timeLeft <= 0) endField(room);
 }
 
-/** Close the current task (attempts in progress end) and open the next, or finish the round. */
-export function nextTask(room: Room): void {
-  for (const p of activePlayers(room)) {
-    endAttempt(room, p, null, true);
-    recordBest(room, p);
-    p.basket = [];
-  }
-  room.taskIdx++;
-  if (room.taskIdx >= room.tasks.length) return finishRound(room);
-  room.timeLeft = room.taskTime;
-  const act = room.tasks[room.taskIdx].act;
-  for (const p of room.players.values()) room.emit(p.id, { kind: 'toast', text: `Task ${room.taskIdx + 1} of ${room.tasks.length}: ${act === 'paint' ? 'painting' : act}` });
+export function scoreField(room: Room, team: 0 | 1 | null): FieldScore {
+  const { penned, total } = tally(room, team);
+  const dogs = activeDogs(room).filter((d) => team === null || d.team === team);
+  const barks = dogs.reduce((n, d) => n + d.fieldBarks, 0);
+  const all = penned === total && total > 0;
+  // Time bonus: the time left when you finished, if they're all still in at the end.
+  const doneAt = room.doneAt[team ?? 0];
+  const timeBonus = all && doneAt !== null ? Math.round(doneAt * SCORE.perSecondLeft) : 0;
+  const calm = Math.max(0, 1 - barks / Math.max(1, total * 1.5));
+  const calmBonus = Math.round(SCORE.calmBonus * calm * (penned / Math.max(1, total)));
+  const g = room.goat;
+  const goatHome = !!g && goatPenned(room) && room.field.pens.some((p) => (team === null || p.team === team) && isPenned(room.field, { x: g.x, z: g.z, team: p.team }));
+  const goatBonus = goatHome ? SCORE.goatPenned : 0;
+  return { team, penned, total, timeBonus, calmBonus, goatBonus, score: penned * SCORE.perSheep + timeBonus + calmBonus + goatBonus };
 }
 
-export function finishRound(room: Room): void {
-  const players = activePlayers(room);
-  for (const p of players) {
-    p.meterActive = false;
-    p.awaitingChoice = false;
-    endAttempt(room, p, null, true);
-    recordBest(room, p);
-    p.basket = [];
-  }
-  const freeSad = players.filter((p) => p.role === 'sad' && !p.inPen);
-  const rows = players.map((p) => {
-    const perTask = room.tasks.map((t, i) => {
-      const c = p.best[i] ?? null;
-      return { desc: c ? describe(c.act, c.attrs) : null, pts: Math.round(TASK_POINTS * closeness(t, c)) };
-    });
-    let pts = perTask.reduce((a, b) => a + b.pts, 0);
-    // The :( player's hidden multiplier, unless someone called them out.
-    if (p.role === 'sad' && !p.inPen) pts *= SAD_MULTIPLIER;
-    p.score += pts + Math.round(p.meter);
-    return { p, perTask };
-  });
-  const sadWon = freeSad.length > 0;
-  if (!sadWon) for (const { p } of rows) if (p.role === 'knower') p.score += POINTS.knowersWin;
-  room.reveal = {
-    tasks: room.tasks.map((t) => ({ act: t.act, text: t.text })),
-    winner: sadWon ? 'sad' : 'knowers',
-    rows: rows.map(({ p, perTask }) => ({
-      id: p.id, sad: p.role === 'sad', inPen: p.inPen, caughtOut: p.role === 'sad' && p.inPen, perTask, points: p.score - p.roundStart, total: p.score,
-    })),
-  };
+export function endField(room: Room): void {
+  const teams: (0 | 1 | null)[] = room.mode === 'versus' ? [0, 1] : [null];
+  room.fieldScores.push(teams.map((t) => scoreField(room, t)));
+  for (const d of room.dogs.values()) [d.dx, d.dz] = [0, 0];
+  room.phase = 'fieldEnd';
+  room.timeLeft = CARD_SEC;
+}
+
+export function finishRun(room: Room): void {
   room.phase = 'results';
   room.timeLeft = 0;
+  if (room.mode !== 'trials') return;
+  const score = room.fieldScores.reduce((n, f) => n + f[0].score, 0);
+  const names = activeDogs(room).map((d) => d.look.name);
+  room.leaderboard.push({ names, score, mode: 'trials', when: Date.now() });
+  room.leaderboard.sort((a, b) => b.score - a.score);
+  room.leaderboard.splice(10);
 }

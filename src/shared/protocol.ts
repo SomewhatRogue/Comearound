@@ -1,107 +1,107 @@
 /**
- * Every message that crosses the wire. Secrets never appear in PublicView: the ask, other players'
- * roles, why anyone is in the Pen, whether an accusation was right, anyone's score this round, and
- * what anyone has in their basket. What everyone DOES see: the current activity, what each player
- * is doing, and what they just caught (or painted).
+ * Every message that crosses the wire. Herding has no secrets, so the public view is most of it;
+ * the private view carries your own stamina and cooldowns.
  */
-import type { ActId, Attrs, Catch, Lane } from './activities';
+import type { Breed } from './looks';
 
-export type Phase = 'lobby' | 'playing' | 'results';
+export type Phase = 'lobby' | 'intro' | 'playing' | 'fieldEnd' | 'results';
+export type Mode = 'trials' | 'versus';
+export type Posture = 'walk' | 'sprint' | 'crouch';
 
-export interface Look { color: string; hat: string; name: string }
+export interface Look { name: string; breed: Breed; coat: string; collar: string; eyes: string }
 
 export type ClientMsg =
   | { t: 'hello'; token: string; look: Look }
-  | { t: 'input'; dx: number; dz: number }
-  /** Start the activity at the spot you are standing at, or throw a snowball in the Pen. */
-  | { t: 'interact' }
-  /** Press during a minigame: ms since the lane started on your screen. Painting adds your picks. */
-  | { t: 'press'; at: number; pick?: Attrs }
-  | { t: 'accuse'; targetId: string }
-  | { t: 'choice'; endNow: boolean }
+  /** Movement plus posture; sent when any of it changes. */
+  | { t: 'input'; dx: number; dz: number; sprint: boolean; crouch: boolean }
+  | { t: 'bark' }
   | { t: 'look'; look: Look }
-  | { t: 'start'; roundSec: number; fillBots: boolean }
+  | { t: 'start'; mode: Mode; fillBots: boolean }
   | { t: 'toLobby' }
-  /** Host only: skip to the reveal now. */
-  | { t: 'endRound' };
+  /** Host only: skip the rest of this field. */
+  | { t: 'endField' };
 
-export interface PlayerPub {
+export interface DogPub {
   id: string;
   look: Look;
+  team: 0 | 1;
   x: number;
   z: number;
-  /** The activity this player is in the middle of, for everyone to see. */
-  doing: ActId | null;
-  /** What they just caught (attrs null for a miss), shown above their head for a moment. */
-  last: { act: ActId; attrs: Attrs | null; seq: number } | null;
-  inPen: boolean;
-  /** Sign worn in the Pen, from one shared pool. Never depends on why they are there. */
-  sign: string | null;
-  spectator: boolean;
+  /** Facing, radians (atan2(dx, dz)). */
+  rot: number;
+  posture: Posture;
+  /** Lying down (crouched and still): calms nearby sheep. */
+  down: boolean;
+  frozen: boolean;
+  /** Increments on every bark, so clients can play one woof per bark. */
+  barks: number;
+  bot: boolean;
   connected: boolean;
+  spectator: boolean;
 }
 
-export interface GoatPub { x: number; z: number; mood: 'wander' | 'eat' | 'stare' | 'pester'; target: string | null }
-export interface SnowballPub { id: number; x: number; z: number }
+export interface SheepPub {
+  id: number;
+  x: number;
+  z: number;
+  rot: number;
+  /** 0 calm to 1 panicked: drives the wobble and the sweat drops. */
+  fear: number;
+  team: 0 | 1 | null;
+  penned: boolean;
+}
 
-export interface RevealRow {
-  id: string;
-  sad: boolean;
-  inPen: boolean;
-  /** Called out correctly: a :( player who loses their multiplier. */
-  caughtOut: boolean;
-  /** Best attempt per task: what it was and the points it scored. */
-  perTask: { desc: string | null; pts: number }[];
-  points: number;
+export interface GoatPub {
+  x: number;
+  z: number;
+  rot: number;
+  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee';
+  /** 0 to 1: how close the goat is to coming over to stare someone down. */
+  annoy: number;
+  target: string | null;
+  bleats: number;
+  penned: boolean;
+}
+
+export interface FieldScore {
+  team: 0 | 1 | null;
+  penned: number;
   total: number;
+  timeBonus: number;
+  calmBonus: number;
+  goatBonus: number;
+  score: number;
 }
+
+export interface LeaderRow { names: string[]; score: number; mode: Mode; when: number }
 
 export interface PublicView {
   phase: Phase;
+  mode: Mode;
   hostId: string | null;
+  /** Index into TRIALS (or 0 for versus) and how many fields this run has. */
+  fieldIdx: number;
+  fieldCount: number;
   timeLeft: number;
-  sadCount: number;
-  /** Which task we are on (0-based), of how many, and its activity. Everyone sees the activity. */
-  taskIdx: number;
-  taskCount: number;
-  taskAct: ActId | null;
-  players: PlayerPub[];
-  /** Which activity spots are in use, by spot id. */
-  busy: string[];
-  goat: GoatPub;
-  /** The Pen minigame: snowballs in flight and which crow targets are standing. */
-  snowballs: SnowballPub[];
-  targets: boolean[];
-  /** Filled only in 'results'. */
-  reveal: { tasks: { act: ActId; text: string }[]; winner: 'knowers' | 'sad'; rows: RevealRow[] } | null;
+  dogs: DogPub[];
+  sheep: SheepPub[];
+  goat: GoatPub | null;
+  /** Scores per field so far this run; filled in as each field ends. */
+  fieldScores: FieldScore[][];
+  /** Best runs in this room (and, for solo, this browser keeps its own). */
+  leaderboard: LeaderRow[];
 }
 
 export interface PrivateView {
   you: string;
-  role: 'knower' | 'sad' | null;
-  /** The current ask. Only ever set for knowers. */
-  task: { text: string; want: Attrs } | null;
-  /** Your attempts at the current task. Private: others only saw each one as it happened. */
-  basket: Catch[];
-  accusationUsed: boolean;
-  score: number;
-  /** A correct accuser's push-your-luck meter, private to them. */
-  meter: number;
-  awaitingChoice: boolean;
+  stamina: number;
+  barkReady: boolean;
 }
 
 export type PrivateEvent =
-  | { kind: 'pop'; amount: number; label: string }
-  /** Your minigame starts now: draw this lane and report your press time. */
-  | { kind: 'lane'; lane: Lane }
-  /** Your minigame result. */
-  | { kind: 'result'; act: ActId; attrs: Attrs | null; spoiled: boolean }
-  | { kind: 'caught' }
-  | { kind: 'wrongAccusation' }
   | { kind: 'naughty'; words: string }
-  | { kind: 'bonked' }
-  | { kind: 'knocked' }
-  | { kind: 'toast'; text: string };
+  | { kind: 'toast'; text: string }
+  | { kind: 'pop'; amount: number; label: string };
 
 export type ServerMsg =
   | { t: 'state'; pub: PublicView; me: PrivateView }

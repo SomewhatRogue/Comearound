@@ -1,85 +1,75 @@
 /**
- * GameRoom: one game, transport-agnostic. The Node dev server and the Cloudflare Durable Object
- * both wrap this same class, so game logic never depends on where it runs.
+ * GameRoom: one game, transport-agnostic. The Node dev server, the Cloudflare Durable Object and
+ * solo mode (in the browser) all wrap this same class.
  *
  * Join and rejoin are one path: a client says hello with its token, gets its seat back if it had
  * one, and the next snapshot (full state, every tick) brings it up to date.
  */
+import { TRIALS } from '../shared/field';
+import { BREEDS, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } from '../shared/looks';
 import type { ClientMsg, Look, PrivateEvent, ServerMsg } from '../shared/protocol';
-import { COLORS, HATS } from '../shared/looks';
 import { Rng } from '../shared/rng';
-import { tickBot } from './bots';
-import { makeGoat, pushOffGoat, tickGoat } from './goat';
-import { makeTargets, throwSnowball, tickPen } from './pen';
-import { accuse, choose, finishRound, startRound, tickRound } from './round';
-import { activePlayers, type Player, type Room } from './state';
+import { DOG } from '../shared/tuning';
+import { makeBrain, tickBot } from './bots';
+import { bark, moveDog, separateDogs } from './dogs';
+import { tickFlock } from './flock';
+import { tickGoat } from './goat';
+import { endField, startRun, tickRound } from './round';
+import { activeDogs, type Dog, type Room } from './state';
 import { privateView, publicView } from './view';
-import { makeSpots, movePlayer, placeInSquare, press, startAttempt, tickAttempts } from './world';
 
 export const TICK_HZ = 20;
-const BOT_NAMES = ['Mabel', 'Turnip', 'Old Gus', 'Pip', 'Wendell', 'Bramble', 'Dot', 'Figgy'];
-const MIN_SEATS = 5;
+const BOT_NAMES = ['Biscuit', 'Juniper', 'Scout', 'Maple', 'Pepper', 'Waffles', 'Ziggy', 'Clover'];
 const LOBBY_GRACE_SEC = 30;
 
 export interface GameOptions {
   seed?: number;
-  /** Test hook: run the round clock faster so a full round fits in seconds. */
+  /** Test hook: run the clock faster so a full run fits in seconds. */
   timeScale?: number;
 }
 
 export class GameRoom implements Room {
   phase: Room['phase'] = 'lobby';
+  mode: Room['mode'] = 'trials';
   clock = 0;
+  realClock = 0;
   timeLeft = 0;
-  roundSec = 420;
+  holdFor: [number, number] = [0, 0];
+  doneAt: [number | null, number | null] = [null, null];
   hostId: string | null = null;
-  tasks: Room['tasks'] = [];
-  taskIdx = 0;
-  taskTime = 0;
-  players = new Map<string, Player>();
-  spots = makeSpots();
-  goat = makeGoat();
-  snowballs: Room['snowballs'] = [];
-  targets = makeTargets();
+  field = TRIALS[0];
+  fieldIdx = 0;
+  fieldCount = TRIALS.length;
+  dogs = new Map<string, Dog>();
+  sheep: Room['sheep'] = [];
+  goat: Room['goat'] = null;
+  fieldScores: Room['fieldScores'] = [];
+  leaderboard: Room['leaderboard'] = [];
+  noises: Room['noises'] = [];
   rng: Rng;
-  reveal: Room['reveal'] = null;
   private conns = new Map<string, string>();
   private nextId = 1;
   private timeScale: number;
-  realClock = 0;
 
   constructor(private send: (connId: string, msg: string) => void, opts: GameOptions = {}) {
     this.rng = new Rng(opts.seed ?? Date.now());
     this.timeScale = opts.timeScale ?? 1;
   }
 
-  emit(playerId: string, ev: PrivateEvent): void {
-    for (const [conn, pid] of this.conns) if (pid === playerId) this.send(conn, JSON.stringify({ t: 'event', ev } satisfies ServerMsg));
+  emit(dogId: string, ev: PrivateEvent): void {
+    for (const [conn, id] of this.conns) if (id === dogId) this.send(conn, JSON.stringify({ t: 'event', ev } satisfies ServerMsg));
   }
 
-  connect(_connId: string): void {
-    // Nothing until hello: the token decides whether this is a new seat or a returning one.
-  }
+  connect(_connId: string): void {}
 
   disconnect(connId: string): void {
-    const pid = this.conns.get(connId);
+    const id = this.conns.get(connId);
     this.conns.delete(connId);
-    const p = pid ? this.players.get(pid) : undefined;
-    if (!p || [...this.conns.values()].includes(p.id)) return;
-    p.connected = false;
-    p.leftAt = this.realClock;
-    p.dx = p.dz = 0;
-    // Seats are held: a reload or a flaky connection gets the same seat (and host) back.
-    // In the lobby an empty seat is cleared after LOBBY_GRACE_SEC; mid-round it is held to the end.
-  }
-
-  /** Clears lobby seats whose player has been gone too long, and hands on host if needed. */
-  private sweep(): void {
-    for (const [id, p] of this.players) {
-      const gone = !p.connected && !p.bot && this.realClock - p.leftAt > LOBBY_GRACE_SEC;
-      if (gone && (this.phase === 'lobby' || p.spectator)) this.players.delete(id);
-    }
-    if (!this.hostId || !this.players.has(this.hostId)) this.hostId = [...this.players.values()].find((q) => q.connected && !q.bot)?.id ?? null;
+    const d = id ? this.dogs.get(id) : undefined;
+    if (!d || [...this.conns.values()].includes(d.id)) return;
+    d.connected = false;
+    d.leftAt = this.realClock;
+    d.dx = d.dz = 0;
   }
 
   message(connId: string, raw: string): void {
@@ -90,79 +80,76 @@ export class GameRoom implements Room {
       return;
     }
     if (m.t === 'hello') return this.hello(connId, m.token, m.look);
-    const p = this.players.get(this.conns.get(connId) ?? '');
-    if (!p) return;
+    const d = this.dogs.get(this.conns.get(connId) ?? '');
+    if (!d) return;
     switch (m.t) {
       case 'input':
-        [p.dx, p.dz] = [clamp(m.dx), clamp(m.dz)];
+        [d.dx, d.dz, d.wantSprint, d.wantCrouch] = [clamp(m.dx), clamp(m.dz), !!m.sprint, !!m.crouch];
         break;
-      case 'interact':
-        if (p.inPen) throwSnowball(this, p);
-        else startAttempt(this, p);
-        break;
-      case 'press':
-        press(this, p, m.at, m.pick);
-        break;
-      case 'accuse':
-        accuse(this, p, m.targetId);
-        break;
-      case 'choice':
-        choose(this, p, m.endNow);
+      case 'bark':
+        bark(this, d);
         break;
       case 'look':
-        if (this.phase === 'lobby') p.look = cleanLook(m.look);
+        if (this.phase === 'lobby') d.look = cleanLook(m.look);
         break;
       case 'start':
-        if (p.id === this.hostId && this.phase === 'lobby') this.start(m.roundSec, m.fillBots);
+        if (d.id === this.hostId && (this.phase === 'lobby' || this.phase === 'results')) this.start(m.mode === 'versus' ? 'versus' : 'trials', m.fillBots);
         break;
       case 'toLobby':
-        // The host can abandon a round from any phase (the menu's Back to lobby).
-        if (p.id === this.hostId && this.phase !== 'lobby') this.toLobby();
+        if (d.id === this.hostId && this.phase !== 'lobby') this.toLobby();
         break;
-      case 'endRound':
-        if (p.id === this.hostId && this.phase === 'playing') finishRound(this);
+      case 'endField':
+        if (d.id === this.hostId && this.phase === 'playing') endField(this);
         break;
     }
   }
 
   private hello(connId: string, token: string, look: Look): void {
-    let p = [...this.players.values()].find((q) => q.token === token && !q.bot);
-    if (!p) {
-      p = blankPlayer(`p${this.nextId++}`, String(token).slice(0, 64), cleanLook(look));
-      p.spectator = this.phase !== 'lobby';
-      placeInSquare(this, p);
-      this.players.set(p.id, p);
+    let d = [...this.dogs.values()].find((q) => q.token === token && !q.bot);
+    if (!d) {
+      d = blankDog(`p${this.nextId++}`, String(token).slice(0, 64), cleanLook(look));
+      d.spectator = this.phase !== 'lobby' && this.phase !== 'results';
+      d.x = this.rng.range(-4, 4);
+      d.z = this.rng.range(-3, 3);
+      this.dogs.set(d.id, d);
     }
-    p.connected = true;
-    this.conns.set(connId, p.id);
-    if (!this.hostId || !this.players.has(this.hostId)) this.hostId = p.id;
-    this.sendState(connId, p);
+    d.connected = true;
+    this.conns.set(connId, d.id);
+    if (!this.hostId || !this.dogs.has(this.hostId)) this.hostId = d.id;
+    this.sendState(connId, d);
   }
 
-  private start(roundSec: number, fillBots: boolean): void {
-    for (const [id, p] of this.players) if (p.bot) this.players.delete(id);
-    const humans = activePlayers(this).length;
+  private start(mode: Room['mode'], fillBots: boolean): void {
+    for (const [id, d] of this.dogs) {
+      if (d.bot) this.dogs.delete(id);
+      else d.spectator = !d.connected;
+    }
+    const humans = activeDogs(this).length;
+    const want = mode === 'versus' ? Math.max(4, humans + (humans % 2)) : Math.max(3, humans);
     if (fillBots) {
-      for (let i = humans; i < MIN_SEATS; i++) {
+      for (let i = humans; i < want; i++) {
         const id = `p${this.nextId++}`;
-        const bot = blankPlayer(id, `bot-${id}`, { name: BOT_NAMES[i % BOT_NAMES.length], color: this.rng.pick(COLORS), hat: this.rng.pick(HATS) });
-        bot.bot = { target: null, wait: 1, belief: {}, seen: {}, pressAt: null, pick: null };
+        const breed = BREEDS[(i + 2) % BREEDS.length];
+        const bot = blankDog(id, `bot-${id}`, { name: BOT_NAMES[i % BOT_NAMES.length], breed, coat: DEFAULT_COAT[breed], collar: COLLARS[(i + 3) % COLLARS.length], eyes: 'brown' });
         bot.connected = true;
-        this.players.set(id, bot);
+        this.dogs.set(id, bot);
       }
     }
-    if (activePlayers(this).length < 3) return;
-    startRound(this, Math.max(30, Math.min(600, roundSec || 420)));
+    startRun(this, mode);
+    // Bots: spread across the flanks of their team; in a big versus game, one raider per team.
+    for (const team of [0, 1] as const) {
+      const bots = activeDogs(this).filter((d) => d.team === team && (d.bot || d.token.startsWith('bot-')));
+      bots.forEach((d, i) => (d.bot = makeBrain([-1, 1, 0, -0.5, 0.5][i % 5], mode === 'versus' && i === 2)));
+    }
   }
 
   private toLobby(): void {
-    for (const [id, p] of this.players) {
-      if (p.bot || !p.connected) this.players.delete(id);
-      else Object.assign(p, { role: null, inPen: false, sign: null, spectator: false, attempt: null, basket: [], best: [], last: null, meter: 0 });
+    for (const [id, d] of this.dogs) {
+      if (d.bot || !d.connected) this.dogs.delete(id);
+      else Object.assign(d, { spectator: false, frozen: 0 });
     }
-    this.spots = makeSpots();
-    this.snowballs = [];
-    this.reveal = null;
+    this.sheep = [];
+    this.goat = null;
     this.phase = 'lobby';
   }
 
@@ -171,31 +158,39 @@ export class GameRoom implements Room {
     this.clock += dt;
     this.realClock += realDt;
     this.sweep();
-    for (const p of this.players.values()) {
-      if (p.bot) tickBot(this, p, dt);
-      movePlayer(p, dt);
-      if (Math.hypot(p.dx, p.dz) > 0.1) [p.fx, p.fz] = [p.dx, p.dz];
-      p.throwCd -= dt;
-      pushOffGoat(this, p);
+    if (this.phase === 'playing') {
+      for (const d of this.dogs.values()) if (d.bot && !d.spectator) tickBot(this, d, dt);
     }
-    tickAttempts(this);
-    tickGoat(this, dt);
-    tickPen(this, dt);
+    for (const d of this.dogs.values()) if (!d.spectator) moveDog(this, d, this.phase === 'playing' || this.phase === 'lobby' ? dt : 0);
+    separateDogs(this);
+    if (this.phase === 'playing') {
+      tickGoat(this, dt);
+      tickFlock(this, dt);
+    }
+    this.noises = [];
     tickRound(this, dt);
-    for (const [conn, pid] of this.conns) {
-      const p = this.players.get(pid);
-      if (p) this.sendState(conn, p);
+    for (const [conn, id] of this.conns) {
+      const d = this.dogs.get(id);
+      if (d) this.sendState(conn, d);
     }
   }
 
-  private sendState(connId: string, p: Player): void {
-    this.send(connId, JSON.stringify({ t: 'state', pub: publicView(this), me: privateView(this, p) } satisfies ServerMsg));
+  /** Clears lobby seats whose dog has been gone too long, and hands on host if needed. */
+  private sweep(): void {
+    for (const [id, d] of this.dogs) {
+      if (!d.connected && !d.bot && this.realClock - d.leftAt > LOBBY_GRACE_SEC && (this.phase === 'lobby' || this.phase === 'results' || d.spectator)) this.dogs.delete(id);
+    }
+    if (!this.hostId || !this.dogs.has(this.hostId)) this.hostId = [...this.dogs.values()].find((q) => q.connected && !q.bot)?.id ?? null;
   }
 
-  /** One blocking call for probes: where the round stands, as one line. */
+  private sendState(connId: string, d: Dog): void {
+    this.send(connId, JSON.stringify({ t: 'state', pub: publicView(this), me: privateView(this, d) } satisfies ServerMsg));
+  }
+
+  /** One blocking call for probes: where the run stands, as one line. */
   report(): string {
-    const ps = [...this.players.values()];
-    return `phase=${this.phase} t=${this.timeLeft.toFixed(1)} players=${ps.length} bots=${ps.filter((p) => p.bot).length} pen=${ps.filter((p) => p.inPen).length} catches=${ps.reduce((n, p) => n + p.basket.length, 0)}`;
+    const penned = publicView(this).sheep.filter((s) => s.penned).length;
+    return `phase=${this.phase} mode=${this.mode} field=${this.fieldIdx + 1}/${this.fieldCount} t=${this.timeLeft.toFixed(1)} dogs=${this.dogs.size} sheep=${penned}/${this.sheep.length} goat=${this.goat?.mood ?? '-'}`;
   }
 }
 
@@ -204,17 +199,19 @@ function clamp(n: number): number {
 }
 
 function cleanLook(l: Partial<Look> | undefined): Look {
+  const breed = (BREEDS as readonly string[]).includes(String(l?.breed)) ? (l!.breed as Breed) : 'collie';
   return {
-    name: String(l?.name ?? 'Villager').replace(/[^\p{L}\p{N} _'-]/gu, '').slice(0, 14) || 'Villager',
-    color: COLORS.includes(String(l?.color)) ? String(l!.color) : COLORS[0],
-    hat: HATS.includes(String(l?.hat)) ? String(l!.hat) : 'none',
+    name: String(l?.name ?? 'Good dog').replace(/[^\p{L}\p{N} _'-]/gu, '').slice(0, 14) || 'Good dog',
+    breed,
+    coat: COATS.some((c) => c.id === l?.coat) ? String(l!.coat) : DEFAULT_COAT[breed],
+    collar: COLLARS.includes(String(l?.collar)) ? String(l!.collar) : COLLARS[0],
+    eyes: EYES.some((e) => e.id === l?.eyes) ? String(l!.eyes) : 'brown',
   };
 }
 
-function blankPlayer(id: string, token: string, look: Look): Player {
+function blankDog(id: string, token: string, look: Look): Dog {
   return {
-    id, token, look, x: 0, z: 0, dx: 0, dz: 0, fx: 0, fz: 1, throwCd: 0, attempt: null, basket: [], best: [], last: null, inPen: false, sign: null, spectator: false, connected: false,
-    role: null, accusationUsed: false, score: 0, roundStart: 0, meter: 0, meterActive: false,
-    awaitingChoice: false, caughtBy: null, bot: null, leftAt: 0,
+    id, token, look, team: 0, x: 0, z: 0, dx: 0, dz: 0, rot: 0, wantSprint: false, wantCrouch: false, posture: 'walk', stillFor: 0,
+    stamina: DOG.staminaMax, frozen: 0, barkCd: 0, barks: 0, fieldBarks: 0, connected: false, leftAt: 0, spectator: false, bot: null,
   };
 }
