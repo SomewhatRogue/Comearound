@@ -1,18 +1,45 @@
-# Design
+# Design: Come Bye!
 
-The living design doc is in Claude Docs: https://claude.ai/artifact/FECNc8Fhix79Kezs8UK7QD
-(working title there: Act Natural). This file is the short version, as built.
+You're a sheepdog. With friends (or bot dogs), herd the flock into the pen. One goat is an agent
+of chaos. As built, 2026-10-30.
 
-- **A round is 3 tasks**, one activity each: fishing (pond), fruit picking (orchard), baking
-  (kitchen), candle lighting (chapel), archery (range), painting (easels around the square).
-- **Everyone sees the activity; only knowers see the ask** ("Catch a small yellow fish").
-  The :( player (1 at 3 to 6 players, 2 at 7 to 9, 3 at 10 to 12) gets nothing and fakes it.
-- **Minigames:** things slide past a marker; press when the one you want is under it. What you
-  get has attributes, shown above your head to everyone. Archery scores precision (ring);
-  painting is medium + colour + subject, then a steady-hand press for quality.
-- **Scoring at the reveal:** best try per task, 100 points times closeness to the ask.
-  An uncaught :( player's points are doubled.
-- **The board:** knowers get one accusation. Right: the :( goes to the Pen and loses the bonus;
-  only the accuser knows; End now or Keep playing (meter). Wrong: the accuser goes to the Pen.
-- **The goat** spooks people mid-minigame, eats from baskets, blocks paths, stares (NAUGHTY in
-  the Pen, WHAT ARE YOU DOING outside it). **The Pen** has a snowball fight.
+## Your dog
+
+- **Moves:** walk, **sprint** (stamina), **crouch** (slow stalk, head low), **lie down** (crouch
+  and hold still), **bark** (1.6 s cooldown). No lunge; a nip may come later.
+- **Breeds:** Border Collie, Keeshond, Malinois, Standard Poodle (the pack's dogs), then Golden,
+  Corgi, Husky, Pug. Coats, eyes (including brilliant blue) and collar colours are yours to pick.
+- **Postures show on the model:** sprinting curves the spine with the head low; crouching drops
+  the body and points the nose; lying down puts the paws out front; a frozen dog sits, guilty.
+
+## Sheep
+
+- Graze, stick together (tighter when frightened), and move away from dogs. How close you can
+  get depends on posture: sprinting scatters them from far off, walking pushes, crouching lets you
+  get close, lying down settles them (the green ring).
+- **The eye:** crouched and facing them (the pale cone), you ease them away without panic.
+- **A bark** sends everything nearby running for a moment. Fast, but costly (see below).
+- A lone sheep heads back to the others. Near the gate with others already in, the rest follow.
+
+## The goat
+
+- Wanders and bleats now and then, scattering sheep near it. Only gives way to a dog giving it the eye.
+- **Barking near it annoys it** (the meter over its head). Too much and it walks over to whoever
+  barked last, stares them down (frozen 4 s) and they get the NAUGHTY close-up.
+- Pen it for a bonus. In versus, walk it onto the other side and let it bleat there.
+
+## Modes
+
+- **Co-op Trials:** three fields (The Meadow, Old Orchard, Windy Hillside). Score per field:
+  100 per sheep penned, 4 per second left (only once every sheep is in and held 2.5 s), up to 200
+  for calm herding (fewer barks per sheep), 250 for the goat. Runs go on the room leaderboard;
+  your browser keeps your best.
+- **Versus (Field Day):** two teams, two pens, both flocks start side by side in the middle with
+  the goat. Sheep wear their team's paint and only count in their own pen. A field ends when both
+  teams are all in, or on time. Best total over three fields wins.
+
+## Controls
+
+- Keyboard: WASD/arrows, Shift sprint, Space crouch, E bark, M sound, Esc menu.
+- Phone held sideways: drag on the left half to steer (push to the edge to sprint), BARK, DOWN
+  (toggles crouch), SPRINT (hold). A rotate hint shows in portrait.

@@ -78,7 +78,7 @@ export const VERSUS: FieldDef = {
   starts: [{ x: -16, z: -9, team: 0 }, { x: -16, z: 9, team: 0 }, { x: -17, z: 0, team: 0 }, { x: 16, z: 9, team: 1 }, { x: 16, z: -9, team: 1 }, { x: 17, z: 0, team: 1 }],
 };
 
-/** The pen's interior (inset from the fence) — penned means inside this. */
+/** The pen's interior (inset from the fence): penned means inside this. */
 export function inPen(p: Pen, x: number, z: number, inset = 0.35): boolean {
   return Math.abs(x - p.x) < p.w / 2 - inset && Math.abs(z - p.z) < p.d / 2 - inset;
 }

@@ -2,6 +2,39 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-30 (late): pivot to Come Bye!, a sheepdog herding game (Claude Opus 5.5)
+
+Kyle: the minigames were all basically the same thing; scrap it. New idea (his): you're a dog,
+herding sheep and one rascally goat into a pen with your friends, co-op or two teams, points for
+speed and accuracy, pick your breed, playable on a phone held sideways.
+
+- **No lunge.** Kyle questioned what it adds; the moves are walk, sprint, crouch (stalk), lie
+  down (crouch and hold still) and bark. A nip may come later.
+- **Bark is the risky shortcut** (Kyle): sheep run faster from it, but it has a 1.6 s cooldown,
+  costs calm-herding points, and annoys the goat. Enough barks near it and it walks over, stares
+  you down for 4 s and you get the NAUGHTY close-up (kept from the old game; now it lasts exactly
+  as long as you're frozen).
+- **The eye and the down are real herding behaviour** (Kyle: "spine curved, able to go down into
+  the grass or just STARE"). Crouched and facing sheep within a cone moves them calmly; lying down
+  calms everything nearby. Both are drawn on the ground (pale cone, green ring) to teach them.
+- **The pack's dogs first:** Border Collie (black and white, brilliant blue eyes), Keeshond,
+  Malinois, golden Standard Poodle. Then Golden, Corgi, Husky, Pug. Photo upload stays on the list.
+- **Dogs can't enter pens** (gates are shut to dogs). Without it, dogs walking in behind sheep
+  shoved them out through the back. The pen is for sheep and the goat.
+- **Fences use the position before the move** to decide which side you're on, so a hard shove
+  can never push a sheep through a fence. Found when bots squeezed sheep out of the meadow pen.
+- **Sheep follow the leaders at the gate.** Once one is in, sheep near the gate want in too.
+  Real sheep do this, and without it the last two or three sheep were a slog even for bots.
+  Lone sheep head back to the flock; frightened sheep bunch tighter.
+- **Versus starts both flocks side by side in the middle** with the goat between, so teams have
+  to work past each other. First version (flocks by their own pens) ended in 25 seconds.
+  A field ends when both teams are in (each keeps its own time bonus) or on time; 3 fields a match.
+- **Lobby practice flock.** The lobby is The Meadow with its sheep out, so you learn the moves
+  while you pick your dog. On phones the panel folds away ("Practise").
+- **Test hooks:** `AUTOPILOT=1` drives human seats with the bot brain (probe), `__pause()` and
+  `__lineup()` in solo builds, `scripts/bench.ts` for bot herding across seeds.
+- **Working title Come Bye!** (the herding call for "go round clockwise"). Kyle may rename it.
+
 ## 2026-10-30 (night): tasks and skill minigames replace building (Claude Opus 5.5)
 
 Kyle, after playing: recipes like boot + hat + flower = frog throne made no sense to anyone, three
