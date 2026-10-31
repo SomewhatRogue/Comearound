@@ -23,6 +23,8 @@ export class Online {
   private host: P2PHost | null = null;
   private guest: P2PNet | null = null;
   private broker: Broker | null = null;
+  /** Why the last join failed: the host never answered, or no route between the two networks worked. */
+  private why: 'answer' | 'link' = 'answer';
   /** A host we just lost: their room claim can outlive their tab for a little while. */
   private lostAt = 0;
   private gen = 0;
@@ -61,7 +63,9 @@ export class Online {
       this.set('connecting');
       const p = new P2PNet((msg) => r.broker.send(hostId, msg), this.me, this.look);
       r.broker.onMessage = (from, msg) => from === hostId && msg.t === 'answer' && p.answered(msg.sdp);
-      const ok = await p.connect(this.lostAt ? 8000 : 15000);
+      const result = await p.connect(this.lostAt ? 10000 : 20000);
+      const ok = result === 'ok';
+      this.why = result === 'no-link' ? 'link' : 'answer';
       // Connected (or not): matchmaking's job is done for a guest.
       r.broker.close();
       this.broker = null;
@@ -85,7 +89,11 @@ export class Online {
     this.lostAt = 0;
     const host = new P2PHost(this.local, (to, msg) => broker.send(to, msg), () => this.onChange());
     this.host = host;
-    broker.onMessage = (from, msg) => msg.t === 'offer' && void host.offer(from, msg.sdp);
+    broker.onMessage = (from, msg) => {
+      if (msg.t !== 'offer') return;
+      this.net.onEvent({ kind: 'toast', text: 'A friend is joining...' });
+      void host.offer(from, msg.sdp);
+    };
     this.set('host');
   }
 
@@ -192,7 +200,7 @@ export class Online {
         body = '<p class="quiet">Opening your room...</p>';
         break;
       case 'connecting':
-        body = '<p class="quiet">Connecting to the host...</p>';
+        body = '<p class="quiet">Connecting to the host... this can take up to 20 seconds.</p>';
         break;
       case 'offline':
         body = '<p>Couldn\'t reach the matchmaking server, so this is a solo game for now.</p><div class="games"><button class="chip" data-act="retry">Try again</button></div>';
@@ -205,7 +213,9 @@ export class Online {
         body = `<p>You're in <b>${esc(hostName)}</b>'s game. They pick the course and start it.</p>${packBox}`;
         break;
       case 'failed':
-        body = '<p>Couldn\'t connect to the host. Some networks block direct connections between players.</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>';
+        body = this.why === 'answer'
+          ? '<p>The host\'s game didn\'t answer. Check the code, and ask them to keep the game open and on screen: phones pause games in the background, so a host on a phone can\'t switch away to send the link.</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>'
+          : '<p>Found the host, but your two networks wouldn\'t let the games link up, even through the relay. Try again, or try from a different network (Wi-Fi instead of mobile data, say).</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>';
         break;
     }
     const join = this.state === 'connecting' || this.state === 'starting' ? '' : `<div class="join-code"><input id="code-input" maxlength="12" placeholder="Friend's code" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="chip" data-act="joincode">Join</button></div>`;

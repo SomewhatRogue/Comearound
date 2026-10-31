@@ -12,6 +12,16 @@ Newest first. Each entry says what was decided and why, signed with the model.
   dependency on an outside host (plus public STUN servers), and only for online play; adding
   Upstash Redis on Vercel takes it out of the path. Tested against a local copy of the real
   PeerServer (`peer` dev dependency); the container can't reach the public one.
+- **A relay for networks that won't connect directly** (Kyle's friend got "couldn't connect").
+  ICE now includes a TURN relay by default: the free Open Relay server's public static-auth
+  endpoint, with time-limited credentials signed in the browser from its published shared secret
+  (the coturn REST scheme Nextcloud Talk uses). Direct routes are still preferred; the relay only
+  carries the game when two networks (mobile data, strict routers) won't link. `VITE_TURN_*`
+  swaps in our own; `?noturn` drops it. ICE gathering waits up to 5 s, the link up to 12 s more.
+  The failure screen now says which went wrong: the host never answered (wrong code, or the host's
+  game paused because it's a phone in the background) or the two networks couldn't link. The host
+  sees "A friend is joining..." when an offer arrives. Can't reach the relay from this container,
+  so it's untested against the real thing.
 - **Invite links use the production domain** (`VERCEL_PROJECT_PRODUCTION_URL`, baked in at build):
   a deployment's own URL sits behind Vercel's sign-in, which is what Kyle's friend hit.
 - Lobby shows the **room code** big and has a **"Friend's code" box** (Enter or Join).

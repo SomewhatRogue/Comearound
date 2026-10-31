@@ -12,10 +12,33 @@ import type { Offer } from './brokers';
 import type { NetLike } from './net';
 
 const env = import.meta.env as Record<string, string | undefined>;
-export const ICE: RTCIceServer[] = [
-  { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
-  ...(env.VITE_TURN_URL ? [{ urls: env.VITE_TURN_URL.split(','), username: env.VITE_TURN_USER, credential: env.VITE_TURN_PASS }] : []),
-];
+const STUN: RTCIceServer = { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] };
+
+/**
+ * Where to find each other. STUN finds a direct route; when two networks won't allow one (phones
+ * on mobile data, strict routers) a TURN relay carries the game instead. By default that's the
+ * free Open Relay server's public static-auth endpoint (time-limited credentials signed with its
+ * published shared secret, the scheme Nextcloud Talk uses); VITE_TURN_URL/USER/PASS replace it
+ * with your own. `?noturn` leaves it out (local tests, which can't reach it).
+ */
+let iceCache: Promise<RTCIceServer[]> | null = null;
+export function iceServers(): Promise<RTCIceServer[]> {
+  return (iceCache ??= (async () => {
+    if (env.VITE_TURN_URL) return [STUN, { urls: env.VITE_TURN_URL.split(','), username: env.VITE_TURN_USER, credential: env.VITE_TURN_PASS }];
+    if (new URLSearchParams(location.search).has('noturn') || !crypto.subtle) return [STUN];
+    try {
+      const username = `${Math.floor(Date.now() / 1000) + 12 * 3600}:comebye`;
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey('raw', enc.encode('openrelayprojectsecret'), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+      const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(username)));
+      const credential = btoa(String.fromCharCode(...sig));
+      const host = 'staticauth.openrelay.metered.ca';
+      return [STUN, { urls: [`turn:${host}:80`, `turn:${host}:80?transport=tcp`, `turn:${host}:443`, `turns:${host}:443?transport=tcp`], username, credential }];
+    } catch {
+      return [STUN];
+    }
+  })());
+}
 const MAX_GUESTS = 7;
 
 export async function signal(body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
@@ -28,7 +51,7 @@ export async function signal(body: Record<string, unknown>): Promise<Record<stri
 }
 
 /** Wait for ICE gathering so one offer and one answer carry every route (no trickle round trips). */
-function gathered(pc: RTCPeerConnection, ms = 2500): Promise<void> {
+function gathered(pc: RTCPeerConnection, ms = 5000): Promise<void> {
   if (pc.iceGatheringState === 'complete') return Promise.resolve();
   return new Promise((done) => {
     const t = setTimeout(done, ms);
@@ -54,7 +77,7 @@ export class P2PHost {
   async offer(from: string, sdp: string): Promise<void> {
     this.drop(from);
     if (this.guests.size >= MAX_GUESTS) return;
-    const pc = new RTCPeerConnection({ iceServers: ICE });
+    const pc = new RTCPeerConnection({ iceServers: await iceServers() });
     const g: Guest = { pc, joined: false };
     this.guests.set(from, g);
     pc.ondatachannel = (e) => {
@@ -113,6 +136,9 @@ export class P2PHost {
   }
 }
 
+/** How joining went: in, the host never answered, or it answered but no route between us worked. */
+export type JoinResult = 'ok' | 'no-answer' | 'no-link';
+
 export class P2PNet implements NetLike {
   pub: PublicView | null = null;
   me: PrivateView | null = null;
@@ -120,21 +146,23 @@ export class P2PNet implements NetLike {
   onState: () => void = () => {};
   /** The connection dropped after it had worked. */
   onGone: () => void = () => {};
-  private pc = new RTCPeerConnection({ iceServers: ICE });
-  private ctl = this.pc.createDataChannel('ctl', { ordered: true });
-  private state = this.pc.createDataChannel('state', { ordered: false, maxRetransmits: 0 });
+  private pc: RTCPeerConnection | null = null;
+  private ctl: RTCDataChannel | null = null;
   private lastAt = 0;
   private closed = false;
-
   private answer: ((sdp: string) => void) | null = null;
 
-  constructor(private offerTo: (msg: Offer) => Promise<boolean>, private token: string, private look: () => Look) {
-    this.ctl.onopen = () => this.send({ t: 'hello', token: this.token, look: this.look() });
-    this.ctl.onmessage = (e) => {
+  constructor(private offerTo: (msg: Offer) => Promise<boolean>, private token: string, private look: () => Look) {}
+
+  private wire(pc: RTCPeerConnection): void {
+    const ctl = (this.ctl = pc.createDataChannel('ctl', { ordered: true }));
+    const state = pc.createDataChannel('state', { ordered: false, maxRetransmits: 0 });
+    ctl.onopen = () => this.send({ t: 'hello', token: this.token, look: this.look() });
+    ctl.onmessage = (e) => {
       const m = JSON.parse(String(e.data)) as ServerMsg;
       if (m.t === 'event') this.onEvent(m.ev);
     };
-    this.state.onmessage = (e) => {
+    state.onmessage = (e) => {
       const m = JSON.parse(String(e.data)) as { m: [string, number, number]; s: WireView };
       this.pub = decodeView(m.s);
       this.me = { you: m.m[0], stamina: m.m[1], barkReady: !!m.m[2] };
@@ -147,13 +175,13 @@ export class P2PNet implements NetLike {
       gone = true;
       this.onGone();
     };
-    this.ctl.onclose = lost;
+    ctl.onclose = lost;
     // A host whose tab closed can take half a minute to read as "failed": 4 s of silence is enough.
     const watch = window.setInterval(() => {
       if (this.closed) clearInterval(watch);
       else if (this.lastAt && performance.now() - this.lastAt > 4000) lost();
     }, 1000);
-    this.pc.onconnectionstatechange = () => (this.pc.connectionState === 'failed' || this.pc.connectionState === 'closed') && lost();
+    pc.onconnectionstatechange = () => (pc.connectionState === 'failed' || pc.connectionState === 'closed') && lost();
   }
 
   /** The host's answer arrived (through matchmaking). */
@@ -161,33 +189,37 @@ export class P2PNet implements NetLike {
     this.answer?.(sdp);
   }
 
-  /** Offer, then wait for the host's answer and the first snapshot. Resolves false if it never comes. */
-  async connect(timeoutMs = 15000): Promise<boolean> {
+  /** Offer, then wait for the host's answer and the first snapshot. */
+  async connect(timeoutMs = 20000): Promise<JoinResult> {
     const until = performance.now() + timeoutMs;
-    await this.pc.setLocalDescription(await this.pc.createOffer());
-    await gathered(this.pc);
+    const pc = (this.pc = new RTCPeerConnection({ iceServers: await iceServers() }));
+    this.wire(pc);
+    await pc.setLocalDescription(await pc.createOffer());
+    await gathered(pc);
     const got = new Promise<string | null>((done) => {
       this.answer = done;
       setTimeout(() => done(null), Math.max(0, until - performance.now()));
     });
-    if (!(await this.offerTo({ t: 'offer', sdp: this.pc.localDescription?.sdp ?? '' }))) return false;
+    if (!(await this.offerTo({ t: 'offer', sdp: pc.localDescription?.sdp ?? '' }))) return 'no-answer';
     const sdp = await got;
-    if (!sdp || this.closed) return false;
-    await this.pc.setRemoteDescription({ type: 'answer', sdp });
-    while (performance.now() < until && !this.closed && !this.me) await new Promise((r) => setTimeout(r, 100));
-    return !!this.me;
+    if (!sdp || this.closed) return 'no-answer';
+    await pc.setRemoteDescription({ type: 'answer', sdp });
+    // Relayed routes can take a few seconds longer than direct ones to come up.
+    const linkBy = Math.max(until, performance.now() + 12000);
+    while (performance.now() < linkBy && !this.closed && !this.me && pc.connectionState !== 'failed') await new Promise((r) => setTimeout(r, 100));
+    return this.me ? 'ok' : 'no-link';
   }
 
   get connected(): boolean {
-    return this.ctl.readyState === 'open' && performance.now() - this.lastAt < 3000;
+    return this.ctl?.readyState === 'open' && performance.now() - this.lastAt < 3000;
   }
 
   send(m: ClientMsg): void {
-    if (this.ctl.readyState === 'open') this.ctl.send(JSON.stringify(m));
+    if (this.ctl?.readyState === 'open') this.ctl.send(JSON.stringify(m));
   }
 
   close(): void {
     this.closed = true;
-    this.pc.close();
+    this.pc?.close();
   }
 }

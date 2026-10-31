@@ -61,8 +61,8 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
 - **Bots only use what a player could see.** They herd with the same moves a player has.
 - **No external hosts at runtime.** Fonts and assets are bundled (Discord's proxy blocks
   unmapped hosts, and a blocked font once stalled page load for 10 s). The one exception is online
-  play on the Vercel site: public STUN servers, and the public PeerJS server for matchmaking when
-  the site has no Redis.
+  play on the Vercel site: public STUN servers, the free Open Relay TURN server (static auth), and the public
+  PeerJS server for matchmaking when the site has no Redis.
 - **CSS2D labels position themselves with `transform`.** Animate them with the individual
   `rotate`/`scale` properties, never `transform`, or they jump to the top-left corner.
 - **No em dashes** anywhere: docs, UI copy, comments (Kyle's standing preference).
