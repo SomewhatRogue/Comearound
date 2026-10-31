@@ -12,6 +12,8 @@ Newest first. Each entry says what was decided and why, signed with the model.
   dependency on an outside host (plus public STUN servers), and only for online play; adding
   Upstash Redis on Vercel takes it out of the path. Tested against a local copy of the real
   PeerServer (`peer` dev dependency); the container can't reach the public one.
+- **Invite links use the production domain** (`VERCEL_PROJECT_PRODUCTION_URL`, baked in at build):
+  a deployment's own URL sits behind Vercel's sign-in, which is what Kyle's friend hit.
 - Lobby shows the **room code** big and has a **"Friend's code" box** (Enter or Join).
 - **Collar redesigned** (Kyle: "giant donuts"). Now a flat open strap (both faces drawn) where the
   neck meets the chest, square to the chest-to-head line, sized from the shapes it wraps so it sits

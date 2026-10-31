@@ -163,8 +163,10 @@ export class Online {
     else void navigator.clipboard?.writeText(url).then(() => this.net.onEvent({ kind: 'toast', text: 'Invite link copied' })).catch(() => {});
   }
 
+  /** The invite: always on the site's public domain (a deployment's own URL asks friends to sign in to Vercel). */
   private link(): string {
-    return `${location.origin}${location.pathname}?room=${this.room}`;
+    const site = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    return site ? `https://${site}/?room=${this.room}` : `${location.origin}${location.pathname}?room=${this.room}`;
   }
 
   get friends(): number {
