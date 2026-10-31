@@ -15,8 +15,19 @@ const server = http.createServer((_req, res) => {
 const wss = new WebSocketServer({ server, maxPayload: 64 * 1024 });
 
 let relay: Promise<Relay> | null = null;
+/**
+ * The Redis connection URL: REDIS_URL or KV_URL as the Marketplace sets them, or any other variable
+ * holding a redis:// or rediss:// URL (connecting storage with a custom prefix renames them, e.g.
+ * STORAGE_URL).
+ */
+function redisUrl(): string | undefined {
+  const named = process.env.REDIS_URL ?? process.env.KV_URL;
+  if (named) return named;
+  return Object.entries(process.env).find(([k, v]) => k.endsWith('URL') && /^rediss?:\/\//.test(v ?? ''))?.[1];
+}
+
 function getRelay(): Promise<Relay> {
-  const url = process.env.REDIS_URL ?? process.env.KV_URL;
+  const url = redisUrl();
   return (relay ??= (url ? redisBackend(url) : Promise.resolve(memoryBackend())).then((b) => new Relay(b)).catch((e) => {
     relay = null;
     throw e;
