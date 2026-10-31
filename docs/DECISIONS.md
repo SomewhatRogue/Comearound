@@ -33,6 +33,11 @@ couldn't join. A fresh review of the online code (a separate agent) plus new tes
   PeerJS fallback, (C) host's page frozen when the friend joins then back, (D) host leaves and a
   friend takes over with the other following, (E) host's connection dropped while away. All pass.
 - Still unverifiable from here: the live 0.peerjs.com and the Open Relay TURN server.
+- **Diagnostics in the game** (Kyle: joining failed even with the screen on, same Wi-Fi; it worked
+  when his friend hosted). With friends now runs a network check (which route kinds this device
+  can offer: same-network, direct, relay) and shows it in plain words; a failed join shows what
+  happened (matchmaking route, whether the host answered, each side's routes, how the link ended)
+  with a Copy details button. `VITE_TURN_API` takes a TURN provider's credentials URL (Metered).
 
 ## 2026-10-31 (midday): new room button; the chihuahua (Claude Opus 5.5)
 

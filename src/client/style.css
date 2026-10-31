@@ -281,3 +281,4 @@ body.touch #bark-key { display: none; }
 .code-line b { font-size: 18px; letter-spacing: 0.12em; }
 .join-code { display: flex; gap: 6px; }
 .join-code input { flex: 1; min-width: 0; font: inherit; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; padding: 5px 10px; border: 2px solid var(--line); border-radius: 10px; background: #fff; }
+.friends .details { font-family: ui-monospace, monospace; font-size: 11px; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }

@@ -11,6 +11,7 @@ import type { Look, PrivateView, PublicView } from '../shared/protocol';
 import type { LocalNet } from './local';
 import type { SwitchNet } from './party';
 import { claimRoom, type Broker } from './brokers';
+import { checkRoutes, routesLine, type Routes } from './netcheck';
 import { P2PHost, P2PNet } from './p2p';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -41,6 +42,11 @@ export class Online {
   private gen = 0;
   /** Opened someone else's code (and hasn't played in that room yet): may not take the room. */
   private joiner: boolean;
+  /** This network's routes (checked once when you switch to With friends). */
+  private routes: Routes | null = null;
+  private checking = false;
+  /** What happened on the last failed join, in plain words, for the failure screen and Copy details. */
+  private details = '';
 
   constructor(private room: string, private me: string, private local: LocalNet, private net: SwitchNet, private look: () => Look) {
     this.mode = room ? 'friends' : 'solo';
@@ -76,7 +82,18 @@ export class Online {
     this.onChange();
   }
 
+  private checkNetwork(): void {
+    if (this.routes || this.checking) return;
+    this.checking = true;
+    void checkRoutes().then((r) => {
+      this.routes = r;
+      this.checking = false;
+      this.onChange();
+    });
+  }
+
   private async connect(): Promise<void> {
+    this.checkNetwork();
     const gen = ++this.gen;
     this.set('starting');
     const startedAt = performance.now();
@@ -118,6 +135,8 @@ export class Online {
           }
           p.close();
           this.why = result === 'no-link' ? 'link' : 'answer';
+          const i = p.info;
+          this.details = `matchmaking: ${r.broker.kind === 'redis' ? 'our server' : 'public server'}; host answered: ${i.answered ? 'yes' : 'no'}; my routes: ${i.mine.join(', ') || 'none'}; host's routes: ${i.theirs.join(', ') || (i.answered ? 'none' : '?')}; link: ${i.ice || 'never started'}; this network: ${this.routes ? this.routes.types.join(', ') || 'none' : 'not checked yet'}`;
           if (result === 'no-link') return this.set('failed');
         }
         // No answer yet: keep asking for a couple of minutes before giving up.
@@ -241,6 +260,11 @@ export class Online {
     if (this.state === 'failed' || this.state === 'offline') void this.connect();
   }
 
+  copyDetails(): void {
+    const text = `Come Bye! join failed (room ${this.room}). ${this.details}`;
+    void navigator.clipboard?.writeText(text).then(() => this.net.onEvent({ kind: 'toast', text: 'Details copied: paste them to Claude' })).catch(() => {});
+  }
+
   share(): void {
     const url = this.link();
     const nav = navigator as Navigator & { share?: (d: { url: string; title: string }) => Promise<void> };
@@ -259,7 +283,7 @@ export class Online {
   }
 
   key(): string {
-    return JSON.stringify([this.mode, this.state, this.friends, this.room, this.waiting]);
+    return JSON.stringify([this.mode, this.state, this.friends, this.room, this.waiting, this.routes?.types.join()]);
   }
 
   /** The top of the lobby: the switch, the invite link, who's in your pack. */
@@ -298,6 +322,8 @@ export class Online {
         break;
     }
     const join = this.state === 'connecting' || this.state === 'starting' ? '' : `<div class="join-code"><input id="code-input" maxlength="12" placeholder="Friend's code" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="chip" data-act="joincode">Join</button></div>`;
-    return `${tabs}<div class="friends">${body}${join}</div>`;
+    const net = this.routes ? `<p class="quiet">${esc(routesLine(this.routes))}</p>` : this.checking ? '<p class="quiet">Checking your network...</p>' : '';
+    const det = this.state === 'failed' && this.details ? `<p class="quiet details">${esc(this.details)}</p><div class="games"><button class="chip" data-act="copydetails">Copy details</button></div>` : '';
+    return `${tabs}<div class="friends">${body}${det}${net}${join}</div>`;
   }
 }

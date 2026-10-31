@@ -20,6 +20,7 @@ export type Offer = { t: 'offer' | 'answer'; sdp: string; n?: string };
 export type Claim = 'host' | 'none' | string | null;
 
 export interface Broker {
+  readonly kind: 'redis' | 'peer';
   claim(take: boolean): Promise<Claim>;
   send(to: string, msg: Offer): Promise<boolean>;
   onMessage: (from: string, msg: Offer) => void;
@@ -47,6 +48,7 @@ function keptToken(kind: 'local' | 'session', key: string): string {
 }
 
 export class RedisBroker implements Broker {
+  readonly kind = 'redis';
   onMessage: (from: string, msg: Offer) => void = () => {};
   onLost: () => void = () => {};
   private timers: number[] = [];
@@ -99,6 +101,7 @@ export class RedisBroker implements Broker {
 const PEER_URL = new URLSearchParams(location.search).get('peer') ?? 'wss://0.peerjs.com/peerjs';
 
 export class PeerBroker implements Broker {
+  readonly kind = 'peer';
   onMessage: (from: string, msg: Offer) => void = () => {};
   onLost: () => void = () => {};
   private ws: WebSocket | null = null;

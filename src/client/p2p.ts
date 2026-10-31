@@ -9,6 +9,7 @@ import type { ClientMsg, Look, PrivateEvent, PrivateView, PublicView, ServerMsg 
 import { decodeView, encodeView, type WireView } from '../shared/wire';
 import type { LocalNet } from './local';
 import type { Offer } from './brokers';
+import { candidateTypes } from './netcheck';
 import type { NetLike } from './net';
 
 const env = import.meta.env as Record<string, string | undefined>;
@@ -19,12 +20,20 @@ const STUN: RTCIceServer = { urls: ['stun:stun.l.google.com:19302', 'stun:stun.c
  * on mobile data, strict routers) a TURN relay carries the game instead. By default that's the
  * free Open Relay server's public static-auth endpoint (time-limited credentials signed with its
  * published shared secret, the scheme Nextcloud Talk uses); VITE_TURN_URL/USER/PASS replace it
- * with your own. `?noturn` leaves it out (local tests, which can't reach it).
+ * with your own, or VITE_TURN_API (a provider's credentials URL, like Metered's) fetches them.
+ * `?noturn` leaves it out (local tests, which can't reach it).
  */
 let iceCache: Promise<RTCIceServer[]> | null = null;
 export function iceServers(): Promise<RTCIceServer[]> {
   return (iceCache ??= (async () => {
     if (env.VITE_TURN_URL) return [STUN, { urls: env.VITE_TURN_URL.split(','), username: env.VITE_TURN_USER, credential: env.VITE_TURN_PASS }];
+    // A TURN provider's credentials endpoint (e.g. Metered's .../api/v1/turn/credentials?apiKey=...).
+    if (env.VITE_TURN_API) {
+      try {
+        const list = (await (await fetch(env.VITE_TURN_API, { signal: AbortSignal.timeout?.(6000) })).json()) as RTCIceServer[];
+        if (Array.isArray(list) && list.length) return [STUN, ...list];
+      } catch { /* fall through to the public relay */ }
+    }
     if (new URLSearchParams(location.search).has('noturn') || !crypto.subtle) return [STUN];
     try {
       const username = `${Math.floor(Date.now() / 1000) + 12 * 3600}:comebye`;
@@ -159,6 +168,8 @@ export class P2PNet implements NetLike {
   private lastAt = 0;
   private closed = false;
   private answer: ((sdp: string) => void) | null = null;
+  /** What happened, for the failure screen: routes each side offered, and how the link ended. */
+  readonly info = { answered: false, mine: [] as string[], theirs: [] as string[], ice: '' };
   /** This attempt's id: only an answer carrying it counts (not a late one to an earlier attempt). */
   private nonce = Math.random().toString(36).slice(2, 10);
 
@@ -215,6 +226,7 @@ export class P2PNet implements NetLike {
     this.wire(pc);
     await pc.setLocalDescription(await pc.createOffer());
     await gathered(pc);
+    this.info.mine = candidateTypes(pc.localDescription?.sdp);
     const got = new Promise<string | null>((done) => {
       this.answer = done;
       setTimeout(() => done(null), Math.max(0, until - performance.now()));
@@ -222,10 +234,13 @@ export class P2PNet implements NetLike {
     if (!(await this.offerTo({ t: 'offer', sdp: pc.localDescription?.sdp ?? '', n: this.nonce }))) return 'no-answer';
     const sdp = await got;
     if (!sdp || this.closed) return 'no-answer';
+    this.info.answered = true;
+    this.info.theirs = candidateTypes(sdp);
     await pc.setRemoteDescription({ type: 'answer', sdp });
     // Relayed routes can take a few seconds longer than direct ones to come up.
     const linkBy = Math.max(until, performance.now() + 12000);
     while (performance.now() < linkBy && !this.closed && !this.me && pc.connectionState !== 'failed') await new Promise((r) => setTimeout(r, 100));
+    this.info.ice = pc.iceConnectionState;
     return this.me ? 'ok' : 'no-link';
   }
 
