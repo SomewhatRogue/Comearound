@@ -24,6 +24,8 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
 - `node_modules/.bin/tsx scripts/bench.ts 6`: bots alone play all three trials on 6 seeds and
   print sheep penned per field (`8/8@61` = all in with 61 s left). Run it after any change to
   flock, goat, dog or bot behaviour. `scripts/trace.ts <field> <seed>` prints one run as text.
+- `node scripts/coop-probe.cjs` (dev server up on 8787): two tabs play together over the stand-in
+  live room (`?fakeroom`): join, move, bark, start a run, host leaves.
 - `npm run probe`: one blocking call, one JSON report. Boots the server with a fast clock
   (`TIMESCALE`) and `AUTOPILOT=1` (human seats herd with the bot brain), opens a laptop, a friend
   and a phone held sideways, checks move/crouch/down/bark and the touch stick, plays a full run,
@@ -48,7 +50,8 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
   gaps, obstacles, flocks, starts) live in `src/shared/field.ts`; the client draws them and the
   server collides against them. Tuning numbers live in `src/shared/tuning.ts`.
 - **Fences never leak.** Collision takes the position before the move and keeps you on that side
-  of every pen wall; dogs treat gates as shut (the pen is for sheep). Tested.
+  of every pen wall. Dogs can walk into pens in the trials (to fetch extras out); in versus, and
+  for bot dogs, gates are shut to dogs. Tested.
 - **Bots only use what a player could see.** They herd with the same moves a player has.
 - **No external hosts at runtime.** Fonts and assets are bundled (Discord's proxy blocks
   unmapped hosts, and a blocked font once stalled page load for 10 s).

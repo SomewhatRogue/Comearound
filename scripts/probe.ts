@@ -45,7 +45,7 @@ async function main() {
     const errors: string[] = [];
     page.on('pageerror', (e: Error) => errors.push(e.message));
     page.on('console', (m: any) => m.type() === 'error' && errors.push(m.text()));
-    await page.goto(`http://localhost:${PORT}/?room=${ROOM}&as=${as}&name=${name}${opts.breed ? `&breed=${opts.breed}` : ''}${opts.render ? '' : '&lowfx&norender'}`);
+    await page.goto(`http://localhost:${PORT}/?room=${ROOM}&as=${as}&name=${name}${opts.breed ? `&breed=${opts.breed}` : ''}${opts.render ? '' : '&lowfx&norender'}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await until(`${name} ready`, async () => (await state(page))?.pub);
     return { page, errors };
   };

@@ -11,6 +11,7 @@ import { Entities } from './entities';
 import { Hud } from './hud';
 import { Input, isTouch } from './input';
 import { LocalNet } from './local';
+import { Party, SwitchNet } from './party';
 import { dogMesh } from './models';
 import { Net, type NetLike } from './net';
 import { Panels } from './panels';
@@ -73,8 +74,21 @@ const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElem
 const tour = new IntroTour(stage);
 const hud = new Hud();
 const input = new Input();
-const net: NetLike = solo ? new LocalNet(() => look) : new Net(room, token, () => look);
-const panels = new Panels((m) => net.send(m), look, (l) => { look = l; store.set('tac-dog', JSON.stringify(l)); }, room, solo);
+const local = solo ? new LocalNet(() => look) : null;
+const net = new SwitchNet(local ?? new Net(room, token, () => look));
+// The shareable page: friends who have it open can join each other's games over the viewer's live room.
+const party = local ? new Party(local, net, () => look, token) : null;
+const panels = new Panels((m) => net.send(m), look, (l) => { look = l; store.set('tac-dog', JSON.stringify(l)); }, room, solo, party);
+if (party) {
+  party.onChange = () => panels.refresh();
+  void party.start();
+}
+// Joining or leaving a friend's game: start your dog afresh from the new room's snapshot.
+net.onSwap = () => {
+  havePrediction = false;
+  lastSent = '';
+  panels.refresh();
+};
 const sounds = new SoundDirector();
 const music = new Music();
 
@@ -160,7 +174,7 @@ function frame(now: number) {
   const me = self();
   input.blocked = !!document.querySelector('#modal:not(.hidden):not(.glance)') || document.activeElement?.tagName === 'INPUT';
   sendInput();
-  if (net instanceof LocalNet) net.pump();
+  if (local && net.inner === local) local.pump();
   if (pub && me && net.me) {
     const field = fieldById(pub.fieldId);
     fieldView.show(field, pub.mode);
@@ -176,7 +190,7 @@ function frame(now: number) {
       const from = { x: predicted.x, z: predicted.z };
       predicted.x += (input.dx / len) * speed * k * dt;
       predicted.z += (input.dz / len) * speed * k * dt;
-      [predicted.x, predicted.z] = collide(field, predicted.x, predicted.z, DOG.radius, { from, gateShut: true, water: false });
+      [predicted.x, predicted.z] = collide(field, predicted.x, predicted.z, DOG.radius, { from, gateShut: pub.mode === 'versus' && pub.phase !== 'lobby', water: false });
       predicted.rot = Math.atan2(input.dx, input.dz);
       idleFor = 0;
     } else idleFor += dt;
@@ -214,8 +228,8 @@ function frame(now: number) {
   if (now - fpsAt > 1000) [fps, frames, fpsAt] = [frames, 0, now];
   if (!diag.hidden && now - diagAt > 250 && pub && me) {
     diagAt = now;
-    const srv = net instanceof LocalNet ? [...net.room.dogs.values()].find((d) => d.id === me.id) : null;
-    diag.textContent = `${input.debug()} | sent ${sent} | room dx ${srv ? `${srv.dx.toFixed(2)},${srv.dz.toFixed(2)}` : '?'} | dog ${me.x.toFixed(1)},${me.z.toFixed(1)} ${me.frozen ? 'frozen' : me.down ? 'down' : me.posture}${me.spectator ? ' SPECTATOR' : ''} | me ${predicted.x.toFixed(1)},${predicted.z.toFixed(1)} | ${pub.phase} | ${fps} fps${net instanceof LocalNet ? ` | ticks ${net.ticks}` : ''} | gl ${stage.renderer.getContext().isContextLost() ? 'LOST' : 'ok'} lost ${glLost}/${glRestored} draws ${stage.renderer.info.render.calls} | sheep0 ${pub.sheep[0] ? pub.sheep[0].x.toFixed(1) : '-'}`;
+    const srv = local && net.inner === local ? [...local.room.dogs.values()].find((d) => d.id === me.id) : null;
+    diag.textContent = `${input.debug()} | sent ${sent} | room dx ${srv ? `${srv.dx.toFixed(2)},${srv.dz.toFixed(2)}` : '?'} | dog ${me.x.toFixed(1)},${me.z.toFixed(1)} ${me.frozen ? 'frozen' : me.down ? 'down' : me.posture}${me.spectator ? ' SPECTATOR' : ''} | me ${predicted.x.toFixed(1)},${predicted.z.toFixed(1)} | ${pub.phase} | ${fps} fps${local ? ` | ticks ${local.ticks}` : ''}${party ? ` | party ${party.state} ${party.games.length}g ${party.guestCount}f` : ''} | gl ${stage.renderer.getContext().isContextLost() ? 'LOST' : 'ok'} lost ${glLost}/${glRestored} draws ${stage.renderer.info.render.calls} | sheep0 ${pub.sheep[0] ? pub.sheep[0].x.toFixed(1) : '-'}`;
   }
   requestAnimationFrame(frame);
 }
@@ -240,9 +254,10 @@ w.render_game_to_text = () => {
     dogs: pub.dogs.length, scores: pub.fieldScores.map((f) => f.map((q) => q.score)),
   });
 };
-if (net instanceof LocalNet) {
-  w.__solo_room = net.room;
-  w.__pause = (on = true) => ((net as LocalNet).paused = on);
+if (local) {
+  w.__solo_room = local.room;
+  w.__pause = (on = true) => (local.paused = on);
+  w.__party = party;
 }
 w.__debug_naughty = (words?: string) => hud.naughty(words);
 w.__music = music;

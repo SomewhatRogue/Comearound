@@ -205,7 +205,16 @@ export class GameRoom implements Room {
     if (!this.hostId || !this.dogs.has(this.hostId)) this.hostId = [...this.dogs.values()].find((q) => q.connected && !q.bot)?.id ?? null;
   }
 
+  /** Connections that get no per-tick state message (guests over the artifact's live room get a compact one instead). */
+  quietConns = new Set<string>();
+
+  /** The dog a connection plays. */
+  dogOf(connId: string): Dog | undefined {
+    return this.dogs.get(this.conns.get(connId) ?? '');
+  }
+
   private sendState(connId: string, d: Dog): void {
+    if (this.quietConns.has(connId)) return;
     this.send(connId, JSON.stringify({ t: 'state', pub: publicView(this), me: privateView(this, d) } satisfies ServerMsg));
   }
 

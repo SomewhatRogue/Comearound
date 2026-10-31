@@ -7,6 +7,7 @@ import { COURSES, fieldById, type CourseId } from '../shared/field';
 import { BREEDS, BREED_NAMES, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } from '../shared/looks';
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
+import type { Party } from './party';
 import { sfx } from './sfx';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -28,7 +29,7 @@ export class Panels {
   private newBest = false;
   private savedRun = '';
 
-  constructor(private send: (m: ClientMsg) => void, private look: Look, private saveLook: (l: Look) => void, private room: string, private solo = false) {
+  constructor(private send: (m: ClientMsg) => void, private look: Look, private saveLook: (l: Look) => void, private room: string, private solo = false, private party: Party | null = null) {
     document.addEventListener('click', (e) => {
       const el = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
       if (!el) return;
@@ -39,6 +40,11 @@ export class Panels {
       const el = e.target as HTMLInputElement;
       if (el.id === 'name-input') this.setLook({ ...this.look, name: el.value.slice(0, 14) }, false);
     });
+  }
+
+  /** Draw the panels afresh (the friends list changed, or you joined someone's game). */
+  refresh(): void {
+    this.keys = { lobby: '', modal: '' };
   }
 
   private setLook(l: Look, rerender = true): void {
@@ -60,6 +66,8 @@ export class Panels {
     if (act === 'copy') void navigator.clipboard?.writeText(location.href).catch(() => {});
     if (act === 'close') this.menuOpen = false;
     if (act === 'toggle') document.dispatchEvent(new CustomEvent('toggle-audio', { detail: v }));
+    if (act === 'join') void this.party?.join(v);
+    if (act === 'leave') void this.party?.leave();
     if (act === 'fold') [this.collapsed, this.keys.lobby] = [!this.collapsed, ''];
     if (act === 'endField') {
       this.send({ t: 'endField' });
@@ -79,7 +87,7 @@ export class Panels {
 
   render(pub: PublicView, me: PrivateView): void {
     const lobby = document.getElementById('lobby')!;
-    const lk = pub.phase === 'lobby' ? JSON.stringify([this.look, pub.dogs.map((d) => [d.look, d.connected, d.bot]), pub.hostId === me.you, this.pick, this.bots, this.collapsed]) : 'off';
+    const lk = pub.phase === 'lobby' ? JSON.stringify([this.look, pub.dogs.map((d) => [d.look, d.connected, d.bot]), pub.hostId === me.you, this.pick, this.bots, this.collapsed, this.party?.key()]) : 'off';
     if (lk !== this.keys.lobby) {
       this.keys.lobby = lk;
       const typing = document.activeElement?.id === 'name-input';
@@ -134,7 +142,7 @@ export class Panels {
       ? `<div class="label">Mode</div><div class="modes">${modes}</div>${this.solo ? '' : `<button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty spots with bot dogs</button>`}<button class="big" data-act="start">Start ${this.pick === 'versus' ? 'the match' : 'the trials'}</button>`
       : `<p class="quiet">Waiting for the host to start.</p>`;
     const roomLine = this.solo
-      ? '<p class="quiet">Solo: bot dogs work alongside you. Practise on the flock while you choose your dog.</p>'
+      ? this.party?.html() ?? '<p class="quiet">Solo: bot dogs work alongside you. Practise on the flock while you choose your dog.</p>'
       : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
     const touchTip = document.body.classList.contains('touch') ? '<p class="touch-tip">Drag anywhere on the field to move. Tap <b>Practise</b> to fold this away and try the buttons.</p>' : '';
     const best = this.bests.gentle || this.bests.tricky || this.bests.wild || this.bests.challenge ? `<p class="quiet">Your best runs: Gentle <b>${this.bests.gentle}</b> &middot; Tricky <b>${this.bests.tricky}</b> &middot; Wild <b>${this.bests.wild}</b> &middot; Challenge <b>${this.bests.challenge}</b></p>` : '';

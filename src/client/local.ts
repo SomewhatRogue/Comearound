@@ -16,9 +16,11 @@ export class LocalNet implements NetLike {
   /** Test hook: freeze the room's clock (screenshots on a slow machine). */
   paused = false;
   ticks = 0;
+  /** Messages for friends playing in this tab's room (hosting over the artifact's live room). */
+  remote: (conn: string, raw: string) => void = () => {};
 
   constructor(look: () => Look) {
-    this.room = new GameRoom((_conn, raw) => this.receive(raw), { seed: Math.floor(Math.random() * 1e9) });
+    this.room = new GameRoom((conn, raw) => (conn === 'local' ? this.receive(raw) : this.remote(conn, raw)), { seed: Math.floor(Math.random() * 1e9) });
     this.room.connect('local');
     this.room.message('local', JSON.stringify({ t: 'hello', token: 'solo', look: look() } satisfies ClientMsg));
     this.last = performance.now();

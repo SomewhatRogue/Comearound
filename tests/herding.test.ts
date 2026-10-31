@@ -87,16 +87,24 @@ describe('the flock', () => {
     expect(isPenned(h.room.field, s)).toBe(false);
   });
 
-  it('dogs cannot walk into the pen through the gate', () => {
-    const h = harness(1);
-    h.say(0, { t: 'start', mode: 'trials', fillBots: false });
-    h.toPlaying();
-    const d = h.dog(0);
+  it('in the trials a dog can walk into the pen (to fetch extras out); in versus the gate stays shut to dogs', () => {
     const pen = TRIALS[0].pens[0];
-    Object.assign(d, { x: pen.x - pen.w / 2 - 2, z: pen.z });
-    h.say(0, { t: 'input', dx: 1, dz: 0, sprint: false, crouch: false });
-    h.run(2);
-    expect(inPen(pen, d.x, d.z, -0.5)).toBe(false);
+    const walkIn = (mode: 'trials' | 'versus') => {
+      const h = harness(1);
+      h.say(0, { t: 'start', mode, fillBots: false });
+      h.toPlaying();
+      const d = h.dog(0);
+      const p = h.room.field.pens[0];
+      // Stand in front of the gate and walk straight through it.
+      const g = { x: p.gate === 'w' ? p.x - p.w / 2 - 2 : p.gate === 'e' ? p.x + p.w / 2 + 2 : p.x, z: p.gate === 'n' ? p.z - p.d / 2 - 2 : p.gate === 's' ? p.z + p.d / 2 + 2 : p.z };
+      Object.assign(d, g);
+      h.say(0, { t: 'input', dx: Math.sign(p.x - g.x), dz: Math.sign(p.z - g.z), sprint: false, crouch: false });
+      h.run(2);
+      return inPen(p, d.x, d.z, -0.5);
+    };
+    expect(pen).toBeTruthy();
+    expect(walkIn('trials')).toBe(true);
+    expect(walkIn('versus')).toBe(false);
   });
 });
 

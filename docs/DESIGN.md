@@ -39,13 +39,19 @@ of chaos. As built, 2026-10-30.
 
 ## Modes
 
-- **Co-op Trials:** pick a course of three fields: Gentle (The Meadow, Old Orchard, Windy Hillside), Tricky (Brook Farm, Bramble Lane, Three Billy Goats) or Wild (Black and White sorting, Big Sky Pasture, Thunder Hill), or Challenge (exact numbers per pen: Split the Flock, Three Little Pens, Odd One Out; a gate swings shut when its pen's count is right). Each field opens with a camera tour: the pen, the sheep, your dog. Score per field:
+- **Co-op Trials:** pick a course of three fields: Gentle (The Meadow, Old Orchard, Windy Hillside), Tricky (Brook Farm, Bramble Lane, Three Billy Goats) or Wild (Black and White sorting, Big Sky Pasture, Thunder Hill), or Challenge (exact numbers per pen: Split the Flock, Three Little Pens, Odd One Out; a gate swings shut when its pen's count is right). Each field opens with a camera tour: the pen, the sheep, your dog. You can walk into a pen in the trials (to fetch an extra out); in versus pens are shut to dogs. Score per field:
   100 per sheep penned, 4 per second left (only once every sheep is in and held 2.5 s), up to 200
   for calm herding (fewer barks per sheep), 250 for the goat. Runs go on the room leaderboard;
   your browser keeps your best.
 - **Versus (Field Day):** two teams, two pens, both flocks start side by side in the middle with
   the goat. Sheep wear their team's paint and only count in their own pen. A field ends when both
   teams are all in, or on time. Best total over three fields wins.
+
+## Playing together on the shareable page
+
+- Everyone with the page open sees each other's games in the lobby ("Join Kyle's game"). Joining
+  puts your dog in their game; they host, pick the course and start it. Bot dogs fill empty spots.
+  Leave to go back to your own. Friends need to be signed in and invited to the page.
 
 ## Controls
 

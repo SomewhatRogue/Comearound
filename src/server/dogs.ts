@@ -32,7 +32,10 @@ export function moveDog(room: Room, d: Dog, dt: number): void {
     d.z += (d.dz / len) * speed * k * dt;
     d.rot = Math.atan2(d.dx, d.dz);
   }
-  [d.x, d.z] = collide(room.field, d.x, d.z, DOG.radius, { from, gateShut: true, water: false });
+  // Pens are locked to dogs only in versus (so nobody can raid from inside). In the trials you can
+  // walk in and fetch an extra sheep back out. Bot dogs still keep out: they never need to go in.
+  const gateShut = (room.mode === 'versus' && room.phase !== 'lobby') || !!d.bot || !!d.auto;
+  [d.x, d.z] = collide(room.field, d.x, d.z, DOG.radius, { from, gateShut, water: false });
 }
 
 /** Dogs don't stack on top of each other. */

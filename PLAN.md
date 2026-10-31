@@ -30,6 +30,9 @@ waiting on Kyle's first play. Spec: `docs/features/slice-02.md`.
       rain and lightning, black-and-white sorting, a 72 m pasture with 24 sheep; Riverside versus
 - [x] Farm props, minimap, six synthesized lofi tracks
 
+- [x] Dogs can walk into pens in the trials (versus keeps them out)
+- [x] Co-op on the shareable page over the viewer's live room (join a friend's game; host runs it)
+
 ## Next (in order)
 
 1. Kyle plays it with friends (solo link first, then a hosted room). Collect taste calls:

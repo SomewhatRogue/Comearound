@@ -2,6 +2,25 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-30 (near midnight): dogs in pens; co-op on the shareable page (Claude Opus 5.5)
+
+- **Pens are locked to dogs only in versus** (Kyle: "if there's too many it says so but you
+  can't go into the pen"). In the trials you can walk in through the gate, even a shut challenge
+  gate, and fetch an extra sheep out. Versus keeps the gate shut to dogs so nobody raids from
+  inside. Bot dogs still keep out (they never need to go in, and wandering in would push sheep out).
+- **Co-op on the shareable page** (Kyle: "allow co-op for trials"). The page runs in the claude.ai
+  viewer, which offers a live room of everyone who has it open (the `room` capability). Everyone
+  runs their own game and advertises it in the room's lobby presence; "Join Kyle's game" switches
+  your connection to his. **The joined tab is the host**: its GameRoom (LocalNet) stays the
+  authority. Friends talk only through presence: theirs carries token, look, stick and a bark
+  counter (fed to the room as ordinary client messages); the host's carries one compact snapshot
+  (`src/shared/wire.ts`, under 4 KB, the presence limit) plus each friend's stamina and events,
+  about 15 times a second, in a named room per game (so the lobby presence stays a small advert).
+  Works for versus too. Up to 7 friends. Viewers must be signed in and invited to the artifact
+  (a public link can't join the room). `?fakeroom` swaps in a BroadcastChannel stand-in so two
+  tabs can test it; `node scripts/coop-probe.cjs` (with the dev server up) joins, moves, barks,
+  plays a field and checks the guest falls back to solo when the host leaves.
+
 ## 2026-10-30 (later still): intro tours and the Challenge course (Claude Opus 5.5)
 
 - **Every field opens with a camera tour** (Kyle): the pen or pens, then each group of sheep
