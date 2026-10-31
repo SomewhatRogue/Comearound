@@ -2,6 +2,43 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (afternoon, later): online rooms through a Vercel relay, per Vercel's docs (Claude Opus 5.5)
+
+Online play had never once connected on Kyle's real devices (same Wi-Fi, screens on), while a
+friend's server-relayed game worked fine. Kyle: "I'm deploying on Vercel. Read their docs and
+figure out the right way, even if we have to refactor."
+
+- **Vercel's documented pattern for realtime on Functions** (docs: WebSockets; KB: "Publish and
+  subscribe to realtime data on Vercel", "multiplayer cursors"): every client holds a WebSocket to
+  a Function; a connection is pinned to one instance and instances share no memory, so rooms,
+  presence and pub/sub live in Redis from the Marketplace; each instance delivers to its own
+  sockets first and publishes with its origin id, skipping its own echoes; clients reconnect
+  (connections end at the function's max duration) and reload full state.
+- **So: `api/room.ts` (+ `api/_relay.ts`) is a WebSocket relay.** One Redis pub/sub channel per
+  room for messages, keys for who hosts and when the host was last heard from. The game still runs
+  in the host's browser (no server can tick a room on Functions); the relay carries friends' input
+  to the host and the host's snapshots (the compact wire format, ~15/s) to everyone. Roles:
+  host/take may claim a room (or replace a host silent for 8 s, e.g. a frozen phone, which steps
+  down when it returns); join (opened someone's code) never claims, gets "nohost" and then
+  "hosted" when one arrives. REDIS_URL (Marketplace Redis) or KV_URL (Upstash); without either
+  it runs in memory and the lobby warns that online play isn't fully set up.
+- **Gone: WebRTC, the PeerJS public server, STUN/TURN, `/api/signal`.** No more third-party
+  hosts for online play.
+- Client: `src/client/relay.ts` (RelaySocket with backoff reconnect, RelayHost, RelayNet) and a
+  rewritten `online.ts`. Build flag renamed VITE_ONLINE.
+- **Tests:** `tests/relay.test.ts` (in `npm test`): two relay instances with players spread
+  across them, each a real WebSocket, run twice (shared memory, and a real `redis-server`): roles,
+  routing (to host, broadcast, direct), friend before host, host leaves and a player takes over,
+  a quiet host replaced and stepping down, a joiner never claiming. `npm run test:online`: real
+  browsers, each player its own profile, the dev server running the relay as two alternating
+  instances: (A) host + two friends (link and typed code) sharing rooms in memory, (B) the same
+  through real Redis, (C) host frozen when the friend joins, (D) host leaves mid-run, (E) host's
+  connection drops, (F) friend waits while the host's game is closed, host reopens its link. All
+  pass, twice.
+- **Kyle needs to add Redis to the Vercel project** (Storage, Redis from the Marketplace) so
+  instances share rooms. Function max duration is left at the 300 s default (all plans);
+  clients reconnect on their own. 800 s is available on Pro if the reconnects are noticeable.
+
 ## 2026-10-31 (afternoon): why joining failed, and real multi-player tests (Claude Opus 5.5)
 
 Kyle hosted on his iPhone, shared the code from the share sheet, came back, and his friend still

@@ -37,15 +37,15 @@ const params = new URLSearchParams(location.search);
 // Solo: the whole room runs in this tab with bot dogs. The shareable solo build sets VITE_SOLO.
 const solo = import.meta.env.VITE_SOLO === '1' || params.has('solo');
 let room = solo ? 'solo' : (params.get('room') ?? '').replace(/[^\w-]/g, '').slice(0, 32);
-// The Vercel build plays online rooms peer to peer (the host's tab runs the game); no room in the link means solo.
-const p2p = import.meta.env.VITE_P2P === '1' && !solo;
-if (!room && !p2p) {
+// The Vercel build plays online rooms through the room relay (the host's tab runs the game); no room in the link means solo.
+const online = import.meta.env.VITE_ONLINE === '1' && !solo;
+if (!room && !online) {
   room = Array.from({ length: 4 }, () => 'BCDFGHJKLMNPQRSTVWXZ'[Math.floor(Math.random() * 20)]).join('');
   params.set('room', room);
   try { history.replaceState(null, '', `?${params}`); } catch { /* sandboxed frame */ }
 }
 // A token per tab-session lets a reload rejoin your seat; ?as= gives tests distinct players.
-const tokenKey = `tac-token-${p2p ? 'p2p' : room}-${params.get('as') ?? ''}`;
+const tokenKey = `tac-token-${online ? 'online' : room}-${params.get('as') ?? ''}`;
 const token = (() => {
   try {
     const t = sessionStorage.getItem(tokenKey) ?? crypto.randomUUID();
@@ -77,10 +77,10 @@ const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElem
 const tour = new IntroTour(stage);
 const hud = new Hud();
 const input = new Input();
-const local = solo || p2p ? new LocalNet(() => look) : null;
+const local = solo || online ? new LocalNet(() => look) : null;
 const net = new SwitchNet(local ?? new Net(room, token, () => look));
 // The shareable page: friends who have it open can join each other's games over the viewer's live room.
-const party = solo && local ? new Party(local, net, () => look, token) : p2p && local ? new Online(room, token, local, net, () => look) : null;
+const party = solo && local ? new Party(local, net, () => look, token) : online && local ? new Online(room, token, local, net, () => look) : null;
 const panels = new Panels((m) => net.send(m), look, (l) => { look = l; store.set('tac-dog', JSON.stringify(l)); }, room, solo, party);
 if (party) {
   party.onChange = () => panels.refresh();

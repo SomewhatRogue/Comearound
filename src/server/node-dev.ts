@@ -3,17 +3,22 @@
  * WebSockets on the same /parties/game-server/<room> path the Cloudflare deploy uses.
  *
  * Env: PORT (default 8787), TIMESCALE (test hook, default 1), SEED (fixed seed for repeatable runs),
- * AUTOPILOT=1 (test hook: human dogs herd with the bot brain once a run starts).
+ * AUTOPILOT=1 (test hook: human dogs herd with the bot brain once a run starts), REDIS_URL (the room
+ * relay's two instances share rooms through this Redis instead of memory).
  */
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { handleSignal, memoryStore } from '../../api/signal';
+import { Relay, memoryBackend, redisBackend } from '../../api/_relay';
 import { GameRoom, TICK_HZ } from './game';
 
-// The Vercel matchmaking function, served here with an in-memory store (online play over WebRTC).
-const signalStore = memoryStore();
+// The Vercel room relay (api/room.ts), served here as TWO instances that share rooms the way
+// Vercel's do: through Redis if REDIS_URL is set, else a shared in-memory bus. New connections
+// alternate between them, so local tests cover friends landing on different instances.
+const relayBus = { kv: new Map(), subs: new Map() };
+const relays = Promise.all([0, 1].map(async () => new Relay(process.env.REDIS_URL ? await redisBackend(process.env.REDIS_URL) : memoryBackend(relayBus))));
+let relayTurn = 0;
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DIST = join(process.cwd(), 'dist');
@@ -39,20 +44,6 @@ function roomFor(name: string) {
 
 const http = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://x');
-  if (url.pathname === '/api/signal' && req.method === 'POST') {
-    // SIGNAL_OFF=1 acts like the Vercel site before Redis is added (tests the public-server fallback).
-    if (process.env.SIGNAL_OFF === '1') return void (res.writeHead(503), res.end('{}'));
-    let raw = '';
-    req.on('data', (c) => (raw += c));
-    req.on('end', async () => {
-      let body = {};
-      try { body = JSON.parse(raw); } catch { /* handled as a bad request */ }
-      const { status, json } = await handleSignal(body, signalStore);
-      res.writeHead(status, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(json));
-    });
-    return;
-  }
   if (url.pathname === '/__report') {
     const r = rooms.get(url.searchParams.get('room') ?? '');
     res.end(r ? r.game.report() : 'no such room');
@@ -66,6 +57,10 @@ const http = createServer((req, res) => {
 
 const wss = new WebSocketServer({ server: http });
 wss.on('connection', (ws, req) => {
+  if ((req.url ?? '').startsWith('/api/room')) {
+    void relays.then((r) => r[relayTurn++ % 2].attach(ws, new URL(req.url ?? '/', 'http://localhost')));
+    return;
+  }
   const m = /^\/parties\/game-server\/([\w-]{1,32})/.exec(req.url ?? '');
   if (!m) return ws.close();
   const r = roomFor(m[1]);
