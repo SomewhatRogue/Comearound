@@ -14,7 +14,8 @@ export class SoundDirector {
   private step = 0;
   private stepAt = 0;
   private baaCd = 0;
-  private goatMood = '';
+  private goatComing = false;
+  private lost = 0;
 
   /** A dog barked at `at`; quieter the further it is from you. */
   woof(d: DogPub, dist: number): void {
@@ -57,8 +58,12 @@ export class SoundDirector {
       }
     }
     // Uh oh: the goat has picked you.
-    const g = pub.goat;
-    if (g && g.mood === 'coming' && this.goatMood !== 'coming' && g.target === me.you) sfx.uhoh();
-    this.goatMood = g?.mood ?? '';
+    const coming = pub.goats.some((g) => g.mood === 'coming' && g.target === me.you);
+    if (coming && !this.goatComing) sfx.uhoh();
+    this.goatComing = coming;
+    // A sheep got out through the broken fence.
+    const lost = pub.sheep.filter((s) => s.lost).length;
+    if (lost > this.lost && pub.phase === 'playing') sfx.sad();
+    this.lost = lost;
   }
 }

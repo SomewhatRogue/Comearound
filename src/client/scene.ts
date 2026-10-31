@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { gateOf, penWalls, type FieldDef } from '../shared/field';
 import { at, hayMesh, mat, mesh, pondMesh, rockMesh, treeMesh } from './models';
+import { buildHazards } from './hazardsview';
 import { Scenery } from './scenery';
 
 export const TEAM_COLORS = ['#3d7dd8', '#e8762c'] as const;
@@ -106,8 +107,8 @@ export class FieldView {
   }
 
   /** Clouds and butterflies. */
-  update(time: number, dt: number): void {
-    this.scenery?.update(time, dt);
+  update(time: number, dt: number, wind: { x: number; z: number; s: number }): void {
+    this.scenery?.update(time, dt, wind);
   }
 }
 
@@ -118,14 +119,36 @@ function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
   const hd = f.d / 2;
   const fence = new THREE.Group();
   const postGeo = new THREE.BoxGeometry(0.16, 1.0, 0.16);
-  for (let x = -hw; x <= hw + 0.01; x += 2.5) for (const z of [-hd, hd]) fence.add(post(postGeo, x, z));
-  for (let z = -hd + 2.5; z < hd; z += 2.5) for (const x of [-hw, hw]) fence.add(post(postGeo, x, z));
-  for (const y of [0.45, 0.8]) {
-    for (const [w, d, x, z] of [[f.w, 0.07, 0, -hd], [f.w, 0.07, 0, hd], [0.07, f.d, -hw, 0], [0.07, f.d, hw, 0]]) {
-      fence.add(at(mesh(new THREE.BoxGeometry(w, 0.08, d), '#c8a46e'), x, y, z));
+  // Each side is a run of rails between gaps (a broken fence leaves a hole).
+  const sides: { side: 'n' | 's' | 'e' | 'w'; alongX: boolean; fixed: number; len: number }[] = [
+    { side: 'n', alongX: true, fixed: -hd, len: f.w }, { side: 's', alongX: true, fixed: hd, len: f.w },
+    { side: 'w', alongX: false, fixed: -hw, len: f.d }, { side: 'e', alongX: false, fixed: hw, len: f.d },
+  ];
+  for (const sd of sides) {
+    const holes = (f.gaps ?? []).filter((q) => q.side === sd.side).map((q) => [q.at - q.w / 2, q.at + q.w / 2]).sort((a, b) => a[0] - b[0]);
+    const runs: [number, number][] = [];
+    let start = -sd.len / 2;
+    for (const [a, b] of holes) {
+      runs.push([start, a]);
+      start = b;
+    }
+    runs.push([start, sd.len / 2]);
+    for (const [a, b] of runs) {
+      if (b - a < 0.2) continue;
+      const n = Math.max(1, Math.round((b - a) / 2.5));
+      for (let i = 0; i <= n; i++) {
+        const t = a + ((b - a) * i) / n;
+        fence.add(sd.alongX ? post(postGeo, t, sd.fixed) : post(postGeo, sd.fixed, t));
+      }
+      for (const y of [0.45, 0.8]) {
+        const rail = mesh(new THREE.BoxGeometry(sd.alongX ? b - a : 0.07, 0.08, sd.alongX ? 0.07 : b - a), '#c8a46e');
+        rail.position.set(sd.alongX ? (a + b) / 2 : sd.fixed, y, sd.alongX ? sd.fixed : (a + b) / 2);
+        fence.add(rail);
+      }
     }
   }
   g.add(fence);
+  g.add(buildHazards(f));
 
   // Pens: dirt floor, fences with the gate gap, a swung-open gate, and a team flag in versus.
   for (const p of f.pens) {
@@ -169,6 +192,7 @@ function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
   }
 
   for (const o of f.obstacles) {
+    if (o.kind === 'bramble') continue;
     const seed = o.x * 1.7 + o.z;
     const obj = o.kind === 'tree' ? treeMesh(o.r, seed) : o.kind === 'rock' ? rockMesh(o.r) : o.kind === 'hay' ? hayMesh(o.r) : pondMesh(o.r, seed);
     obj.position.x += o.x;

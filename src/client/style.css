@@ -43,6 +43,11 @@ input { -webkit-user-select: text; user-select: text; }
 .goat-meter::after { content: ''; display: block; height: 100%; width: calc(var(--annoy, 0) * 100%); background: linear-gradient(90deg, #f2c84b, #e2533a); transition: width 0.3s; }
 .goat-meter.hot { animation: throb 0.5s ease-in-out infinite alternate; }
 
+#wind span { display: inline-block; font-size: 15px; line-height: 1; color: #5f86d8; }
+#wind[data-level="2"] span { color: #e2a33a; } #wind[data-level="3"] span { color: var(--bad); animation: throb 0.6s ease-in-out infinite alternate; }
+#lost { background: var(--bad) !important; color: #fff; }
+.gap-label { font-weight: 700; font-size: 11px; color: #fff; background: var(--bad); padding: 1px 7px; border-radius: 4px; letter-spacing: 0.06em; box-shadow: 0 2px 0 #0003; }
+
 /* HUD */
 #hud { position: fixed; inset: 0; pointer-events: none; }
 #topbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; white-space: nowrap; }
@@ -139,6 +144,7 @@ body:has(#modal:not(.hidden):not(.glance)) #touch { display: none; }
 .tally li { display: flex; justify-content: space-between; align-items: baseline; background: #fff; border-radius: 10px; padding: 7px 10px; animation: tally 0.45s cubic-bezier(.3,1.6,.5,1) both; animation-delay: var(--d); }
 .tally li i { font-style: normal; font-size: 12px; color: var(--ink-soft); margin-left: 4px; }
 .tally li b { color: var(--good); font-size: 17px; }
+.tally li b.bad, .results .bad { color: var(--bad); }
 .tally .sum { text-align: right; font-size: 34px; font-weight: 700; margin-top: 6px; animation: tally 0.45s cubic-bezier(.3,1.6,.5,1) both; animation-delay: var(--d); }
 .tally h3 { margin: 0 0 6px; }
 .tally.team0 h3 { color: var(--t0); } .tally.team1 h3 { color: var(--t1); }

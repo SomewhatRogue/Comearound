@@ -283,16 +283,24 @@ export function sheepMesh(): SheepRig {
 }
 
 /** The goat: shaggier, horned, bearded, with floppy sideways ears and a judgemental face. */
-export function goatMesh(): { root: THREE.Group; head: THREE.Group; legs: THREE.Mesh[] } {
+/** Goat coats: each goat on a field looks a bit different, so you can tell who's doing what. */
+const GOAT_COATS = [
+  { body: '#e8e1d2', back: '#cfc4ad', face: '#d6ccb7' },
+  { body: '#6b4a34', back: '#4a3324', face: '#e8e1d2' },
+  { body: '#9b9790', back: '#7a766f', face: '#c9c4ba' },
+];
+
+export function goatMesh(variant = 0): { root: THREE.Group; head: THREE.Group; legs: THREE.Mesh[] } {
+  const c = GOAT_COATS[variant % GOAT_COATS.length];
   const root = group('goat');
-  const body = mesh(new THREE.BoxGeometry(0.56, 0.5, 0.95), '#e8e1d2');
+  const body = mesh(new THREE.BoxGeometry(0.56, 0.5, 0.95), c.body);
   body.position.y = 0.72;
   root.add(body);
-  root.add(at(mesh(new THREE.BoxGeometry(0.5, 0.12, 0.7), '#cfc4ad'), 0, 1.0, -0.05));
+  root.add(at(mesh(new THREE.BoxGeometry(0.5, 0.12, 0.7), c.back), 0, 1.0, -0.05));
   const head = group('head');
   head.position.set(0, 1.05, 0.55);
-  head.add(mesh(new THREE.BoxGeometry(0.34, 0.36, 0.42), '#e8e1d2'));
-  head.add(at(mesh(new THREE.BoxGeometry(0.26, 0.2, 0.18), '#d6ccb7'), 0, -0.1, 0.26));
+  head.add(mesh(new THREE.BoxGeometry(0.34, 0.36, 0.42), c.body));
+  head.add(at(mesh(new THREE.BoxGeometry(0.26, 0.2, 0.18), c.face), 0, -0.1, 0.26));
   head.add(at(mesh(new THREE.ConeGeometry(0.06, 0.2, 5), '#b9ad94'), 0, -0.3, 0.26));
   for (const side of [-1, 1]) {
     const horn = mesh(new THREE.ConeGeometry(0.05, 0.3, 6), '#9a8a6a');
@@ -309,7 +317,7 @@ export function goatMesh(): { root: THREE.Group; head: THREE.Group; legs: THREE.
   root.add(head);
   const legs: THREE.Mesh[] = [];
   for (const [x, z] of [[-0.18, 0.32], [0.18, 0.32], [-0.18, -0.32], [0.18, -0.32]]) {
-    const leg = mesh(new THREE.BoxGeometry(0.11, 0.48, 0.11), '#d6ccb7');
+    const leg = mesh(new THREE.BoxGeometry(0.11, 0.48, 0.11), c.face);
     leg.geometry.translate(0, -0.24, 0);
     leg.position.set(x, 0.48, z);
     root.add(leg);

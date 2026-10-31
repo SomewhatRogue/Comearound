@@ -8,7 +8,8 @@ import * as THREE from 'three';
 import type { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { DogPub, PublicView } from '../shared/protocol';
 import { DOG, GOAT, SHEEP } from '../shared/tuning';
-import { dogMesh, goatMesh, sheepMesh, type DogRig, type SheepRig } from './models';
+import { GoatView } from './goatview';
+import { dogMesh, sheepMesh, type DogRig, type SheepRig } from './models';
 import { TEAM_COLORS, label, type Stage } from './scene';
 
 const lerpAngle = (a: number, b: number, k: number) => {
@@ -37,12 +38,7 @@ interface SheepView { rig: SheepRig; facing: number; phase: number; lastX: numbe
 export class Entities {
   private dogs = new Map<string, DogView>();
   private sheep = new Map<number, SheepView>();
-  private goat = goatMesh();
-  private goatTag: CSS2DObject;
-  private goatBubble: CSS2DObject;
-  private goatFacing = 0;
-  private goatPhase = 0;
-  private goatLast = { x: 0, z: 0, bleats: 0 };
+  private goats = new Map<string, GoatView>();
   private rings: { m: THREE.Mesh; t: number; max: number }[] = [];
   // Points along -y in its own plane, which becomes +z (the dog's forward) once laid flat.
   private eyeGeo = new THREE.CircleGeometry(DOG.eyeRange, 24, -Math.PI / 2 - DOG.eyeCone, DOG.eyeCone * 2);
@@ -55,14 +51,6 @@ export class Entities {
   onBleat: (at: THREE.Vector3) => void = () => {};
 
   constructor(private stage: Stage) {
-    stage.scene.add(this.goat.root);
-    this.goat.root.visible = false;
-    this.goatTag = label('', 'goat-meter');
-    this.goatTag.position.y = 2.0;
-    this.goat.root.add(this.goatTag);
-    this.goatBubble = label('', 'goat-bubble');
-    this.goatBubble.position.y = 2.5;
-    this.goat.root.add(this.goatBubble);
   }
 
   sync(pub: PublicView, you: string, predicted: { x: number; z: number; rot: number } | null, dt: number, time: number): void {
@@ -204,6 +192,7 @@ export class Entities {
         this.sheep.set(s.id, v);
       }
       const root = v.rig.root;
+      root.visible = !s.lost;
       root.position.x += (s.x - root.position.x) * k;
       root.position.z += (s.z - root.position.z) * k;
       const moved = Math.hypot(root.position.x - v.lastX, root.position.z - v.lastZ) / Math.max(dt, 1e-3);
@@ -235,41 +224,23 @@ export class Entities {
   }
 
   private syncGoat(pub: PublicView, dt: number, k: number, time: number): void {
-    const g = pub.goat;
-    const root = this.goat.root;
-    root.visible = !!g;
-    this.goatTag.element.style.display = g ? '' : 'none';
-    this.goatBubble.element.style.display = g ? '' : 'none';
-    if (!g) return;
-    if (!this.goatLast.x && !this.goatLast.z) root.position.set(g.x, 0, g.z);
-    root.position.x += (g.x - root.position.x) * k;
-    root.position.z += (g.z - root.position.z) * k;
-    const speed = Math.hypot(root.position.x - this.goatLast.x, root.position.z - this.goatLast.z) / Math.max(dt, 1e-3);
-    [this.goatLast.x, this.goatLast.z] = [root.position.x, root.position.z];
-    // Staring: turn to face the victim, whatever it was doing.
-    let face = g.rot;
-    const victim = g.target ? pub.dogs.find((d) => d.id === g.target) : null;
-    if (victim && (g.mood === 'stare' || g.mood === 'coming')) face = Math.atan2(victim.x - g.x, victim.z - g.z);
-    this.goatFacing = lerpAngle(this.goatFacing, face, 1 - Math.exp(-dt * 6));
-    root.rotation.y = this.goatFacing;
-    this.goatPhase += dt * Math.min(speed, 5) * 3;
-    const amp = Math.min(0.5, speed * 0.15);
-    this.goat.legs.forEach((l, i) => (l.rotation.x = Math.sin(this.goatPhase + (i === 0 || i === 3 ? 0 : Math.PI)) * amp));
-    // Bleating: head up. Staring: dead still. Blocking a gate: horns down, daring you.
-    this.goat.head.rotation.x = g.mood === 'bleat' ? -0.5 : g.mood === 'stare' ? 0.15 + Math.sin(time * 2) * 0.02 : g.mood === 'block' ? 0.55 + Math.sin(time * 3) * 0.05 : 0.25;
-    // The patience meter: fills as barking annoys it.
-    const el = this.goatTag.element;
-    el.style.setProperty('--annoy', String(g.annoy));
-    el.classList.toggle('hot', g.annoy > 0.6);
-    el.style.opacity = g.annoy > 0.05 || g.mood === 'coming' ? '1' : '0';
-    const bubble = { bleat: 'MEHHH', coming: '!', stare: '...', block: 'NOPE', escape: 'bye!', stroll: 'hehe' }[g.mood as string] ?? '';
-    this.goatBubble.element.textContent = bubble;
-    this.goatBubble.element.style.display = bubble ? '' : 'none';
-    if (g.bleats > this.goatLast.bleats) {
-      this.ring(root.position.x, root.position.z, GOAT.bleatRadius, '#ffd9a8');
-      this.onBleat(root.position);
+    const seen = new Set<string>();
+    for (const g of pub.goats) {
+      // Goat ids restart every field, so key them by field too.
+      const key = `${pub.fieldId}:${pub.fieldIdx}:${g.id}`;
+      seen.add(key);
+      let v = this.goats.get(key);
+      if (!v) this.goats.set(key, (v = new GoatView(this.stage.scene, g)));
+      if (v.sync(g, pub, dt, k, time)) {
+        this.ring(v.rig.root.position.x, v.rig.root.position.z, GOAT.bleatRadius, '#ffd9a8');
+        this.onBleat(v.rig.root.position);
+      }
     }
-    this.goatLast.bleats = g.bleats;
+    for (const [key, v] of this.goats) {
+      if (seen.has(key)) continue;
+      v.dispose(this.stage.scene);
+      this.goats.delete(key);
+    }
   }
 }
 

@@ -38,6 +38,16 @@ export class Hud {
       $('pens').innerHTML = counts.map((c) => `<div class="pen-count ${c.t === null ? '' : `team${c.t}`}"><span class="sheep-ico"></span><b>${c.n}</b>/${c.of}${c.t === null ? '' : ` <i>${TEAM_NAMES[c.t]}</i>`}</div>`).join('');
     }
 
+    // Wind: an arrow the way it blows (north is up on screen), bolder when it's strong.
+    const wind = $('wind');
+    wind.style.display = pub.wind.s > 0.05 && (playing || pub.phase === 'intro') ? '' : 'none';
+    $('wind-arrow').style.rotate = `${Math.atan2(pub.wind.z, pub.wind.x)}rad`;
+    wind.dataset.level = pub.wind.s > 0.7 ? '3' : pub.wind.s > 0.4 ? '2' : '1';
+    // Lost sheep, if any got out.
+    const lost = pub.sheep.filter((s) => s.lost).length;
+    $('lost').style.display = lost ? '' : 'none';
+    $('lost').textContent = `${lost} lost`;
+
     // Stamina and bark.
     const self = pub.dogs.find((d) => d.id === me.you);
     const show = !!self && !self.spectator && (playing || pub.phase === 'lobby');
@@ -116,8 +126,12 @@ export class Hud {
 }
 
 const TIPS: Record<string, string> = {
+  brook: 'Sheep won\'t swim. Find a bridge. Mind the mud.',
+  lane: 'The north fence is broken and the wind blows that way. Keep downwind of them.',
+  billy: 'Three goats, two bridges, a broken fence and a gale. Good luck.',
+  riverside: 'Your sheep are on the far bank. Bring them over a bridge.',
   meadow: 'One flock, one pen. Get round behind them and walk them in.',
   orchard: 'Two flocks among the trees, and a goat. Watch your barking.',
-  hillside: 'Big field, two flocks, a pond in the way. Split up.',
+  hillside: 'Big field, two flocks, a pond in the way, and wind: sheep downwind of you can smell you.',
   fieldday: 'Both flocks start in the middle. Pen yours. Or make trouble.',
 };

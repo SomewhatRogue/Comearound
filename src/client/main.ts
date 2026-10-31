@@ -2,10 +2,10 @@
  * Client entry: joins the room in the URL (or makes one), predicts your own dog's movement,
  * draws the field, and exposes text state for tests (window.__GAME_STATE__, render_game_to_text).
  */
-import { fieldById } from '../shared/field';
+import { fieldById, inMud, inWater } from '../shared/field';
 import { BREEDS, COLLARS, DEFAULT_COAT } from '../shared/looks';
 import type { Look } from '../shared/protocol';
-import { DOG } from '../shared/tuning';
+import { DOG, HAZARD } from '../shared/tuning';
 import { collide } from '../server/physics';
 import { Entities } from './entities';
 import { Hud } from './hud';
@@ -141,18 +141,19 @@ function frame(now: number) {
   if (pub && me && net.me) {
     const field = fieldById(pub.fieldId);
     fieldView.show(field, pub.mode);
-    fieldView.update(now / 1000, dt);
+    fieldView.update(now / 1000, dt, pub.wind);
     // Predict our own run; ease back toward the server so we never drift far from the truth.
     if (!havePrediction) [predicted.x, predicted.z, predicted.rot, havePrediction] = [me.x, me.z, me.rot, true];
     const len = Math.hypot(input.dx, input.dz);
     const canMove = !me.spectator && !me.frozen && (pub.phase === 'playing' || pub.phase === 'lobby');
     if (canMove && len > 0.1) {
-      const speed = input.crouch ? DOG.crouch : input.sprint && net.me.stamina > 1 ? DOG.sprint : DOG.walk;
+      const ground = inMud(field, predicted.x, predicted.z) ? HAZARD.mudSlow : inWater(field, predicted.x, predicted.z) ? HAZARD.wadeSlow : 1;
+      const speed = (input.crouch ? DOG.crouch : input.sprint && net.me.stamina > 1 ? DOG.sprint : DOG.walk) * ground;
       const k = Math.min(1, len);
       const from = { x: predicted.x, z: predicted.z };
       predicted.x += (input.dx / len) * speed * k * dt;
       predicted.z += (input.dz / len) * speed * k * dt;
-      [predicted.x, predicted.z] = collide(field, predicted.x, predicted.z, DOG.radius, { from, gateShut: true });
+      [predicted.x, predicted.z] = collide(field, predicted.x, predicted.z, DOG.radius, { from, gateShut: true, water: false });
       predicted.rot = Math.atan2(input.dx, input.dz);
       idleFor = 0;
     } else idleFor += dt;
@@ -207,7 +208,7 @@ w.render_game_to_text = () => {
   return JSON.stringify({
     phase: pub.phase, mode: pub.mode, field: `${pub.fieldIdx + 1}/${pub.fieldCount} ${pub.fieldId}`, timeLeft: pub.timeLeft,
     you: s?.look.name, breed: s?.look.breed, team: s?.team, posture: s?.frozen ? 'frozen' : s?.down ? 'down' : s?.posture, stamina: net.me.stamina, barkReady: net.me.barkReady,
-    penned: `${pub.sheep.filter((q) => q.penned).length}/${pub.sheep.length}`, goat: pub.goat ? `${pub.goat.mood} annoy=${pub.goat.annoy}` : null,
+    penned: `${pub.sheep.filter((q) => q.penned).length}/${pub.sheep.length}`, goats: pub.goats.map((g) => `${g.mood} annoy=${g.annoy}`), wind: `${pub.wind.s}`, lost: pub.sheep.filter((q) => q.lost).length,
     dogs: pub.dogs.length, scores: pub.fieldScores.map((f) => f.map((q) => q.score)),
   });
 };

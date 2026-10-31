@@ -3,7 +3,7 @@
  * field, and the results with the leaderboard. Each renders only when its inputs change; buttons
  * use data-act attributes and one listener.
  */
-import { TRIALS, fieldById } from '../shared/field';
+import { COURSES, fieldById, type CourseId } from '../shared/field';
 import { BREEDS, BREED_NAMES, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } from '../shared/looks';
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
@@ -20,9 +20,11 @@ export class Panels {
   /** The lobby panel can fold away so you can practise on the flock (on phones it covers the buttons). */
   collapsed = false;
   private keys = { lobby: '', modal: '' };
-  private mode: Mode = 'trials';
+  /** What the host has picked: a trials course, or versus. */
+  private pick: CourseId | 'versus' = 'gentle';
   private bots = true;
-  private best = Number(store.get('tac-best-trials') ?? 0) || 0;
+  private bests: Record<CourseId, number> = { gentle: Number(store.get('tac-best-trials') ?? 0) || 0, tricky: Number(store.get('tac-best-tricky') ?? 0) || 0 };
+  private best = 0;
   private newBest = false;
   private savedRun = '';
 
@@ -51,10 +53,10 @@ export class Panels {
     if (act === 'coat') this.setLook({ ...this.look, coat: v });
     if (act === 'eyes') this.setLook({ ...this.look, eyes: v });
     if (act === 'collar') this.setLook({ ...this.look, collar: v });
-    if (act === 'mode') [this.mode, this.keys.lobby] = [v as Mode, ''];
+    if (act === 'mode') [this.pick, this.keys.lobby] = [v as CourseId | 'versus', ''];
     if (act === 'bots') [this.bots, this.keys.lobby] = [!this.bots, ''];
-    if (act === 'start') this.send({ t: 'start', mode: this.mode, fillBots: this.bots || this.solo });
-    if (act === 'again') this.send({ t: 'start', mode: (v as Mode) || this.mode, fillBots: this.bots || this.solo });
+    if (act === 'start') this.startPick(this.pick);
+    if (act === 'again') this.startPick(v as CourseId | 'versus');
     if (act === 'copy') void navigator.clipboard?.writeText(location.href).catch(() => {});
     if (act === 'close') this.menuOpen = false;
     if (act === 'fold') [this.collapsed, this.keys.lobby] = [!this.collapsed, ''];
@@ -69,9 +71,14 @@ export class Panels {
     this.keys.modal = '';
   }
 
+  private startPick(pick: CourseId | 'versus'): void {
+    const mode: Mode = pick === 'versus' ? 'versus' : 'trials';
+    this.send({ t: 'start', mode, fillBots: this.bots || this.solo, course: pick === 'versus' ? 'gentle' : pick });
+  }
+
   render(pub: PublicView, me: PrivateView): void {
     const lobby = document.getElementById('lobby')!;
-    const lk = pub.phase === 'lobby' ? JSON.stringify([this.look, pub.dogs.map((d) => [d.look, d.connected, d.bot]), pub.hostId === me.you, this.mode, this.bots, this.collapsed]) : 'off';
+    const lk = pub.phase === 'lobby' ? JSON.stringify([this.look, pub.dogs.map((d) => [d.look, d.connected, d.bot]), pub.hostId === me.you, this.pick, this.bots, this.collapsed]) : 'off';
     if (lk !== this.keys.lobby) {
       this.keys.lobby = lk;
       const typing = document.activeElement?.id === 'name-input';
@@ -99,10 +106,12 @@ export class Panels {
     const id = JSON.stringify(pub.fieldScores);
     if (id === this.savedRun) return;
     this.savedRun = id;
-    this.newBest = run > this.best;
+    const c = pub.course;
+    this.newBest = run > this.bests[c];
+    this.best = Math.max(run, this.bests[c]);
     if (this.newBest) {
-      this.best = run;
-      store.set('tac-best-trials', String(run));
+      this.bests[c] = run;
+      store.set(c === 'gentle' ? 'tac-best-trials' : 'tac-best-tricky', String(run));
     }
   }
 
@@ -113,16 +122,19 @@ export class Panels {
     const eyes = EYES.map((e) => `<button class="chip eye-chip ${e.id === this.look.eyes ? 'on' : ''}" data-act="eyes" data-v="${e.id}"><i style="background:${e.color}"></i>${e.name}</button>`).join('');
     const collars = COLLARS.map((c) => `<button class="swatch ${c === this.look.collar ? 'on' : ''}" style="background:${c}" data-act="collar" data-v="${c}" aria-label="collar ${c}"></button>`).join('');
     const pack = pub.dogs.filter((d) => !d.bot).map((d) => `<li><i style="background:${d.look.collar}"></i>${esc(d.look.name)} <span class="quiet">${BREED_NAMES[d.look.breed]}</span>${d.id === pub.hostId ? ' <em>host</em>' : ''}${d.connected ? '' : ' <span class="quiet">(away)</span>'}</li>`).join('');
-    const modes = ([['trials', 'Co-op Trials', 'Three fields together. Fast, calm herding scores best.'], ['versus', 'Versus', 'Two teams, two pens. Pen yours, or go and stir up theirs.']] as const)
-      .map(([m, n, d]) => `<button class="mode ${m === this.mode ? 'on' : ''}" data-act="mode" data-v="${m}"><b>${n}</b><span>${d}</span></button>`).join('');
+    const modes = ([
+      ['gentle', 'Co-op Trials: Gentle', 'The Meadow, Old Orchard, Windy Hillside. Learn the ropes, meet the goat.'],
+      ['tricky', 'Co-op Trials: Tricky', 'Streams and bridges, brambles, a broken fence, wind, and three goats.'],
+      ['versus', 'Versus', 'Two teams, two pens. Pen yours, or go and stir up theirs.'],
+    ] as const).map(([m, n, d]) => `<button class="mode ${m === this.pick ? 'on' : ''}" data-act="mode" data-v="${m}"><b>${n}</b><span>${d}</span></button>`).join('');
     const controls = host
-      ? `<div class="label">Mode</div><div class="modes">${modes}</div>${this.solo ? '' : `<button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty spots with bot dogs</button>`}<button class="big" data-act="start">Start ${this.mode === 'trials' ? 'the trials' : 'the match'}</button>`
+      ? `<div class="label">Mode</div><div class="modes">${modes}</div>${this.solo ? '' : `<button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty spots with bot dogs</button>`}<button class="big" data-act="start">Start ${this.pick === 'versus' ? 'the match' : 'the trials'}</button>`
       : `<p class="quiet">Waiting for the host to start.</p>`;
     const roomLine = this.solo
       ? '<p class="quiet">Solo: bot dogs work alongside you. Practise on the flock while you choose your dog.</p>'
       : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
     const touchTip = document.body.classList.contains('touch') ? '<p class="touch-tip">Drag anywhere on the field to move. Tap <b>Practise</b> to fold this away and try the buttons.</p>' : '';
-    const best = this.best ? `<p class="quiet">Your best trials run: <b>${this.best}</b></p>` : '';
+    const best = this.bests.gentle || this.bests.tricky ? `<p class="quiet">Your best runs: Gentle <b>${this.bests.gentle}</b> &middot; Tricky <b>${this.bests.tricky}</b></p>` : '';
     return `<button class="chip fold" data-act="fold">Practise</button><h2>Come Bye!</h2>${roomLine}
       <label>Your dog's name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>${touchTip}
       <div class="label">Breed</div><div class="row wrap">${breeds}</div>
@@ -157,10 +169,11 @@ export class Panels {
     const run = runTotal(pub.fieldScores, null);
     const rows = pub.fieldScores.map((f, i) => {
       const s = f[0];
-      return `<tr style="--d:${i * 0.35}s"><td>${TRIALS[i]?.name ?? `Field ${i + 1}`}</td><td>${s.penned}/${s.total}</td><td>+${s.timeBonus}</td><td>+${s.calmBonus}</td><td>${s.goatBonus ? '+' + s.goatBonus : ''}</td><td class="pts">${s.score}</td></tr>`;
+      return `<tr style="--d:${i * 0.35}s"><td>${COURSES[pub.course].fields[i]?.name ?? `Field ${i + 1}`}</td><td>${s.penned}/${s.total}${s.lost ? ` <span class="bad">-${s.lost} lost</span>` : ''}</td><td>+${s.timeBonus}</td><td>+${s.calmBonus}</td><td>${s.goatBonus ? '+' + s.goatBonus : ''}</td><td class="pts">${s.score}</td></tr>`;
     }).join('');
-    const board = pub.leaderboard.map((r, i) => `<li class="${r.score === run && i === pub.leaderboard.findIndex((q) => q.score === run) ? 'this' : ''}"><b>${i + 1}</b><span>${r.names.map(esc).join(', ')}</span><span class="pts">${r.score}</span></li>`).join('');
-    return `<div class="sheet results"><h4>Co-op Trials</h4><h2>${run} points</h2>${this.newBest ? '<p class="banner">New best for this browser!</p>' : `<p class="quiet">Your best: ${this.best}</p>`}
+    const rows2 = pub.leaderboard.filter((r) => r.course === pub.course);
+    const board = rows2.map((r, i) => `<li class="${r.score === run && i === rows2.findIndex((q) => q.score === run) ? 'this' : ''}"><b>${i + 1}</b><span>${r.names.map(esc).join(', ')}</span><span class="pts">${r.score}</span></li>`).join('');
+    return `<div class="sheet results"><h4>Co-op Trials: ${COURSES[pub.course].name}</h4><h2>${run} points</h2>${this.newBest ? '<p class="banner">New best for this browser!</p>' : `<p class="quiet">Your best: ${this.best}</p>`}
       <table><thead><tr><th>Field</th><th>Sheep</th><th>Time</th><th>Calm</th><th>Goat</th><th>Score</th></tr></thead><tbody>${rows}</tbody></table>
       <h3>Leaderboard (this room)</h3><ol class="board">${board}</ol>${again}</div>`;
   }
@@ -181,10 +194,11 @@ function fieldCard(pub: PublicView, me: PrivateView): string {
       [`Sheep penned`, `${s.penned}/${s.total}`, s.penned * 100],
       ['Time left', s.timeBonus ? '' : 'pen them all to earn it', s.timeBonus],
       ['Calm herding', 'fewer barks', s.calmBonus],
-      ...(s.goatBonus ? [['The goat!', 'penned', s.goatBonus] as const] : []),
+      ...(s.goatBonus ? [[s.goatBonus > 250 ? 'Goats!' : 'The goat!', 'penned', s.goatBonus] as const] : []),
+      ...(s.lost ? [['Lost sheep', `${s.lost} out the broken fence`, -s.lostPenalty] as const] : []),
     ];
     return `<div class="tally ${s.team === null ? '' : `team${s.team}`}">${s.team === null ? '' : `<h3>${TEAM_NAMES[s.team]}</h3>`}
-      <ul>${rows.map(([a, b, c], i) => `<li style="--d:${0.2 + i * 0.35}s"><span>${a} <i>${b}</i></span><b>+${c}</b></li>`).join('')}</ul>
+      <ul>${rows.map(([a, b, c], i) => `<li style="--d:${0.2 + i * 0.35}s"><span>${a} <i>${b}</i></span><b class="${Number(c) < 0 ? 'bad' : ''}">${Number(c) < 0 ? '' : '+'}${c}</b></li>`).join('')}</ul>
       <div class="sum" style="--d:${0.2 + rows.length * 0.35}s">${s.score}</div></div>`;
   };
   const mine = pub.dogs.find((d) => d.id === me.you)?.team ?? 0;

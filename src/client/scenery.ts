@@ -5,7 +5,7 @@
  * Nearly all instanced, so a phone draws it in a handful of calls.
  */
 import * as THREE from 'three';
-import { gateOf, type FieldDef } from '../shared/field';
+import { gateOf, inMud, inWater, type FieldDef } from '../shared/field';
 import { Rng } from '../shared/rng';
 import { at, mat, mesh, treeMesh } from './models';
 
@@ -37,6 +37,29 @@ const THEMES: Record<string, Theme> = {
   },
 };
 
+/** Shared by every swaying material: the clock and the wind. */
+export const windUniforms = { uTime: { value: 0 }, uWind: { value: 0 }, uWindDir: { value: new THREE.Vector2(1, 0) } };
+
+/** A material whose vertices sway in the wind, more the higher they are (grass tips, flower heads). */
+function swaying(color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra });
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, windUniforms);
+    sh.vertexShader = 'uniform float uTime;\nuniform float uWind;\nuniform vec2 uWindDir;\n' + sh.vertexShader.replace('#include <project_vertex>', `
+      vec4 mvPosition = vec4( transformed, 1.0 );
+      #ifdef USE_INSTANCING
+        mvPosition = instanceMatrix * mvPosition;
+      #endif
+      float h = max(mvPosition.y, 0.0);
+      float wave = sin(uTime * 2.2 - dot(mvPosition.xz, uWindDir) * 0.5 + mvPosition.x * 0.13) * 0.5 + 0.5;
+      float flutter = sin(uTime * 7.0 + mvPosition.x * 3.1 + mvPosition.z * 2.3) * 0.12;
+      mvPosition.xz += uWindDir * (uWind * (0.3 + wave * 1.1) + flutter * (0.25 + uWind)) * h * 0.75;
+      mvPosition = modelViewMatrix * mvPosition;
+      gl_Position = projectionMatrix * mvPosition;`);
+  };
+  return m;
+}
+
 /** Smooth, cheap noise: a few crossed sine waves with random phases. 0..1. */
 function noise2(rng: Rng): (x: number, z: number) => number {
   const w = Array.from({ length: 4 }, () => ({ a: rng.range(0, 6.28), fx: rng.range(0.05, 0.16), fz: rng.range(0.05, 0.16), p: rng.range(0, 6.28) }));
@@ -51,6 +74,7 @@ export class Scenery {
   readonly group = new THREE.Group();
   private butterflies: { inst: THREE.InstancedMesh; homes: { x: number; z: number; r: number; ph: number; sp: number }[] } | null = null;
   private clouds: THREE.Object3D[] = [];
+  private streaks: { inst: THREE.InstancedMesh; mat: THREE.MeshBasicMaterial; pts: { x: number; z: number; y: number; ph: number }[] } | null = null;
   private m = new THREE.Matrix4();
 
   constructor(private f: FieldDef, private lowfx: boolean) {
@@ -65,6 +89,20 @@ export class Scenery {
     if (theme.extras === 'apples') this.apples(rng);
     if (theme.extras === 'bunting') this.bunting();
     this.butterflySwarm(rng, patches);
+    this.windStreaks(rng);
+  }
+
+  /** Faint white streaks blowing across the field when the wind is up. */
+  private windStreaks(rng: Rng): void {
+    if (!this.f.wind || this.f.wind.strength <= 0) return;
+    const count = this.lowfx ? 10 : 26;
+    const geo = new THREE.PlaneGeometry(1.8, 0.05);
+    geo.rotateX(-Math.PI / 2);
+    const m = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false });
+    const inst = new THREE.InstancedMesh(geo, m, count);
+    const pts = Array.from({ length: count }, () => ({ x: rng.range(-this.f.w / 2, this.f.w / 2), z: rng.range(-this.f.d / 2, this.f.d / 2), y: rng.range(0.6, 2.2), ph: rng.range(0, 6.28) }));
+    this.streaks = { inst, mat: m, pts };
+    this.group.add(inst);
   }
 
   /** Is (x, z) somewhere decoration shouldn't go: pens, ponds, trees, rocks, the gate approach. */
@@ -72,6 +110,7 @@ export class Scenery {
     const f = this.f;
     if (Math.abs(x) > f.w / 2 - 0.4 || Math.abs(z) > f.d / 2 - 0.4) return true;
     if (f.pens.some((p) => Math.abs(x - p.x) < p.w / 2 + pad && Math.abs(z - p.z) < p.d / 2 + pad)) return true;
+    if (inWater(f, x, z, pad + 0.5) || inMud(f, x, z)) return true;
     return f.obstacles.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + pad + (o.kind === 'pond' ? 0.4 : 0));
   }
 
@@ -218,12 +257,12 @@ export class Scenery {
     petalGeo.rotateX(-Math.PI / 2);
     const heartGeo = new THREE.IcosahedronGeometry(0.055, 0);
     const stemGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.22, 3);
-    const stems = new THREE.InstancedMesh(stemGeo, mat('#5d8a3e'), per);
+    const stems = new THREE.InstancedMesh(stemGeo, swaying('#5d8a3e'), per);
     let s = 0;
     for (const kind of theme.flowers) {
       const count = Math.round((per * kind.weight) / total);
-      const petals = new THREE.InstancedMesh(petalGeo, mat(kind.petal, { side: THREE.DoubleSide }), count);
-      const hearts = new THREE.InstancedMesh(heartGeo, mat(kind.heart), count);
+      const petals = new THREE.InstancedMesh(petalGeo, swaying(kind.petal, { side: THREE.DoubleSide }), count);
+      const hearts = new THREE.InstancedMesh(heartGeo, swaying(kind.heart), count);
       let k = 0;
       for (let i = 0; i < count * 3 && k < count; i++) {
         // 75% in patches, the rest scattered.
@@ -262,7 +301,7 @@ export class Scenery {
     const count = this.lowfx ? 220 : 700;
     const blade = new THREE.ConeGeometry(0.07, 0.55, 3);
     blade.translate(0, 0.27, 0);
-    const greens = [mat('#6f9a48'), mat('#7fa652'), mat('#5f8a3e')];
+    const greens = [swaying('#6f9a48'), swaying('#7fa652'), swaying('#5f8a3e')];
     const insts = greens.map((g) => new THREE.InstancedMesh(blade, g, Math.ceil(count / 3)));
     const ks = [0, 0, 0];
     for (let i = 0; i < count * 2 && ks.reduce((a, b) => a + b, 0) < count; i++) {
@@ -364,10 +403,40 @@ export class Scenery {
     this.group.add(inst);
   }
 
-  update(time: number, dt: number): void {
+  update(time: number, dt: number, wind: { x: number; z: number; s: number }): void {
+    windUniforms.uTime.value = time;
+    windUniforms.uWind.value += (wind.s - windUniforms.uWind.value) * Math.min(1, dt * 2);
+    windUniforms.uWindDir.value.lerp(new THREE.Vector2(wind.x, wind.z), Math.min(1, dt * 2)).normalize();
+    const st = this.streaks;
+    if (st) {
+      st.mat.opacity = Math.max(0, (windUniforms.uWind.value - 0.15) * 0.55);
+      const [hw, hd] = [this.f.w / 2 + 4, this.f.d / 2 + 4];
+      // The streak's long side (its x) points along the wind.
+      const ang = Math.atan2(-wind.z, wind.x);
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ang, 0));
+      st.pts.forEach((p, i) => {
+        const v = 5 + windUniforms.uWind.value * 9;
+        p.x += wind.x * v * dt;
+        p.z += wind.z * v * dt;
+        // Wrap round the field.
+        if (p.x > hw) p.x -= hw * 2;
+        if (p.x < -hw) p.x += hw * 2;
+        if (p.z > hd) p.z -= hd * 2;
+        if (p.z < -hd) p.z += hd * 2;
+        const len = 0.4 + 0.6 * (Math.sin(time * 1.3 + p.ph) * 0.5 + 0.5);
+        this.m.compose(new THREE.Vector3(p.x, p.y, p.z), q, new THREE.Vector3(len, 1, 1));
+        st.inst.setMatrixAt(i, this.m);
+      });
+      st.inst.instanceMatrix.needsUpdate = true;
+    }
     for (const c of this.clouds) {
+      c.position.x += wind.x * (1 + wind.s * 3) * dt * 0.5;
+      c.position.z += wind.z * (1 + wind.s * 3) * dt * 0.5;
       c.position.x += c.userData.speed * dt;
       if (c.position.x > 110) c.position.x = -110;
+      if (c.position.x < -110) c.position.x = 110;
+      if (c.position.z > 60) c.position.z = -100;
+      if (c.position.z < -100) c.position.z = 60;
     }
     const b = this.butterflies;
     if (!b) return;
