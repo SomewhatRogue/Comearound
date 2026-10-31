@@ -2,31 +2,47 @@
  * The village layout, in metres on the XZ plane. Shared by server (rules) and client (drawing),
  * so what is drawn and what is decided can never disagree.
  */
-import type { AreaId } from './catalog';
+import type { ActId } from './activities';
+
+export type AreaId = 'kitchen' | 'garden' | 'pond' | 'chapel' | 'range' | 'square';
 
 export interface Rect { x: number; z: number; w: number; d: number }
-export interface Area { id: AreaId; name: string; x: number; z: number; color: string }
-export interface StationDef { id: string; area: AreaId; x: number; z: number }
+export interface Area { id: AreaId; name: string; x: number; z: number; color: string; act: ActId }
+/** Where you stand to do an activity (x, z) and the prop you face (px, pz): stool, tree, oven... */
+export interface SpotDef { id: string; area: AreaId; act: ActId; x: number; z: number; px: number; pz: number }
 
 export const WORLD = { w: 44, d: 34 };
 
 export const AREAS: Area[] = [
-  { id: 'kitchen', name: 'Cottage kitchen', x: -13, z: -8, color: '#c99a6b' },
-  { id: 'garden', name: 'Garden', x: 13, z: -8, color: '#6f9a4a' },
-  { id: 'pond', name: 'Pond', x: 13, z: 8, color: '#4f8a9a' },
-  { id: 'chapel', name: 'Chapel of too many candles', x: -13, z: 8, color: '#8a7a9a' },
+  { id: 'kitchen', name: 'Cottage kitchen', x: -13, z: -8, color: '#c99a6b', act: 'bake' },
+  { id: 'garden', name: 'Orchard', x: 13, z: -8, color: '#6f9a4a', act: 'fruit' },
+  { id: 'pond', name: 'Pond', x: 13, z: 8, color: '#4f8a9a', act: 'fish' },
+  { id: 'chapel', name: 'Chapel of too many candles', x: -13, z: 8, color: '#8a7a9a', act: 'candle' },
+  { id: 'range', name: 'Archery range', x: 0, z: -12, color: '#9aa45a', act: 'archery' },
 ];
 
 /** Radius of an area's ground patch. */
 export const AREA_RADIUS = 7;
 
-/** Three build stations per area, in a triangle around its centre. */
-export const STATIONS: StationDef[] = AREAS.flatMap((a) =>
-  [0, 1, 2].map((i) => {
-    const ang = (i / 3) * Math.PI * 2 + Math.PI / 2;
-    return { id: `${a.id}-${i}`, area: a.id, x: a.x + Math.cos(ang) * 3.2, z: a.z + Math.sin(ang) * 3.2 };
-  }),
-);
+const ring = (id: AreaId, act: ActId, cx: number, cz: number, rs: number, rp: number, angles: number[]): SpotDef[] =>
+  angles.map((deg, i) => {
+    const a = (deg * Math.PI) / 180;
+    return { id: `${id}-${i}`, area: id, act, x: cx + Math.cos(a) * rs, z: cz + Math.sin(a) * rs, px: cx + Math.cos(a) * rp, pz: cz + Math.sin(a) * rp };
+  });
+
+/**
+ * Five spots per area, enough for a 12-player game (an attempt takes about six seconds).
+ * Angles are degrees from +x toward +z (south); north is negative z.
+ */
+export const SPOTS: SpotDef[] = [
+  ...ring('pond', 'fish', 13, 8, 3.1, 2.1, [90, 162, 234, 306, 18]),
+  ...ring('garden', 'fruit', 13, -8, 2.2, 3.6, [90, 162, 234, 306, 18]),
+  ...[-3.6, -1.8, 0, 1.8, 3.6].map((dx, i) => ({ id: `kitchen-${i}`, area: 'kitchen' as AreaId, act: 'bake' as ActId, x: -13 + dx, z: -8 - 2.9, px: -13 + dx, pz: -8 - 4.2 })),
+  ...ring('chapel', 'candle', -13, 8, 2.3, 3.3, [-80, -35, 10, 55, 100]),
+  ...[-4, -2, 0, 2, 4].map((dx, i) => ({ id: `range-${i}`, area: 'range' as AreaId, act: 'archery' as ActId, x: dx, z: -9.6, px: dx, pz: -15.2 })),
+  // Easels around the village square, facing outward, for painting.
+  ...ring('square', 'paint', 0, 2, 5.4, 6.3, [20, 70, 110, 160, 200]),
+];
 
 /** The board in the village square: guesses and accusations happen here. */
 export const BOARD = { x: 0, z: -2 };
@@ -39,9 +55,8 @@ export const PEN_TARGETS = [-1, 0, 1].map((i) => ({ x: PEN.x + i * (PEN.w / 3), 
 export const SQUARE = { x: 0, z: 2, r: 3.5 };
 
 export const REACH = {
-  /** How close you must be to pick up an item or use a station. */
-  item: 1.4,
-  station: 1.6,
+  /** How close you must be to use an activity spot or the board. */
+  spot: 1.3,
   board: 2.4,
 };
 

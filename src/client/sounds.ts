@@ -1,14 +1,14 @@
 /**
- * Plays sounds for things that show up in the public state (not private events): picking up and
- * putting down, the round starting, last call, the reveal, the goat getting close, snowballs, crows.
+ * Plays sounds for things that show up in the public state (not private events): the round
+ * starting, each new task, the reveal, the goat getting close, snowballs, crows.
  * It compares each snapshot with the last one; private events (pops, catches) play from main.ts.
  */
 import type { PrivateView, PublicView } from '../shared/protocol';
 import { sfx } from './sfx';
 
 export class SoundDirector {
-  private carrying: string | null | undefined = undefined;
   private phase = '';
+  private taskIdx = -1;
   private goatMood = '';
   private targets: boolean[] = [];
   private snowballs = new Set<number>();
@@ -19,17 +19,8 @@ export class SoundDirector {
     if (!self) return;
     this.bleatCd -= dt;
 
-    // Pick up / put down / drop, from what you are carrying.
-    if (this.carrying !== undefined && self.carrying !== this.carrying) {
-      if (self.carrying) sfx.pickup();
-      else if (pub.stations.some((s) => s.owner === me.you)) sfx.place();
-      else sfx.drop();
-    }
-    this.carrying = self.carrying;
-
     if (this.phase && pub.phase !== this.phase) {
       if (pub.phase === 'playing' && this.phase === 'lobby') sfx.roundStart();
-      if (pub.phase === 'lastcall') sfx.bell();
       if (pub.phase === 'results' && pub.reveal) {
         sfx.drumroll();
         // One tick per tally row, in step with the rows sliding in (0.35 s apart).
@@ -37,6 +28,9 @@ export class SoundDirector {
       }
     }
     this.phase = pub.phase;
+    // A new task: the chapel bell.
+    if (pub.phase === 'playing' && this.taskIdx >= 0 && pub.taskIdx !== this.taskIdx) sfx.bell();
+    this.taskIdx = pub.phase === 'playing' ? pub.taskIdx : -1;
 
     // The goat bleats when it starts bothering someone near you.
     const g = pub.goat;

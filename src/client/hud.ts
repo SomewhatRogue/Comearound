@@ -3,13 +3,12 @@
  * the accuser's meter, and the goat's NAUGHTY close-up. DOM over the canvas.
  */
 import * as THREE from 'three';
-import { itemById, thingById } from '../shared/catalog';
-import { AREAS } from '../shared/map';
+import { describe } from '../shared/activities';
 import type { PrivateView, PublicView } from '../shared/protocol';
 import { sfx } from './sfx';
 
 const $ = (id: string) => document.getElementById(id)!;
-const PHASE: Record<string, string> = { lobby: 'Lobby', playing: 'Make the thing', lastcall: 'Last call!', lastchance: 'Last chance', results: 'The reveal' };
+const PHASE: Record<string, string> = { lobby: 'Lobby', playing: 'Task', results: 'The reveal' };
 
 export class Hud {
   private roleKey = '';
@@ -19,15 +18,15 @@ export class Hud {
   private naughtyTimer: ReturnType<typeof setTimeout> | undefined;
 
   update(pub: PublicView, me: PrivateView, prompt: string): void {
-    $('phase').textContent = PHASE[pub.phase];
-    $('phase').classList.toggle('alarm', pub.phase === 'lastcall');
-    const playing = pub.phase === 'playing' || pub.phase === 'lastcall' || pub.phase === 'lastchance';
+    $('phase').textContent = pub.phase === 'playing' ? `Task ${pub.taskIdx + 1} of ${pub.taskCount}` : PHASE[pub.phase];
+    $('phase').classList.toggle('alarm', pub.phase === 'playing' && pub.timeLeft <= 10);
+    const playing = pub.phase === 'playing';
     $('clock').style.display = playing ? '' : 'none';
     const mm = Math.floor(pub.timeLeft / 60);
     $('clock-text').textContent = `${mm}:${String(pub.timeLeft % 60).padStart(2, '0')}`;
     // The moon wanes as the round runs out.
     $('moon-shadow').style.transform = `translateX(${-100 * (pub.timeLeft / Math.max(1, Number($('clock').dataset.total) || pub.timeLeft))}%)`;
-    if (pub.phase === 'playing' && !$('clock').dataset.total) $('clock').dataset.total = String(pub.timeLeft);
+    if (pub.phase === 'playing' && (!$('clock').dataset.total || $('clock').dataset.task !== String(pub.taskIdx))) [$('clock').dataset.total, $('clock').dataset.task] = [String(pub.timeLeft), String(pub.taskIdx)];
     if (!playing) delete $('clock').dataset.total;
 
     // Score counts up rather than jumping.
@@ -38,7 +37,7 @@ export class Hud {
     $('meter-n').textContent = String(me.meter);
 
     const self = pub.players.find((p) => p.id === me.you);
-    const key = `${pub.phase}|${me.role}|${me.thingId}|${self?.inPen}|${self?.sign}|${self?.spectator}|${me.guessesLeft}|${pub.sadCount}`;
+    const key = `${pub.phase}|${pub.taskIdx}|${me.role}|${me.task?.text}|${self?.inPen}|${self?.sign}|${self?.spectator}|${me.basket.length}|${pub.sadCount}`;
     if (key !== this.roleKey) {
       this.roleKey = key;
       $('rolecard').innerHTML = roleCard(pub, me, !!self?.inPen, self?.sign ?? null, !!self?.spectator);
@@ -102,18 +101,21 @@ export class Hud {
   }
 }
 
+const WHERE: Record<string, string> = { fish: 'the pond', fruit: 'the orchard', bake: 'the cottage kitchen', candle: 'the chapel', archery: 'the archery range', paint: 'the easels around the square' };
+const NAME: Record<string, string> = { fish: 'Fishing', fruit: 'Fruit picking', bake: 'Baking', candle: 'Candle lighting', archery: 'Archery', paint: 'Painting' };
+
 function roleCard(pub: PublicView, me: PrivateView, inPen: boolean, sign: string | null, spectator: boolean): string {
-  if (pub.phase === 'lobby' || pub.phase === 'results') return '';
+  if (pub.phase !== 'playing') return '';
   if (spectator) return `<div class="card"><h3>Round in progress</h3><p>You'll join the next one. Watch the chaos.</p></div>`;
-  const pen = inPen ? `<p class="pen-note">You're in the Pen${sign ? `, wearing <b>${sign}</b>` : ''}. Snowball fight! <b>E</b> throws the way you're facing. Knock the crows off the fence for points.</p>` : '';
+  const act = pub.taskAct!;
+  const head = `<h4>Task ${pub.taskIdx + 1} of ${pub.taskCount}</h4><h3>${NAME[act]}</h3><p class="where">at ${WHERE[act]}</p>`;
+  const pen = inPen ? `<p class="pen-note">You're in the Pen${sign ? `, wearing <b>${sign}</b>` : ''}. You sit out the tasks. Snowball fight! <b>E</b> throws the way you're facing. Knock the crows off the fence.</p>` : '';
   const sads = pub.sadCount > 1 ? `<p class="quiet">There are ${pub.sadCount} :( players this round.</p>` : '';
-  if (me.role === 'knower' && me.thingId) {
-    const t = thingById.get(me.thingId)!;
-    const area = AREAS.find((a) => a.id === t.area)!.name;
-    const parts = t.parts.map((p) => `<li><b>${p.label}</b><span>${p.accepts.map((a) => itemById.get(a)!.name).join(', ')}</span></li>`).join('');
-    const how = inPen ? '' : `<p class="how">Pick up a part (<b>E</b>), carry it to an empty table at the ${area}, put it down (<b>E</b>). Hold your most telling part until last call. Think you've spotted the :( player? Accuse them at the board (<b>Q</b>).</p>`;
-    return `<div class="card knower"><h4>The thing</h4><h3>${t.name}</h3><p class="where">Build it at the <b>${area}</b></p><ul>${parts}</ul>${how}${pen}${sads}</div>`;
+  const tries = me.basket.length ? `<ul>${me.basket.map((c) => `<li><span>${describe(c.act, c.attrs)}</span></li>`).join('')}</ul><p class="quiet">Your best one counts. Scores come out at the reveal.</p>` : '';
+  if (me.role === 'knower' && me.task) {
+    const how = inPen ? '' : `<p class="how">Go to ${WHERE[act]} and press <b>E</b> at a free spot. Get as close to the ask as you can; your best try counts. Spot someone faking it? Accuse them at the board (<b>Q</b>).</p>`;
+    return `<div class="card knower">${head}<p class="ask-text">${me.task.text}</p>${tries}${how}${pen}${sads}</div>`;
   }
-  const how = inPen ? '' : `<p class="how">Walk to the board and press <b>Q</b> to see every thing it could be. Watch where people build and what they carry. Pick one and make it too, so you blend in. ${me.guessesLeft ? 'When you are sure, guess at the board: you get <b>one</b> guess, before last call.' : 'Your guess is spent. Build the right thing and survive to the reveal.'}</p>`;
-  return `<div class="card sad"><div class="frown">:(</div><h3>You don't know the thing</h3>${how}${pen}${sads}</div>`;
+  const how = inPen ? '' : `<p class="how">Everyone else knows exactly what to make. Watch what they catch, then do the same at ${WHERE[act]}. If nobody calls you out, your points are <b>doubled</b>.</p>`;
+  return `<div class="card sad">${head}<div class="frown">:(</div><h3>You don't know the ask</h3>${tries}${how}${pen}${sads}</div>`;
 }

@@ -2,6 +2,28 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-30 (night): tasks and skill minigames replace building (Claude Opus 5.5)
+
+Kyle, after playing: recipes like boot + hat + flower = frog throne made no sense to anyone, three
+tables per area was too few, nothing stopped theft, and the :( guessing to win felt wrong.
+
+- **A round is 3 tasks in sequence**, each one activity. Everyone sees the activity; only knowers
+  see the exact ask. The :( player fakes it and gets **x2** on their points if never caught.
+  No guessing to win any more.
+- **Six skill minigames on one lane engine:** fishing, fruit picking, baking, candle lighting,
+  archery (precision decides the ring) and painting (medium, colour and subject, then a steady
+  hand). What you catch has attributes; the ask cares about some of them, so a watcher sees a
+  small yellow fish but not whether "small" or "yellow" mattered (Kyle's idea).
+- **Scored at the reveal** on closeness to the ask (best try per task). In-round points are a
+  flat +5 per catch so they never leak the ask.
+- **Five spots per activity**; progress is a personal basket (nothing to steal). The goat spooks
+  people mid-minigame and eats from baskets, but leaves painters alone while they choose colours.
+- **Server-judged timing:** the server deals each lane and judges the client's reported press time.
+- **Painting claims the easel on E**, then the stroke starts when you finish choosing. Found when a
+  bot took the easel while a player was picking colours.
+- Removed: items, tables, the thing catalog, guessing, last call, last chance.
+- Next activity idea from Kyle: a tree you water that grows different fruit depending on what you graft.
+
 ## 2026-10-30 (evening): first playtest notes from Kyle (Claude Opus 5.5)
 
 - **:( players only guess the thing; they cannot accuse.** Kyle's call after playing. The board

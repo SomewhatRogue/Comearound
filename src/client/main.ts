@@ -3,13 +3,13 @@
  * draws the world, and exposes text state for tests (window.__GAME_STATE__, render_game_to_text).
  */
 import * as THREE from 'three';
-import { itemById } from '../shared/catalog';
-import { BOARD, PLAYER_SPEED, REACH, STATIONS, dist } from '../shared/map';
+import { BOARD, PLAYER_SPEED, REACH, SPOTS, dist } from '../shared/map';
 import type { Look } from '../shared/protocol';
 import { Entities } from './entities';
 import { Hud } from './hud';
 import { Input } from './input';
 import { LocalNet } from './local';
+import { Minigame } from './minigame';
 import { Net, type NetLike } from './net';
 import { COLORS, HATS, Panels } from './panels';
 import { followCamera, makeStage } from './scene';
@@ -72,10 +72,17 @@ for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => sfx.unlo
 
 const predicted = new THREE.Vector3();
 let havePrediction = false;
+const minigame = new Minigame((at, pick) => net.send({ t: 'press', at, pick }));
+const ask = () => net.me?.task?.text ?? null;
 
-input.onInteract = () => net.send({ t: 'interact' });
+input.onInteract = () => {
+  if (minigame.lane) return minigame.press();
+  if (minigame.pickerOpen) return minigame.go();
+  net.send({ t: 'interact' });
+};
 input.onEscape = () => {
-  if (panels.boardOpen) panels.boardOpen = false;
+  if (minigame.pickerOpen) minigame.cancel();
+  else if (panels.boardOpen) panels.boardOpen = false;
   else panels.menuOpen = !panels.menuOpen;
 };
 input.onBoard = () => {
@@ -86,14 +93,16 @@ input.onBoard = () => {
 
 net.onEvent = (ev) => {
   const at = net.me ? entities.pos.get(net.me.you) : undefined;
-  if (ev.kind === 'pop') {
-    hud.pop(ev.amount, ev.label, at, stage.camera);
-    if (ev.label === 'Something made!') sfx.fanfare();
+  if (ev.kind === 'pop') hud.pop(ev.amount, ev.label, at, stage.camera);
+  if (ev.kind === 'lane') minigame.open(ev.lane, ask());
+  if (ev.kind === 'result') {
+    minigame.showResult(ev.act, ev.attrs, ev.spoiled);
+    if (ev.attrs && !ev.spoiled) sfx.pickup();
+    else sfx.drop();
   }
   if (ev.kind === 'naughty') hud.naughty(ev.words);
   if (ev.kind === 'bonked') hud.bonked();
   if (ev.kind === 'wrongAccusation') { hud.toast('Wrong! Off to the Pen with you.', 'bad'); sfx.sad(); }
-  if (ev.kind === 'wrongGuess') { hud.toast('Not it. Your guess is spent. Act natural.', 'bad'); sfx.sad(); }
   if (ev.kind === 'knocked') sfx.boing();
   if (ev.kind === 'caught') { hud.toast('Got one! Only you know.', 'good'); sfx.caught(); }
   if (ev.kind === 'toast') hud.toast(ev.text);
@@ -107,34 +116,31 @@ function nearBoard(): boolean {
   return dist(predicted.x, predicted.z, BOARD.x, BOARD.z) <= REACH.board;
 }
 
+const VERB: Record<string, string> = { fish: 'fish', fruit: 'pick fruit', bake: 'bake', candle: 'light a candle', archery: 'shoot', paint: 'paint at the easel' };
+const ACT_NAME: Record<string, string> = { fish: 'Fishing', fruit: 'Fruit picking', bake: 'Baking', candle: 'Candle lighting', archery: 'Archery', paint: 'Painting' };
+
+/** The activity spot you are standing at, if any (the same reach as the server). */
+function nearSpot() {
+  let best: (typeof SPOTS)[number] | null = null;
+  let bd = REACH.spot;
+  for (const s of SPOTS) {
+    const d = dist(predicted.x, predicted.z, s.x, s.z);
+    if (d < bd) [best, bd] = [s, d];
+  }
+  return best;
+}
+
 function promptText(): string {
   const pub = net.pub;
   const me = self();
-  if (!pub || !me || me.spectator) return '';
-  if (me.inPen) return pub.phase === 'playing' || pub.phase === 'lastcall' ? 'E: throw a snowball' : '';
+  if (!pub || !me || me.spectator || minigame.busy) return '';
+  if (me.inPen) return pub.phase === 'playing' ? 'E: throw a snowball' : '';
   if (pub.phase === 'playing' && nearBoard()) return 'Q: open the board';
-  if (pub.phase === 'lastcall' && nearBoard()) return 'The board is closed';
-  if (me.carrying) {
-    const st = STATIONS.find((s) => dist(predicted.x, predicted.z, s.x, s.z) <= REACH.station);
-    const owner = st ? pub.stations.find((s) => s.id === st.id)?.owner : undefined;
-    const mine = pub.stations.some((s) => s.owner === me.id);
-    if (st && pub.phase !== 'lobby' && (owner === me.id || (!owner && !mine))) return `E: place the ${itemById.get(me.carrying)!.name.toLowerCase()}`;
-    return `E: drop the ${itemById.get(me.carrying)!.name.toLowerCase()}`;
-  }
-  const near = net.pub?.items.find((it) => it.uid === nearestItem());
-  return near ? `E: pick up the ${itemById.get(near.id)!.name.toLowerCase()}` : '';
-}
-
-/** The item E would pick up: the closest one in reach (the same rule as the server). */
-function nearestItem(): number | null {
-  let best: number | null = null;
-  let bd = REACH.item;
-  for (const it of net.pub?.items ?? []) {
-    const s = it.station ? STATIONS.find((st) => st.id === it.station)! : null;
-    const d = dist(predicted.x, predicted.z, s ? s.x : it.x, s ? s.z : it.z);
-    if (d < bd) [best, bd] = [it.uid, d];
-  }
-  return best;
+  const spot = nearSpot();
+  if (!spot || pub.phase !== 'playing') return '';
+  if (spot.act !== pub.taskAct) return `${ACT_NAME[spot.act]} is not this task`;
+  if (pub.busy.includes(spot.id)) return 'Someone is using this one';
+  return `E: ${VERB[spot.act]}`;
 }
 
 let lastSent = '';
@@ -169,11 +175,11 @@ function frame(now: number) {
     predicted.z += (me.z - predicted.z) * pull;
     entities.sync(pub, me.id, predicted, dt, now / 1000);
     sounds.update(pub, net.me!, dt);
-    entities.highlight(me.carrying || me.inPen || me.spectator ? null : nearestItem());
     followCamera(stage, predicted.x, predicted.z, dt);
     hud.update(pub, net.me!, panels.boardOpen ? '' : promptText());
     panels.render(pub, net.me!);
   }
+  minigame.frame();
   hud.connection(net.connected && !!pub);
   if (!noRender) {
     stage.renderer.render(stage.scene, stage.camera);
@@ -190,8 +196,9 @@ Object.defineProperty(w, '__GAME_STATE__', { get: () => ({ pub: net.pub, me: net
 w.render_game_to_text = () => {
   if (!net.pub || !net.me) return JSON.stringify({ error: 'not_ready' });
   const s = self();
-  return JSON.stringify({ phase: net.pub.phase, timeLeft: net.pub.timeLeft, you: s?.look.name, role: net.me.role, thing: net.me.thingId, inPen: s?.inPen, carrying: s?.carrying, score: net.me.score, players: net.pub.players.length, prompt: promptText() });
+  return JSON.stringify({ phase: net.pub.phase, task: `${net.pub.taskIdx + 1}/${net.pub.taskCount} ${net.pub.taskAct ?? ''}`, timeLeft: net.pub.timeLeft, you: s?.look.name, role: net.me.role, ask: net.me.task?.text ?? null, doing: s?.doing, basket: net.me.basket.length, inPen: s?.inPen, score: net.me.score, players: net.pub.players.length, prompt: promptText(), minigame: !!minigame.lane });
 };
 if (net instanceof LocalNet) w.__solo_room = net.room;
 w.__debug_naughty = (words?: string) => hud.naughty(words);
+w.__minigame = minigame;
 w.__game_actions__ = { send: (m: Parameters<NetLike['send']>[0]) => net.send(m), teleportHint: () => predicted.toArray() };

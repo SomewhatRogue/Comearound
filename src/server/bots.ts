@@ -1,19 +1,22 @@
 /**
- * Bots fill empty seats. They only use what a human could see: knower bots know the thing,
- * :( bots read the same public stations everyone sees and guess from them.
- * Bots never accuse in slice 1.
- *
- * Bots act natural: they fill the least telling parts first and hold the most telling part
- * (the one whose items fit the fewest things) until last call, the way a sneaky human would.
+ * Bots fill empty seats and only use what a human could know. Knower bots know the ask; :( bots
+ * watch the catches everyone can see during the task and copy what seems popular. They play the
+ * minigames with a skill roll (they miss, and rarely hit bullseyes or paint perfectly), make a few
+ * attempts per task, and never accuse.
  */
-import { THINGS, thingById } from '../shared/catalog';
-import { filledParts, thingsAccepting } from '../shared/judge';
-import { BOARD, REACH, dist } from '../shared/map';
-import { guess, lastChance } from './round';
-import type { Item, Player, Room, Station } from './state';
-import { interact, pickUp, stationItems } from './world';
+import { ACTS, CHOSEN, type Attrs, type Lane } from '../shared/activities';
+import { closeness } from '../shared/tasks';
+import { REACH, dist } from '../shared/map';
+import { throwSnowball } from './pen';
+import type { Player, Room } from './state';
+import { openAct, press, startAttempt } from './world';
 
-function steer(p: Player, x: number, z: number, stopAt = 0.6): boolean {
+/** Timing error in ms (uniform, +/-). */
+const AIM_ERR = { normal: 210, archery: 110, paint: 90 };
+const PICKS_RIGHT = 0.85;
+const MAX_TRIES = 3;
+
+function steer(p: Player, x: number, z: number, stopAt = 0.4): boolean {
   const d = dist(p.x, p.z, x, z);
   if (d <= stopAt) {
     p.dx = p.dz = 0;
@@ -23,93 +26,70 @@ function steer(p: Player, x: number, z: number, stopAt = 0.6): boolean {
   return false;
 }
 
-/** Evidence per thing from stations other players are building. */
-function readStations(room: Room, p: Player): Record<string, number> {
-  const belief: Record<string, number> = {};
-  for (const s of room.stations) {
-    if (!s.owner || s.owner === p.id) continue;
-    const items = stationItems(room, s);
-    for (const t of THINGS) if (t.area === s.area) belief[t.id] = (belief[t.id] ?? 0) + filledParts(t, items).filter(Boolean).length;
+/** Choose when to press: aim at something matching `want` (usually), with human-ish error. */
+function planPress(room: Room, lane: Lane, want: Attrs): number {
+  const right = lane.objs.filter((o) => Object.entries(want).every(([k, v]) => !(k in o.attrs) || o.attrs[k] === v));
+  const pool = right.length && room.rng.next() < PICKS_RIGHT ? right : lane.objs;
+  const o = room.rng.pick(pool);
+  const ideal = o.enter + (1 / lane.speed) * 1000;
+  const err = lane.act === 'archery' ? AIM_ERR.archery : lane.act === 'paint' ? AIM_ERR.paint : AIM_ERR.normal;
+  return Math.max(0, ideal + room.rng.range(-err, err));
+}
+
+/** :( bots: tally the attribute values of catches other players made this task. */
+function watch(p: Player, room: Room, act: string): Attrs {
+  const b = p.bot!;
+  for (const q of room.players.values()) {
+    if (q === p || !q.last?.attrs || q.last.act !== act || b.seen[q.id] === q.last.seq) continue;
+    b.seen[q.id] = q.last.seq;
+    for (const [k, v] of Object.entries(q.last.attrs)) b.belief[`${k}=${v}`] = (b.belief[`${k}=${v}`] ?? 0) + 1;
   }
-  return belief;
-}
-
-function best(room: Room, belief: Record<string, number>): { id: string; lead: number; top: number } {
-  const ranked = THINGS.map((t) => ({ id: t.id, v: belief[t.id] ?? 0 })).sort((a, b) => b.v - a.v || room.rng.next() - 0.5);
-  return { id: ranked[0].id, lead: ranked[0].v - ranked[1].v, top: ranked[0].v };
-}
-
-function myStation(room: Room, p: Player, area: string): Station | null {
-  const owned = room.stations.find((s) => s.owner === p.id);
-  if (owned) return owned;
-  const free = room.stations.filter((s) => !s.owner && s.area === area);
-  free.sort((a, b) => dist(p.x, p.z, a.x, a.z) - dist(p.x, p.z, b.x, b.z));
-  return free[0] ?? null;
+  const guess: Attrs = {};
+  for (const [k, values] of Object.entries(ACTS[act as keyof typeof ACTS].attrs)) {
+    const ranked = values.map((v) => ({ v, n: b.belief[`${k}=${v}`] ?? 0 })).sort((x, y) => y.n - x.n || room.rng.next() - 0.5);
+    guess[k] = ranked[0].v;
+  }
+  return guess;
 }
 
 export function tickBot(room: Room, p: Player, dt: number): void {
   const b = p.bot!;
   p.dx = p.dz = 0;
-  if (room.phase === 'lastchance' && p.caughtBy && !p.lastChance) {
-    return lastChance(room, p, best(room, readStations(room, p)).id);
+  if (room.phase !== 'playing' || p.spectator) return;
+
+  // Mid-minigame: press when the planned moment comes (painting brings its picks).
+  if (p.attempt) {
+    if (b.pressAt != null && (room.realClock - p.attempt.startedAt) * 1000 >= b.pressAt) {
+      press(room, p, b.pressAt, b.pick ?? undefined);
+      b.pressAt = null;
+      b.wait = room.rng.range(0.6, 1.8);
+    }
+    return;
   }
-  if ((room.phase !== 'playing' && room.phase !== 'lastcall') || p.spectator) return;
   if (p.inPen) {
     if (!b.target || steer(p, b.target.x, b.target.z)) b.target = { x: p.x + room.rng.range(-2, 2), z: p.z + room.rng.range(-1.5, 1.5) };
+    if (room.rng.next() < 0.5 * dt) throwSnowball(room, p);
     return;
   }
   b.wait -= dt;
   if (b.wait > 0) return;
 
-  if (p.role === 'sad') {
-    b.belief = readStations(room, p);
-    const top = best(room, b.belief);
-    if (!b.goal || top.top > (b.belief[b.goal] ?? 0)) b.goal = top.top > 0 ? top.id : b.goal ?? room.rng.pick(THINGS).id;
-    const settled = room.timeLeft < room.roundSec * 0.6;
-    if (room.phase === 'playing' && settled && p.guessesLeft > 0 && top.top >= 5 && top.lead >= 2 && room.rng.next() < 0.04 * dt) b.wantsBoard = true;
-    if (b.wantsBoard) {
-      if (room.phase !== 'playing') b.wantsBoard = false;
-      else if (steer(p, BOARD.x, BOARD.z, REACH.board - 0.4)) {
-        b.wantsBoard = false;
-        guess(room, p, top.id);
-      }
-      return;
-    }
-  }
-
-  const goal = thingById.get(b.goal ?? '');
-  if (!goal) return;
-  const station = myStation(room, p, goal.area);
-  if (!station) return;
-
-  if (p.carrying != null) {
-    if (steer(p, station.x, station.z, REACH.station - 0.5)) {
-      interact(room, p);
-      b.wait = room.rng.range(0.4, 1.5);
-    }
+  const task = room.tasks[room.taskIdx];
+  const act = openAct(room);
+  if (!task || !act) return;
+  // A :( bot hangs back at the start of a task to watch what others catch.
+  const watching = p.role === 'sad' && room.timeLeft > room.taskTime * 0.8;
+  const want = p.role === 'knower' ? task.want : watch(p, room, act);
+  const nailed = p.role === 'knower' && p.basket.some((c) => closeness(task, c) >= 1);
+  if (watching || nailed || p.basket.length >= MAX_TRIES) {
+    if (!b.target || steer(p, b.target.x, b.target.z)) b.target = { x: room.rng.range(-14, 14), z: room.rng.range(-12, 8) };
     return;
   }
-  const have = stationItems(room, station);
-  const filled = filledParts(goal, have);
-  const telling = (i: number) => Math.max(...goal.parts[i].accepts.map((a) => thingsAccepting(a).length));
-  const giveaway = goal.parts.map((_, i) => i).sort((a, b) => telling(a) - telling(b))[0];
-  const late = room.phase === 'lastcall' && room.timeLeft <= room.lastCallAt - (Number(p.id.slice(1)) % 4) * 2;
-  const open = goal.parts.map((_, i) => i).filter((i) => !filled[i] && (late || i !== giveaway));
-  const missing = open.flatMap((i) => goal.parts[i].accepts);
-  if (!missing.length) {
-    if (!b.target || steer(p, b.target.x, b.target.z)) b.target = { x: station.x + room.rng.range(-3, 3), z: station.z + room.rng.range(-3, 3) };
-    return;
-  }
-  let pick = null as null | Item;
-  let bd = Infinity;
-  for (const it of room.items) {
-    if (it.gone || it.heldBy || it.station || !missing.includes(it.id)) continue;
-    const d = dist(p.x, p.z, it.x, it.z);
-    if (d < bd) [pick, bd] = [it, d];
-  }
-  if (!pick) return;
-  if (steer(p, pick.x, pick.z, REACH.item - 0.5)) {
-    pickUp(room, p, pick);
-    b.wait = room.rng.range(0.3, 1.2);
+  const spot = room.spots.filter((s) => s.act === act && !s.busyBy).sort((a, c) => dist(p.x, p.z, a.x, a.z) - dist(p.x, p.z, c.x, c.z))[0];
+  if (!spot) return;
+  if (steer(p, spot.x, spot.z, REACH.spot - 0.3) && startAttempt(room, p, spot)) {
+    b.pressAt = planPress(room, p.attempt!.lane, want);
+    const chosen = CHOSEN[act as keyof typeof CHOSEN];
+    b.pick = chosen ? Object.fromEntries(chosen.map((k) => [k, want[k]])) : null;
   }
 }

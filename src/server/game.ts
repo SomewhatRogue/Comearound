@@ -11,10 +11,10 @@ import { Rng } from '../shared/rng';
 import { tickBot } from './bots';
 import { makeGoat, pushOffGoat, tickGoat } from './goat';
 import { makeTargets, throwSnowball, tickPen } from './pen';
-import { accuse, beginReveal, choose, guess, lastChance, startRound, tickRound } from './round';
+import { accuse, choose, finishRound, startRound, tickRound } from './round';
 import { activePlayers, type Player, type Room } from './state';
 import { privateView, publicView } from './view';
-import { interact, makeStations, movePlayer, placeInSquare } from './world';
+import { makeSpots, movePlayer, placeInSquare, press, startAttempt, tickAttempts } from './world';
 
 export const TICK_HZ = 20;
 const BOT_NAMES = ['Mabel', 'Turnip', 'Old Gus', 'Pip', 'Wendell', 'Bramble', 'Dot', 'Figgy'];
@@ -32,12 +32,12 @@ export class GameRoom implements Room {
   clock = 0;
   timeLeft = 0;
   roundSec = 420;
-  lastCallAt = 90;
   hostId: string | null = null;
-  thingId: string | null = null;
+  tasks: Room['tasks'] = [];
+  taskIdx = 0;
+  taskTime = 0;
   players = new Map<string, Player>();
-  items: Room['items'] = [];
-  stations = makeStations();
+  spots = makeSpots();
   goat = makeGoat();
   snowballs: Room['snowballs'] = [];
   targets = makeTargets();
@@ -46,7 +46,7 @@ export class GameRoom implements Room {
   private conns = new Map<string, string>();
   private nextId = 1;
   private timeScale: number;
-  private realClock = 0;
+  realClock = 0;
 
   constructor(private send: (connId: string, msg: string) => void, opts: GameOptions = {}) {
     this.rng = new Rng(opts.seed ?? Date.now());
@@ -98,11 +98,10 @@ export class GameRoom implements Room {
         break;
       case 'interact':
         if (p.inPen) throwSnowball(this, p);
-        else interact(this, p);
+        else startAttempt(this, p);
         break;
-      case 'guess':
-        if (this.phase === 'lastchance') lastChance(this, p, m.thingId);
-        else guess(this, p, m.thingId);
+      case 'press':
+        press(this, p, m.at, m.pick);
         break;
       case 'accuse':
         accuse(this, p, m.targetId);
@@ -121,7 +120,7 @@ export class GameRoom implements Room {
         if (p.id === this.hostId && this.phase !== 'lobby') this.toLobby();
         break;
       case 'endRound':
-        if (p.id === this.hostId && (this.phase === 'playing' || this.phase === 'lastcall')) beginReveal(this);
+        if (p.id === this.hostId && this.phase === 'playing') finishRound(this);
         break;
     }
   }
@@ -147,7 +146,7 @@ export class GameRoom implements Room {
       for (let i = humans; i < MIN_SEATS; i++) {
         const id = `p${this.nextId++}`;
         const bot = blankPlayer(id, `bot-${id}`, { name: BOT_NAMES[i % BOT_NAMES.length], color: this.rng.pick(COLORS), hat: this.rng.pick(HATS) });
-        bot.bot = { goal: null, target: null, wait: 1, belief: {}, wantsBoard: false };
+        bot.bot = { target: null, wait: 1, belief: {}, seen: {}, pressAt: null, pick: null };
         bot.connected = true;
         this.players.set(id, bot);
       }
@@ -159,10 +158,9 @@ export class GameRoom implements Room {
   private toLobby(): void {
     for (const [id, p] of this.players) {
       if (p.bot || !p.connected) this.players.delete(id);
-      else Object.assign(p, { role: null, inPen: false, sign: null, spectator: false, carrying: null, meter: 0 });
+      else Object.assign(p, { role: null, inPen: false, sign: null, spectator: false, attempt: null, basket: [], best: [], last: null, meter: 0 });
     }
-    this.items = [];
-    this.stations = makeStations();
+    this.spots = makeSpots();
     this.snowballs = [];
     this.reveal = null;
     this.phase = 'lobby';
@@ -179,11 +177,8 @@ export class GameRoom implements Room {
       if (Math.hypot(p.dx, p.dz) > 0.1) [p.fx, p.fz] = [p.dx, p.dz];
       p.throwCd -= dt;
       pushOffGoat(this, p);
-      if (p.carrying != null) {
-        const it = this.items.find((i) => i.uid === p.carrying);
-        if (it) [it.x, it.z] = [p.x, p.z];
-      }
     }
+    tickAttempts(this);
     tickGoat(this, dt);
     tickPen(this, dt);
     tickRound(this, dt);
@@ -200,7 +195,7 @@ export class GameRoom implements Room {
   /** One blocking call for probes: where the round stands, as one line. */
   report(): string {
     const ps = [...this.players.values()];
-    return `phase=${this.phase} t=${this.timeLeft.toFixed(1)} players=${ps.length} bots=${ps.filter((p) => p.bot).length} pen=${ps.filter((p) => p.inPen).length} stations=${this.stations.filter((s) => s.owner).length}`;
+    return `phase=${this.phase} t=${this.timeLeft.toFixed(1)} players=${ps.length} bots=${ps.filter((p) => p.bot).length} pen=${ps.filter((p) => p.inPen).length} catches=${ps.reduce((n, p) => n + p.basket.length, 0)}`;
   }
 }
 
@@ -218,8 +213,8 @@ function cleanLook(l: Partial<Look> | undefined): Look {
 
 function blankPlayer(id: string, token: string, look: Look): Player {
   return {
-    id, token, look, x: 0, z: 0, dx: 0, dz: 0, fx: 0, fz: 1, throwCd: 0, carrying: null, inPen: false, sign: null, spectator: false, connected: false,
-    role: null, guessesLeft: 0, accusationUsed: false, score: 0, stationPoints: 0, roundStart: 0, meter: 0, meterActive: false,
-    awaitingChoice: false, caughtBy: null, lastChance: null, bot: null, leftAt: 0,
+    id, token, look, x: 0, z: 0, dx: 0, dz: 0, fx: 0, fz: 1, throwCd: 0, attempt: null, basket: [], best: [], last: null, inPen: false, sign: null, spectator: false, connected: false,
+    role: null, accusationUsed: false, score: 0, roundStart: 0, meter: 0, meterActive: false,
+    awaitingChoice: false, caughtBy: null, bot: null, leftAt: 0,
   };
 }

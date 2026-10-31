@@ -2,19 +2,26 @@
  * Server-side state. Everything here is authoritative and lives only on the server.
  * Clients get a filtered copy built by view.ts.
  */
-import type { AreaId } from '../shared/catalog';
+import type { ActId, Attrs, Catch, Lane } from '../shared/activities';
+import type { Task } from '../shared/tasks';
 import type { Look, Phase, PrivateEvent } from '../shared/protocol';
 import type { Rng } from '../shared/rng';
 
 export interface BotBrain {
-  /** Thing the bot is working toward (the real one for knowers, its best guess for :( bots). */
-  goal: string | null;
   target: { x: number; z: number } | null;
   wait: number;
-  /** :( bots: evidence per thing id, from placements they have watched. */
+  /** :( bots: how often each attribute value has been seen in others' catches this task. */
   belief: Record<string, number>;
-  wantsBoard: boolean;
+  /** Last catch seq seen per player, so a watched catch is counted once. */
+  seen: Record<string, number>;
+  /** When to press in the current minigame (ms into the lane), decided at the start. */
+  pressAt: number | null;
+  /** Painting: the medium, colour and subject the bot will choose. */
+  pick: Attrs | null;
 }
+
+/** A minigame in progress. */
+export interface Attempt { spot: string; lane: Lane; startedAt: number }
 
 export interface Player {
   id: string;
@@ -28,7 +35,13 @@ export interface Player {
   fx: number;
   fz: number;
   throwCd: number;
-  carrying: number | null;
+  /** The minigame you are in, if any (you cannot walk while in one). */
+  attempt: Attempt | null;
+  /** Attempts at the current task. */
+  basket: Catch[];
+  /** Best attempt per task so far (scored only at the reveal). */
+  best: (Catch | null)[];
+  last: { act: ActId; attrs: Attrs | null; seq: number; at: number } | null;
   inPen: boolean;
   sign: string | null;
   spectator: boolean;
@@ -36,44 +49,19 @@ export interface Player {
   /** Real seconds (room clock) when the last connection closed. */
   leftAt: number;
   role: 'knower' | 'sad' | null;
-  guessesLeft: number;
   accusationUsed: boolean;
   score: number;
-  /** Points earned at this round's station, multiplied at the reveal if it was the real thing. */
-  stationPoints: number;
   /** Score when this round started, so the reveal can show points earned this round. */
   roundStart: number;
   meter: number;
   meterActive: boolean;
   awaitingChoice: boolean;
-  /** For a jailed :( player: who caught them (they can steal that meter). */
+  /** For a jailed :( player: who caught them. */
   caughtBy: string | null;
-  lastChance: string | null;
   bot: BotBrain | null;
 }
 
-export interface Item {
-  uid: number;
-  id: string;
-  x: number;
-  z: number;
-  heldBy: string | null;
-  station: string | null;
-  /** Eaten by the goat; comes back at respawnAt. */
-  gone: boolean;
-  respawnAt: number;
-}
-
-export interface Station {
-  id: string;
-  area: AreaId;
-  x: number;
-  z: number;
-  owner: string | null;
-  items: number[];
-  /** Thing ids already rewarded at this station, so a finish pays once. */
-  finished: Set<string>;
-}
+export interface Spot { id: string; area: string; act: ActId; x: number; z: number; busyBy: string | null }
 
 export interface Goat {
   x: number;
@@ -84,7 +72,6 @@ export interface Goat {
   tz: number;
   timer: number;
   stareCooldown: number;
-  eatItem: number | null;
   pesterCd: number;
   /** Cooldown on staring down someone who is NOT in the Pen. */
   freeStareCd: number;
@@ -96,14 +83,16 @@ export interface PenTarget { x: number; z: number; up: boolean; downUntil: numbe
 export interface Room {
   phase: Phase;
   clock: number;
+  /** Unscaled seconds: minigames run in real time even when tests speed up the round clock. */
+  realClock: number;
   timeLeft: number;
   roundSec: number;
-  lastCallAt: number;
   hostId: string | null;
-  thingId: string | null;
+  tasks: Task[];
+  taskIdx: number;
+  taskTime: number;
   players: Map<string, Player>;
-  items: Item[];
-  stations: Station[];
+  spots: Spot[];
   goat: Goat;
   snowballs: Snowball[];
   targets: PenTarget[];

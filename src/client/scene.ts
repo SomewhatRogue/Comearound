@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { AREAS, AREA_RADIUS, BOARD, PEN, STATIONS, WORLD } from '../shared/map';
+import { AREAS, AREA_RADIUS, BOARD, PEN, WORLD } from '../shared/map';
 import { mat } from './models';
 import { buildVillage } from './village';
 
@@ -15,7 +15,6 @@ export interface Stage {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   sun: THREE.DirectionalLight;
-  stationTops: Map<string, THREE.Vector3>;
   resize(): void;
 }
 
@@ -66,23 +65,8 @@ export function makeStage(host: HTMLElement, lowfx = false): Stage {
   buildVillage(scene);
   for (const a of AREAS) {
     const l = label(a.name, 'area-label');
-    l.position.set(a.x, 0.2, a.z - AREA_RADIUS + 0.6);
+    l.position.set(a.x, 0.2, a.z - (a.id === 'range' ? 4.6 : AREA_RADIUS - 0.6));
     scene.add(l);
-  }
-
-  // Stations: little tables. Their tops are where placed items sit.
-  const stationTops = new Map<string, THREE.Vector3>();
-  for (const s of STATIONS) {
-    const t = new THREE.Group();
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.12, 14), mat('#a0714a'));
-    top.position.y = 0.6;
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.6, 8), mat('#7a5233'));
-    leg.position.y = 0.3;
-    for (const m of [top, leg]) [m.castShadow, m.receiveShadow] = [true, true];
-    t.add(top, leg);
-    t.position.set(s.x, 0, s.z);
-    scene.add(t);
-    stationTops.set(s.id, new THREE.Vector3(s.x, 0.66, s.z));
   }
 
   // The board in the square.
@@ -137,7 +121,7 @@ export function makeStage(host: HTMLElement, lowfx = false): Stage {
   };
   window.addEventListener('resize', resize);
   resize();
-  return { renderer, labels, scene, camera, sun, stationTops, resize };
+  return { renderer, labels, scene, camera, sun, resize };
 }
 
 function post(x: number, z: number): THREE.Mesh {

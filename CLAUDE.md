@@ -28,20 +28,23 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
 ## Hard rules
 
 - **The server decides everything; secrets never reach a client that should not have them.**
-  The thing, roles, why someone is in the Pen and whether an accusation was right stay on the
-  server (`src/server/view.ts`). `tests/rules.test.ts` reads a :( player's messages and fails if
-  the secret appears, with a positive control on a knower so the check can fail.
+  The ask, roles, scores before the reveal, why someone is in the Pen and whether an accusation
+  was right stay on the server (`src/server/view.ts`). `tests/rules.test.ts` reads a :( player's
+  messages and fails if an ask appears, with a positive control on a knower so the check can fail.
+- **Minigames are judged on the server** from the press time the client reports (ms since the
+  lane appeared on its screen), against the lane the server dealt. Lag never decides a hit.
 - **Never `Math.random` for outcomes.** Use the room's seeded `Rng`.
 - **Join and rejoin are one path.** Every snapshot is full state; a token gets your seat back.
   Seats are held 30 s in the lobby and for the whole round mid-game.
 - **Transport-agnostic rooms.** Game logic lives in `GameRoom`; `node-dev.ts` and `worker.ts`
   only adapt sockets. Nothing in `src/server/` except those two files may know about either.
-- **Content is data.** A new item or thing is an entry in `src/shared/catalog.ts`. Every thing
-  in the catalog must be makeable on the map, or it is a free elimination for the :( player.
+- **Content is data.** Activities and their attributes live in `src/shared/activities.ts`; how
+  asks are built and scored lives in `src/shared/tasks.ts`; spots live in `src/shared/map.ts`.
+  A new activity is an entry in each, a skin in `src/client/minigame.ts` and a prop in `village.ts`.
 - **What is drawn and what is decided share one source.** Map geometry lives in
   `src/shared/map.ts`, read by both the client and the server.
-- **Bots act natural.** They fill the least telling part first and hold the giveaway part until
-  last call. A test fails if a bot finishes the real thing before last call.
+- **Bots only know what a human would.** Knower bots know the ask; :( bots copy what they see
+  others catch. They play the minigames with a timing error, so they miss.
 - **No external hosts at runtime.** Fonts and assets are bundled (Discord's proxy blocks
   unmapped hosts, and a blocked font once stalled page load for 10 s).
 - **No em dashes** anywhere: docs, UI copy, comments (Kyle's standing preference).

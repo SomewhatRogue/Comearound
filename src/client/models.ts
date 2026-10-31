@@ -2,7 +2,6 @@
  * Placeholder models built from primitives until the KayKit art pass. Chunky, readable from above.
  */
 import * as THREE from 'three';
-import type { ItemDef } from '../shared/catalog';
 
 const mats = new Map<string, THREE.MeshStandardMaterial>();
 export function mat(color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}): THREE.MeshStandardMaterial {
@@ -22,21 +21,6 @@ function mesh(geo: THREE.BufferGeometry, color: string, shadow = true): THREE.Me
 function at(m: THREE.Mesh, x: number, y: number, z: number): THREE.Mesh {
   m.position.set(x, y, z);
   return m;
-}
-
-export function itemMesh(def: ItemDef): THREE.Object3D {
-  const g = new THREE.Group();
-  let m: THREE.Mesh;
-  switch (def.shape) {
-    case 'ball': m = mesh(new THREE.IcosahedronGeometry(0.24, 1), def.color); m.position.y = 0.24; break;
-    case 'tall': m = mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.5, 8), def.color); m.position.y = 0.25; break;
-    case 'cup': m = mesh(new THREE.CylinderGeometry(0.2, 0.14, 0.22, 10, 1, true), def.color); m.position.y = 0.11; (m.material as THREE.Material).side = THREE.DoubleSide; break;
-    case 'box': m = mesh(new THREE.BoxGeometry(0.34, 0.3, 0.26), def.color); m.position.y = 0.15; break;
-    case 'flat': m = mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.07, 12), def.color); m.position.y = 0.04; break;
-    default: m = mesh(new THREE.ConeGeometry(0.2, 0.38, 8), def.color); m.position.y = 0.19;
-  }
-  g.add(m);
-  return g;
 }
 
 export function hatMesh(hat: string): THREE.Object3D | null {

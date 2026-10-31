@@ -2,11 +2,12 @@
  * Set dressing: turns each area from a coloured circle into a place you'd recognise.
  * Pond (water, bank, lily pads, cattails, thistle, rocks), cottage kitchen (plank floor, walls,
  * stove, counter, rug), garden (tilled rows, cabbages, sunflowers, picket fence), chapel (stone
- * floor, chapel with bell tower, far too many candles, a well), paths, trees and bushes.
+ * floor, chapel with bell tower, far too many candles, a well), the archery range, an easel ring
+ * around the square, paths, trees and bushes. Each activity spot gets its prop (activityProps).
  * Purely visual: nothing here changes where you can walk. Repeated pieces are instanced.
  */
 import * as THREE from 'three';
-import { AREAS, PEN, SQUARE, STATIONS, WORLD } from '../shared/map';
+import { AREAS, PEN, SPOTS, SQUARE, WORLD } from '../shared/map';
 import { mat } from './models';
 
 type V3 = [number, number, number];
@@ -68,7 +69,7 @@ function scatter(seed: number, n: number, fn: (r: () => number, i: number) => [V
 }
 
 const area = (id: string) => AREAS.find((a) => a.id === id)!;
-const nearStation = (x: number, z: number, pad: number) => STATIONS.some((s) => Math.hypot(s.x - x, s.z - z) < pad);
+const nearStation = (x: number, z: number, pad: number) => SPOTS.some((s) => Math.hypot(s.x - x, s.z - z) < pad || Math.hypot(s.px - x, s.pz - z) < pad);
 
 function pond(scene: THREE.Object3D): void {
   const { x, z } = area('pond');
@@ -108,23 +109,11 @@ function kitchen(scene: THREE.Object3D): void {
   put(scene, G.box, '#8fc4dd', [1.6, 0.7, 0.32], [x + 2, 1.0, z - 5], 0, { emissive: '#8fc4dd', emissiveIntensity: 0.3 });
   put(scene, G.box, '#7a5233', [10.2, 0.16, 0.4], [x, 1.66, z - 5]);
   put(scene, G.box, '#7a5233', [0.4, 0.16, 10.2], [x - 5, 1.66, z]);
-  // Stove with a glowing door and a chimney; a counter along the back wall.
-  put(scene, G.box, '#3c3b40', [1.2, 0.9, 0.9], [x - 4, 0.45, z - 4.2]);
-  put(scene, G.box, '#ff8a3d', [0.6, 0.3, 0.05], [x - 4, 0.35, z - 3.72], 0, { emissive: '#ff6a1a', emissiveIntensity: 1.2 });
-  put(scene, G.cyl, '#3c3b40', [0.2, 1.4, 0.2], [x - 4.2, 1.6, z - 4.4]);
-  put(scene, G.box, '#9a7552', [4, 0.8, 0.8], [x + 1.5, 0.4, z - 4.3]);
-  put(scene, G.box, '#c9b48e', [4.1, 0.08, 0.9], [x + 1.5, 0.84, z - 4.3]);
-  many(scene, G.cyl, '#b0723f', [[[0.18, 0.2, 0.18], [x + 0.6, 0.98, z - 4.3]], [[0.14, 0.3, 0.14], [x + 2.6, 1.03, z - 4.3]]]);
 }
 
 function garden(scene: THREE.Object3D): void {
   const { x, z } = area('garden');
   flat(scene, G.disc, '#86ad5c', [6.4, 6.4, 1], [x, 0.008, z]);
-  const rows: [number, number][] = [[4.6, -1.5], [5.6, -1.5], [4.6, 2.2], [5.6, 2.2], [-4.6, 2.2], [-5.6, 2.2]];
-  many(scene, G.box, '#5a3d27', rows.map(([dx, dz]) => [[0.7, 0.08, 3], [x + dx, 0.04, z + dz]] as [V3, V3]), {}, false);
-  const plants = rows.flatMap(([dx, dz]) => [-1, 0, 1].map((k) => [x + dx, z + dz + k] as [number, number]));
-  many(scene, G.sphere, '#7fbf4f', plants.filter((_, i) => i % 2 === 0).map(([px, pz]) => [[0.24, 0.18, 0.24], [px, 0.18, pz]] as [V3, V3]));
-  many(scene, G.cone, '#5f9a3a', plants.filter((_, i) => i % 2 === 1).map(([px, pz]) => [[0.12, 0.3, 0.12], [px, 0.2, pz]] as [V3, V3]));
   // Sunflowers along the back.
   const sun = [-3, -1.6, 1.6, 3].map((dx) => [x + dx, z - 5.4] as [number, number]);
   many(scene, G.cyl, '#5d8a3a', sun.map(([px, pz]) => [[0.05, 1.6, 0.05], [px, 0.8, pz]] as [V3, V3]));
@@ -202,7 +191,68 @@ function surroundings(scene: THREE.Object3D): void {
   many(scene, G.sphere, '#5a8a3c', bushes);
 }
 
+function range(scene: THREE.Object3D): void {
+  flat(scene, G.plane, '#a9c37a', [12, 9, 1], [0, 0.007, -12.4]);
+  flat(scene, G.plane, '#f4efe2', [11, 0.12, 1], [0, 0.012, -9.0]);
+  many(scene, G.plane, '#8fae62', [-3, -1, 1, 3].map((x) => [[0.08, 5.6, 1], [x, 0.011, -12.4]] as [V3, V3]), {}, false);
+  // Hay bales behind the targets.
+  many(scene, G.box, '#e2c26a', [-4, -2, 0, 2, 4].map((x) => [[1.3, 0.9, 0.7], [x, 0.45, -16.2]] as [V3, V3]));
+}
+
+/** The thing you use at each spot: stools and rods, fruit trees, ovens, candle stands, targets, easels. */
+function activityProps(scene: THREE.Object3D): void {
+  for (const s of SPOTS) {
+    const g = new THREE.Group();
+    const ry = Math.atan2(s.px - s.x, s.pz - s.z);
+    if (s.act === 'fish') {
+      put(g, G.cyl, '#9a7552', [0.28, 0.35, 0.28], [0, 0.17, 0]);
+      const rod = put(g, G.cyl, '#6b4429', [0.025, 1.8, 0.025], [0, 0.9, 0.5]);
+      rod.rotation.x = 0.9;
+      put(g, G.sphere, '#f4f1ea', [0.06, 0.06, 0.06], [0, 0.02, 1.25]);
+      g.position.set(s.x, 0, s.z);
+      g.rotation.y = ry;
+    } else if (s.act === 'fruit') {
+      put(g, G.cyl, '#6b4429', [0.2, 1.6, 0.2], [0, 0.8, 0]);
+      put(g, G.sphere, '#5f9a3e', [1.2, 1.0, 1.2], [0, 2.1, 0]);
+      const fruit = ['#d8433a', '#c4cf52', '#7a3b78'];
+      for (let k = 0; k < 6; k++) put(g, G.sphere, fruit[k % 3], [0.13, 0.13, 0.13], [Math.cos(k) * 0.95, 1.85 + (k % 2) * 0.35, Math.sin(k) * 0.95]);
+      g.position.set(s.px, 0, s.pz);
+    } else if (s.act === 'bake') {
+      put(g, G.box, '#b8634a', [1.2, 1.1, 0.9], [0, 0.55, 0]);
+      put(g, G.box, '#ff8a3d', [0.6, 0.35, 0.05], [0, 0.5, 0.46], 0, { emissive: '#ff6a1a', emissiveIntensity: 1.2 });
+      put(g, G.cyl, '#7a3b2a', [0.15, 0.9, 0.15], [0.35, 1.5, -0.2]);
+      g.position.set(s.px, 0, s.pz);
+      g.rotation.y = ry + Math.PI;
+    } else if (s.act === 'candle') {
+      put(g, G.cyl, '#5b4a3a', [0.08, 1.0, 0.08], [0, 0.5, 0]);
+      put(g, G.cyl, '#5b4a3a', [0.45, 0.06, 0.45], [0, 1.0, 0]);
+      const cols = ['#f4f1ea', '#8e5bb5', '#e0a92e'];
+      cols.forEach((c, k) => {
+        const a = (k / 3) * Math.PI * 2;
+        put(g, G.cyl, c, [0.06, 0.28, 0.06], [Math.cos(a) * 0.25, 1.17, Math.sin(a) * 0.25]);
+        put(g, G.cone, '#ffcf4a', [0.04, 0.1, 0.04], [Math.cos(a) * 0.25, 1.38, Math.sin(a) * 0.25], 0, { emissive: '#ffb02e', emissiveIntensity: 2 });
+      });
+      g.position.set(s.px, 0, s.pz);
+    } else if (s.act === 'archery') {
+      put(g, G.cyl, '#f4f1ea', [0.65, 0.08, 0.65], [0, 1.0, 0]).rotation.x = Math.PI / 2;
+      put(g, G.cyl, '#d8433a', [0.45, 0.09, 0.45], [0, 1.0, 0.005]).rotation.x = Math.PI / 2;
+      put(g, G.cyl, '#f5c53d', [0.18, 0.1, 0.18], [0, 1.0, 0.01]).rotation.x = Math.PI / 2;
+      for (const sx of [-0.4, 0.4]) put(g, G.box, '#6b4429', [0.06, 1.1, 0.06], [sx, 0.5, -0.1]);
+      g.position.set(s.px, 0, s.pz);
+    } else {
+      // Easel with a blank canvas, facing the painter.
+      for (const sx of [-0.25, 0.25]) put(g, G.box, '#8b5a2b', [0.05, 1.5, 0.05], [sx, 0.75, 0]);
+      put(g, G.box, '#f6efe0', [0.8, 0.6, 0.04], [0, 1.15, 0.04]);
+      g.position.set(s.px, 0, s.pz);
+      g.rotation.y = ry + Math.PI;
+    }
+    scene.add(g);
+  }
+}
+
 export function buildVillage(scene: THREE.Object3D): void {
+  range(scene);
+  activityProps(scene);
   pond(scene);
   kitchen(scene);
   garden(scene);

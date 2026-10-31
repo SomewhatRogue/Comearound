@@ -120,7 +120,7 @@ async function main() {
   console.log(JSON.stringify({
     ok: errors.length === 0 && lateSpectator && roleBefore === roleAfter,
     timeline: log,
-    reveal: { winner: reveal.winner, thing: reveal.thingId, made: reveal.rows.filter((r: any) => r.creation).length, rows: reveal.rows.length },
+    reveal: { winner: reveal.winner, asks: reveal.tasks.map((t: any) => t.text), scored: reveal.rows.filter((r: any) => r.perTask.some((t: any) => t.pts > 0)).length, rows: reveal.rows.length },
     gl,
     firstErrors: errors.slice(0, 3),
     shots: ['shots/1-lobby.png', 'shots/2-playing.png', 'shots/2c-board.png', 'shots/2b-playing-friend.png', 'shots/3-naughty.png', 'shots/4-reveal.png'],
