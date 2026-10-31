@@ -86,6 +86,7 @@ export type PrivateEvent =
   | { kind: 'wrongGuess' }
   | { kind: 'naughty'; words: string }
   | { kind: 'bonked' }
+  | { kind: 'knocked' }
   | { kind: 'toast'; text: string };
 
 export type ServerMsg =

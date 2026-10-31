@@ -94,7 +94,7 @@ export class Hud {
     b.classList.remove('play');
     void b.offsetWidth;
     b.classList.add('play');
-    sfx.thud();
+    sfx.poof();
   }
 
   connection(ok: boolean): void {

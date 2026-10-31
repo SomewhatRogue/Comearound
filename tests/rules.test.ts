@@ -211,7 +211,7 @@ describe('round', () => {
     const knowers = new Set(h.players().filter((p) => p.role === 'knower').map((p) => p.id));
     const early = h.room.stations.filter((s) => s.owner && knowers.has(s.owner) && makes(thing, s.area, s.items.map((u) => h.room.items.find((it) => it.uid === u)!.id)));
     expect(early.length, 'a knower bot gave the thing away before last call').toBe(0);
-    for (let i = 0; i < 20 * 140 && h.room.phase !== 'results'; i++) h.room.tick(0.05);
+    for (let i = 0; i < 20 * 140 && (h.room.phase as string) !== 'results'; i++) h.room.tick(0.05);
     expect(h.room.phase).toBe('results');
     const made = h.room.reveal!.rows.filter((r) => r.creation).length;
     expect(made, h.room.report()).toBeGreaterThanOrEqual(2);

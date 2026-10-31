@@ -165,3 +165,5 @@ button { font: inherit; cursor: pointer; }
 .menu .big.danger { background: var(--bad); box-shadow: 0 4px 0 #8c2f27; }
 .side .how-mini { font-size: 13px; color: var(--ink-soft); margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .item-tag { font-weight: 600; font-size: 12px; color: var(--ink); background: #fffbe8; border: 2px solid var(--ink); padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+
+#mute { pointer-events: auto; background: var(--paper); color: var(--ink); border: 0; border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 13px; box-shadow: 0 3px 0 #0002; }

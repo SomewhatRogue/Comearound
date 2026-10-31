@@ -1,11 +1,26 @@
 /**
- * Tiny Web Audio synth so feedback has sound before real audio assets exist.
- * Chimes climb in semitones (2^(n/12)) when points come in a row.
+ * Every sound in the game, synthesized with Web Audio: no files, nothing to load or block.
+ * Cute and round on purpose: bubbles, plinks, chimes, a goat. One master volume with mute (M).
+ * Browsers start audio suspended until the first click or key press; unlock() handles that.
  */
 let ctx: AudioContext | null = null;
+let master: GainNode | null = null;
+let muted = (() => {
+  try {
+    return localStorage.getItem('tac-muted') === '1';
+  } catch {
+    return false;
+  }
+})();
+
 function ac(): AudioContext | null {
   try {
-    ctx ??= new AudioContext();
+    if (!ctx) {
+      ctx = new AudioContext();
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : 0.8;
+      master.connect(ctx.destination);
+    }
     if (ctx.state === 'suspended') void ctx.resume();
     return ctx;
   } catch {
@@ -13,39 +28,178 @@ function ac(): AudioContext | null {
   }
 }
 
-function tone(freq: number, dur: number, type: OscillatorType, gain: number, at = 0): void {
+/** One voice: an oscillator with a pitch glide and an envelope, optionally filtered. */
+function voice(o: { f0: number; f1?: number; dur: number; type?: OscillatorType; gain?: number; at?: number; vib?: number; vibRate?: number; lp?: number; trem?: number }): void {
   const a = ac();
-  if (!a) return;
-  const o = a.createOscillator();
+  if (!a || !master || muted) return;
+  const t = a.currentTime + (o.at ?? 0);
+  const osc = a.createOscillator();
   const g = a.createGain();
-  o.type = type;
-  o.frequency.value = freq;
-  const t = a.currentTime + at;
+  osc.type = o.type ?? 'sine';
+  osc.frequency.setValueAtTime(o.f0, t);
+  if (o.f1) osc.frequency.exponentialRampToValueAtTime(o.f1, t + o.dur * 0.8);
+  if (o.vib) {
+    const lfo = a.createOscillator();
+    const lg = a.createGain();
+    lfo.frequency.value = o.vibRate ?? 6;
+    lg.gain.value = o.vib;
+    lfo.connect(lg).connect(osc.frequency);
+    lfo.start(t);
+    lfo.stop(t + o.dur + 0.05);
+  }
+  let out: AudioNode = g;
+  if (o.lp) {
+    const f = a.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = o.lp;
+    g.connect(f);
+    out = f;
+  }
+  const peak = o.gain ?? 0.15;
   g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(gain, t + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(a.destination);
-  o.start(t);
-  o.stop(t + dur + 0.05);
+  g.gain.linearRampToValueAtTime(peak, t + 0.008);
+  if (o.trem) {
+    // Tremolo: the bleat's "meh-eh-eh".
+    for (let k = 0; k < o.dur * o.trem; k++) g.gain.setTargetAtTime(k % 2 ? peak : peak * 0.35, t + k / o.trem, 0.01);
+  }
+  g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+  osc.connect(g);
+  out.connect(master);
+  osc.start(t);
+  osc.stop(t + o.dur + 0.05);
 }
 
+/** A burst of filtered noise: whooshes, rustles, poofs. */
+function noise(o: { dur: number; f0: number; f1?: number; gain?: number; at?: number; q?: number }): void {
+  const a = ac();
+  if (!a || !master || muted) return;
+  const t = a.currentTime + (o.at ?? 0);
+  const buf = a.createBuffer(1, Math.ceil(a.sampleRate * o.dur), a.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = a.createBufferSource();
+  src.buffer = buf;
+  const f = a.createBiquadFilter();
+  f.type = 'bandpass';
+  f.Q.value = o.q ?? 1.2;
+  f.frequency.setValueAtTime(o.f0, t);
+  if (o.f1) f.frequency.exponentialRampToValueAtTime(o.f1, t + o.dur);
+  const g = a.createGain();
+  g.gain.setValueAtTime(o.gain ?? 0.2, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+  src.connect(f).connect(g).connect(master);
+  src.start(t);
+}
+
+const semi = (base: number, n: number) => base * 2 ** (n / 12);
+
 export const sfx = {
-  chime(step: number) {
-    const f = 660 * 2 ** (step / 12);
-    tone(f, 0.35, 'sine', 0.18);
-    tone(f * 2, 0.2, 'triangle', 0.05, 0.03);
+  /** Call from any click or key press so the browser lets sound start. */
+  unlock() {
+    ac();
   },
+  get muted() {
+    return muted;
+  },
+  toggleMute(): boolean {
+    muted = !muted;
+    try {
+      localStorage.setItem('tac-muted', muted ? '1' : '0');
+    } catch { /* storage blocked */ }
+    if (master && ctx) master.gain.setTargetAtTime(muted ? 0 : 0.8, ctx.currentTime, 0.02);
+    return muted;
+  },
+
+  /** Points: a chime that climbs a semitone step each time pops come in a row. */
+  chime(step: number) {
+    const f = semi(784, step);
+    voice({ f0: f, dur: 0.4, gain: 0.14 });
+    voice({ f0: f * 2, dur: 0.25, type: 'triangle', gain: 0.04, at: 0.03 });
+  },
+  /** Picking something up: a bubble rising. */
+  pickup() {
+    voice({ f0: 260, f1: 720, dur: 0.12, gain: 0.16 });
+    voice({ f0: 520, f1: 1200, dur: 0.08, gain: 0.05, at: 0.04 });
+  },
+  /** Putting something on a table: a soft wooden plunk. */
+  place() {
+    voice({ f0: 420, f1: 180, dur: 0.14, gain: 0.18, type: 'triangle' });
+    noise({ dur: 0.05, f0: 900, gain: 0.05 });
+  },
+  /** Dropping something on the grass. */
+  drop() {
+    voice({ f0: 300, f1: 140, dur: 0.12, gain: 0.12 });
+  },
+  /** Something finished: a little sparkle fanfare. */
   fanfare() {
-    [0, 4, 7, 12].forEach((s, i) => tone(523 * 2 ** (s / 12), 0.3, 'triangle', 0.15, i * 0.09));
+    [0, 4, 7, 12].forEach((s, i) => voice({ f0: semi(523, s), dur: 0.32, type: 'triangle', gain: 0.13, at: i * 0.08 }));
+    [19, 24].forEach((s, i) => voice({ f0: semi(523, s), dur: 0.5, gain: 0.05, at: 0.32 + i * 0.06 }));
+  },
+  /** The round begins. */
+  roundStart() {
+    [0, 7, 12, 16].forEach((s, i) => voice({ f0: semi(392, s), dur: 0.28, type: 'triangle', gain: 0.12, at: i * 0.11 }));
+  },
+  /** Last call: a chapel bell, ding-dong. */
+  bell() {
+    for (const [f, at] of [[659, 0], [523, 0.45]] as const) {
+      voice({ f0: f, dur: 1.6, gain: 0.14, at });
+      voice({ f0: f * 2.76, dur: 0.9, gain: 0.04, at });
+      voice({ f0: f * 5.4, dur: 0.4, gain: 0.02, at });
+    }
+  },
+  /** The goat. Meh-eh-eh. Quieter when it is further away. */
+  bleat(volume = 1) {
+    voice({ f0: 330, f1: 290, dur: 0.75, type: 'sawtooth', gain: 0.07 * volume, lp: 1400, vib: 14, vibRate: 7, trem: 14 });
+    voice({ f0: 660, f1: 580, dur: 0.75, type: 'triangle', gain: 0.025 * volume, trem: 14 });
+  },
+  /** Snowball thrown. */
+  whoosh() {
+    noise({ dur: 0.22, f0: 600, f1: 2400, gain: 0.12, q: 2 });
+  },
+  /** Snowball hit someone. */
+  poof() {
+    noise({ dur: 0.18, f0: 1800, f1: 500, gain: 0.16 });
+    voice({ f0: 220, f1: 110, dur: 0.15, gain: 0.1 });
+  },
+  /** A crow knocked off the fence. */
+  squawk() {
+    voice({ f0: 900, f1: 500, dur: 0.18, type: 'square', gain: 0.05, lp: 2200 });
+    voice({ f0: 800, f1: 420, dur: 0.16, type: 'square', gain: 0.045, lp: 2200, at: 0.2 });
+  },
+  /** The goat knocked your thing loose. */
+  boing() {
+    voice({ f0: 180, f1: 420, dur: 0.35, gain: 0.14, vib: 40, vibRate: 18 });
+  },
+  /** Wrong accusation or wrong guess: the sad trombone. */
+  sad() {
+    [0, -1, -2].forEach((s, i) => voice({ f0: semi(311, s), dur: 0.36, type: 'sawtooth', gain: 0.07, lp: 900, at: i * 0.36 }));
+    voice({ f0: semi(311, -3), dur: 1.0, type: 'sawtooth', gain: 0.07, lp: 900, vib: 6, vibRate: 5, at: 1.08 });
+  },
+  /** You caught a :( player. */
+  caught() {
+    [0, 4, 7, 11, 14].forEach((s, i) => voice({ f0: semi(587, s), dur: 0.3, type: 'triangle', gain: 0.12, at: i * 0.07 }));
+  },
+  /** Opening the board: a paper rustle. */
+  rustle() {
+    noise({ dur: 0.2, f0: 3000, f1: 1500, gain: 0.07, q: 0.8 });
+  },
+  /** The reveal: a short drumroll, then each tally row ticks in. */
+  drumroll() {
+    for (let i = 0; i < 14; i++) noise({ dur: 0.06, f0: 180, gain: 0.08 + i * 0.006, at: i * 0.05, q: 0.7 });
+  },
+  tick(at = 0) {
+    voice({ f0: 1400, f1: 1800, dur: 0.06, gain: 0.08, at });
+  },
+  /** The goat's close-up: a low, uneasy drone. */
+  naughty() {
+    voice({ f0: 110, dur: 2.4, type: 'sawtooth', gain: 0.05, lp: 500 });
+    voice({ f0: 116.5, dur: 2.4, type: 'sawtooth', gain: 0.04, lp: 500, at: 0.05 });
+    sfx.bleat(0.8);
   },
   thud() {
-    tone(90, 0.25, 'square', 0.12);
-  },
-  naughty() {
-    tone(110, 1.6, 'sawtooth', 0.06);
-    tone(116, 1.6, 'sawtooth', 0.05, 0.05);
+    voice({ f0: 120, f1: 70, dur: 0.22, gain: 0.16 });
   },
   click() {
-    tone(880, 0.06, 'square', 0.04);
+    voice({ f0: 1200, f1: 900, dur: 0.05, gain: 0.05, type: 'triangle' });
   },
 };

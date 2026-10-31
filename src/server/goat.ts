@@ -54,6 +54,7 @@ function knockLoose(room: Room, p: Player, g: Goat): void {
   dropCarried(room, p);
   const ang = Math.atan2(p.z - g.z, p.x - g.x) + room.rng.range(-0.6, 0.6);
   [it.x, it.z] = [p.x + Math.cos(ang) * 1.8, p.z + Math.sin(ang) * 1.8];
+  room.emit(p.id, { kind: 'knocked' });
   room.emit(p.id, { kind: 'toast', text: `The goat knocked your ${itemById.get(it.id)!.name.toLowerCase()} loose!` });
 }
 

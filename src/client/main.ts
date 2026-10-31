@@ -14,6 +14,7 @@ import { Net, type NetLike } from './net';
 import { COLORS, HATS, Panels } from './panels';
 import { followCamera, makeStage } from './scene';
 import { sfx } from './sfx';
+import { SoundDirector } from './sounds';
 import '@fontsource/fredoka/400.css';
 import '@fontsource/fredoka/600.css';
 import '@fontsource/fredoka/700.css';
@@ -57,6 +58,18 @@ const input = new Input();
 const net: NetLike = solo ? new LocalNet(() => look) : new Net(room, token, () => look);
 const panels = new Panels((m) => net.send(m), look, (l) => { look = l; store.set('tac-look', JSON.stringify(l)); }, room, solo);
 
+const sounds = new SoundDirector();
+const muteBtn = document.getElementById('mute')!;
+const showMute = () => (muteBtn.textContent = sfx.muted ? 'Sound off' : 'Sound on');
+showMute();
+input.onMute = () => {
+  sfx.toggleMute();
+  showMute();
+};
+muteBtn.addEventListener('click', () => input.onMute());
+// Browsers only allow sound after the player interacts.
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => sfx.unlock(), { capture: true });
+
 const predicted = new THREE.Vector3();
 let havePrediction = false;
 
@@ -66,7 +79,9 @@ input.onEscape = () => {
   else panels.menuOpen = !panels.menuOpen;
 };
 input.onBoard = () => {
-  if (net.pub?.phase === 'playing' && nearBoard()) panels.boardOpen = !panels.boardOpen;
+  if (net.pub?.phase !== 'playing' || !nearBoard()) return;
+  panels.boardOpen = !panels.boardOpen;
+  if (panels.boardOpen) sfx.rustle();
 };
 
 net.onEvent = (ev) => {
@@ -77,9 +92,10 @@ net.onEvent = (ev) => {
   }
   if (ev.kind === 'naughty') hud.naughty(ev.words);
   if (ev.kind === 'bonked') hud.bonked();
-  if (ev.kind === 'wrongAccusation') { hud.toast('Wrong! Off to the Pen with you.', 'bad'); sfx.thud(); }
-  if (ev.kind === 'wrongGuess') { hud.toast('Not it. Your guess is spent. Act natural.', 'bad'); sfx.thud(); }
-  if (ev.kind === 'caught') hud.toast('Got one! Only you know.', 'good');
+  if (ev.kind === 'wrongAccusation') { hud.toast('Wrong! Off to the Pen with you.', 'bad'); sfx.sad(); }
+  if (ev.kind === 'wrongGuess') { hud.toast('Not it. Your guess is spent. Act natural.', 'bad'); sfx.sad(); }
+  if (ev.kind === 'knocked') sfx.boing();
+  if (ev.kind === 'caught') { hud.toast('Got one! Only you know.', 'good'); sfx.caught(); }
   if (ev.kind === 'toast') hud.toast(ev.text);
 };
 
@@ -152,6 +168,7 @@ function frame(now: number) {
     predicted.x += (me.x - predicted.x) * pull;
     predicted.z += (me.z - predicted.z) * pull;
     entities.sync(pub, me.id, predicted, dt, now / 1000);
+    sounds.update(pub, net.me!, dt);
     entities.highlight(me.carrying || me.inPen || me.spectator ? null : nearestItem());
     followCamera(stage, predicted.x, predicted.z, dt);
     hud.update(pub, net.me!, panels.boardOpen ? '' : promptText());

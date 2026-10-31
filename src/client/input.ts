@@ -9,6 +9,7 @@ export class Input {
   onInteract = () => {};
   onBoard = () => {};
   onEscape = () => {};
+  onMute = () => {};
   /** Set by the HUD while a panel has focus, so typing a name doesn't walk you around. */
   blocked = false;
 
@@ -22,6 +23,7 @@ export class Input {
         this.onInteract();
       }
       if (!e.repeat && k === 'q') this.onBoard();
+      if (!e.repeat && k === 'm') this.onMute();
       this.keys.add(k);
       this.update();
     });
