@@ -14,6 +14,15 @@ import { claimRoom, type Broker } from './brokers';
 import { P2PHost, P2PNet } from './p2p';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+/** Rooms this device has hosted: opening one of those again may take it back. */
+function hosted(room: string, mark = false): boolean {
+  try {
+    if (mark) localStorage.setItem(`cbx-hosted-${room}`, '1');
+    return localStorage.getItem(`cbx-hosted-${room}`) === '1';
+  } catch {
+    return mark;
+  }
+}
 const newCode = () => Array.from({ length: 5 }, () => 'BCDFGHJKLMNPQRSTVWXZ23456789'[Math.floor(Math.random() * 28)]).join('');
 
 export class Online {
@@ -25,13 +34,31 @@ export class Online {
   private broker: Broker | null = null;
   /** Why the last join failed: the host never answered, or no route between the two networks worked. */
   private why: 'answer' | 'link' = 'answer';
+  /** Still trying: the host hasn't answered yet. */
+  private waiting = false;
   /** A host we just lost: their room claim can outlive their tab for a little while. */
   private lostAt = 0;
   private gen = 0;
+  /** Opened someone else's code (and hasn't played in that room yet): may not take the room. */
+  private joiner: boolean;
 
   constructor(private room: string, private me: string, private local: LocalNet, private net: SwitchNet, private look: () => Look) {
     this.mode = room ? 'friends' : 'solo';
+    this.joiner = !!room && !hosted(room);
     addEventListener('pagehide', () => this.stopHosting());
+    // Restored from the browser's back/forward cache: the connections are gone, so start again.
+    addEventListener('pageshow', (e) => {
+      if (!(e as PageTransitionEvent).persisted || this.mode !== 'friends') return;
+      this.stopHosting();
+      this.dropGuest();
+      void this.connect();
+    });
+  }
+
+  /** Host the room you're waiting on (its host never came back). */
+  hostRoom(): void {
+    this.joiner = false;
+    void this.connect();
   }
 
   /** Bot dogs always fill in when you play solo. */
@@ -52,47 +79,81 @@ export class Online {
   private async connect(): Promise<void> {
     const gen = ++this.gen;
     this.set('starting');
-    for (;;) {
-      this.broker?.close();
-      const r = await claimRoom(this.room, this.me);
-      if (gen !== this.gen) return r?.broker.close();
-      if (!r) return this.set('offline');
-      this.broker = r.broker;
-      if (r.host === 'host') return this.becomeHost(r.broker);
-      const hostId = r.host;
-      this.set('connecting');
-      const p = new P2PNet((msg) => r.broker.send(hostId, msg), this.me, this.look);
-      r.broker.onMessage = (from, msg) => from === hostId && msg.t === 'answer' && p.answered(msg.sdp);
-      const result = await p.connect(this.lostAt ? 10000 : 20000);
-      const ok = result === 'ok';
-      this.why = result === 'no-link' ? 'link' : 'answer';
-      // Connected (or not): matchmaking's job is done for a guest.
-      r.broker.close();
-      this.broker = null;
-      if (gen !== this.gen) return p.close();
-      if (ok) {
-        this.lostAt = 0;
-        this.guest = p;
-        this.local.paused = true;
-        this.net.use(p);
-        p.onGone = () => this.hostLost();
-        return this.set('guest');
+    const startedAt = performance.now();
+    this.waiting = false;
+    try {
+      for (;;) {
+        this.broker?.close();
+        this.broker = null;
+        // A friend who opened someone's code never takes the room: if its host isn't there right
+        // now (a phone sending the code), keep asking rather than hosting an empty copy of it.
+        const r = await claimRoom(this.room, this.me, !this.joiner);
+        if (gen !== this.gen) return r?.broker.close();
+        if (!r) {
+          if (!this.waiting) return this.set('offline');
+        } else if (r.host === 'host') {
+          this.broker = r.broker;
+          return this.becomeHost(r.broker);
+        } else if (r.host === 'none') {
+          r.broker.close();
+        } else {
+          this.broker = r.broker;
+          const hostId = r.host as string;
+          this.set('connecting');
+          const p = new P2PNet((msg) => r.broker.send(hostId, msg), this.me, this.look);
+          r.broker.onMessage = (from, msg) => from === hostId && p.answered(msg);
+          const result = await p.connect(this.lostAt || this.waiting ? 12000 : 20000);
+          // Connected (or not): matchmaking's job is done for a guest.
+          r.broker.close();
+          this.broker = null;
+          if (gen !== this.gen) return p.close();
+          if (result === 'ok') {
+            this.lostAt = 0;
+            this.joiner = false;
+            this.guest = p;
+            this.local.paused = true;
+            this.net.use(p);
+            p.onGone = () => this.hostLost();
+            return this.set('guest');
+          }
+          p.close();
+          this.why = result === 'no-link' ? 'link' : 'answer';
+          if (result === 'no-link') return this.set('failed');
+        }
+        // No answer yet: keep asking for a couple of minutes before giving up.
+        if (performance.now() - startedAt > 120000) {
+          this.why = 'answer';
+          return this.set('failed');
+        }
+        this.waiting = true;
+        this.set('connecting');
+        await new Promise((res) => setTimeout(res, 2500));
+        if (gen !== this.gen) return;
       }
-      p.close();
-      // Just lost a host? Their claim may still be live for a few seconds: keep trying.
-      if (!this.lostAt || performance.now() - this.lostAt > 60000) return this.set('failed');
-      await new Promise((res) => setTimeout(res, 2000));
+    } catch {
+      if (gen === this.gen) {
+        this.why = 'answer';
+        this.set('failed');
+      }
     }
   }
 
   private becomeHost(broker: Broker): void {
     this.lostAt = 0;
+    this.joiner = false;
+    hosted(this.room, true);
     const host = new P2PHost(this.local, (to, msg) => broker.send(to, msg), () => this.onChange());
     this.host = host;
+    broker.onLost = () => {
+      if (this.state !== 'host' || this.broker !== broker) return;
+      this.net.onEvent({ kind: 'toast', text: 'Your room was taken over while you were away. Rejoining it...' });
+      this.stopHosting();
+      void this.connect();
+    };
     broker.onMessage = (from, msg) => {
       if (msg.t !== 'offer') return;
       this.net.onEvent({ kind: 'toast', text: 'A friend is joining...' });
-      void host.offer(from, msg.sdp);
+      void host.offer(from, msg.sdp, msg.n);
     };
     this.set('host');
   }
@@ -125,6 +186,7 @@ export class Online {
     this.dropGuest();
     this.room = newCode();
     this.mode = 'friends';
+    this.joiner = false;
     const url = new URL(location.href);
     url.searchParams.set('room', this.room);
     try {
@@ -141,6 +203,7 @@ export class Online {
     this.dropGuest();
     this.room = code;
     this.mode = 'friends';
+    this.joiner = !hosted(code);
     const url = new URL(location.href);
     url.searchParams.set('room', code);
     try {
@@ -161,7 +224,7 @@ export class Online {
       url.searchParams.delete('room');
       this.set('idle');
     } else {
-      this.room ||= newCode();
+      if (!this.room) [this.room, this.joiner] = [newCode(), false];
       url.searchParams.set('room', this.room);
       void this.connect();
     }
@@ -196,7 +259,7 @@ export class Online {
   }
 
   key(): string {
-    return JSON.stringify([this.mode, this.state, this.friends, this.room]);
+    return JSON.stringify([this.mode, this.state, this.friends, this.room, this.waiting]);
   }
 
   /** The top of the lobby: the switch, the invite link, who's in your pack. */
@@ -214,13 +277,15 @@ export class Online {
         body = '<p class="quiet">Opening your room...</p>';
         break;
       case 'connecting':
-        body = '<p class="quiet">Connecting to the host... this can take up to 20 seconds.</p>';
+        body = this.waiting
+          ? `<p>Waiting for room <b>${esc(this.room)}</b>'s host to answer... If they're on a phone, they need the game open on screen. Still trying.</p><div class="games"><button class="chip" data-act="hostroom">Host this room myself</button></div>`
+          : '<p class="quiet">Connecting to the host... this can take up to 20 seconds.</p>';
         break;
       case 'offline':
         body = '<p>Couldn\'t reach the matchmaking server, so this is a solo game for now.</p><div class="games"><button class="chip" data-act="retry">Try again</button></div>';
         break;
       case 'host':
-        body = `<p class="code-line">Room code <b>${esc(this.room)}</b> <button class="link" data-act="newroom">new code</button></p><div class="invite"><code>${esc(this.link().replace(/^https?:\/\//, ''))}</code><button class="chip on" data-act="share">${'share' in navigator ? 'Share link' : 'Copy link'}</button></div>
+        body = `<p class="code-line">Room code <b>${esc(this.room)}</b> <button class="link" data-act="newroom">new code</button></p><p class="quiet">After you send it, come back to this screen: friends can only join while your game is open.</p><div class="invite"><code>${esc(this.link().replace(/^https?:\/\//, ''))}</code><button class="chip on" data-act="share">${'share' in navigator ? 'Share link' : 'Copy link'}</button></div>
           <p class="quiet">${this.friends ? `${this.friends === 1 ? 'A friend has' : `${this.friends} friends have`} joined. Pick a course and start when you're ready.` : 'Send this link to friends. When they open it, they pop up in your pack below.'} Bot dogs fill any empty spots. Keep this tab open: it runs the game.</p>${packBox}`;
         break;
       case 'guest':
@@ -228,7 +293,7 @@ export class Online {
         break;
       case 'failed':
         body = this.why === 'answer'
-          ? '<p>The host\'s game didn\'t answer. Check the code, and ask them to keep the game open and on screen: phones pause games in the background, so a host on a phone can\'t switch away to send the link.</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="newroom">Start my own room</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>'
+          ? '<p>The host\'s game didn\'t answer. Check the code, and ask them to keep the game open and on screen: phones pause games in the background, so a host on a phone can\'t switch away to send the link.</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="hostroom">Host this room myself</button><button class="chip" data-act="newroom">Start my own room</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>'
           : '<p>Found the host, but your two networks wouldn\'t let the games link up, even through the relay. Try again, or try from a different network (Wi-Fi instead of mobile data, say).</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="newroom">Start my own room</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>';
         break;
     }

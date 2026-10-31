@@ -1,7 +1,8 @@
 /**
  * Matchmaking for online play on Vercel. Games run in the host's browser and players connect to
  * each other directly (WebRTC); this function only introduces them:
- * - claim: the first tab in a room becomes its host (kept alive by re-claiming every 15 s).
+ * - claim: the first tab in a room becomes its host (kept alive by re-claiming every 10 s).
+ * - peek: who hosts a room, without taking it (a friend who opened the code).
  * - send / poll: a tiny mailbox per player, for the connection offers and answers.
  * - release: the host's tab closing frees the room straight away.
  * State lives in Redis from the Vercel Marketplace (Upstash), because Vercel Functions don't keep
@@ -30,6 +31,11 @@ export async function handleSignal(body: Body, store: Store): Promise<{ status: 
     case 'claim': {
       const [, host] = await store.run([['SET', hostKey, me, 'NX', 'EX', HOST_TTL], ['GET', hostKey]]);
       if (host === me) await store.run([['EXPIRE', hostKey, HOST_TTL]]);
+      return { status: 200, json: { host } };
+    }
+    case 'peek': {
+      // Who hosts this room, without taking it (a friend opening someone's code).
+      const [host] = await store.run([['GET', hostKey]]);
       return { status: 200, json: { host } };
     }
     case 'release': {

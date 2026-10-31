@@ -27,6 +27,9 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
   flock, goat, dog or bot behaviour. `scripts/trace.ts <field> <seed>` prints one run as text.
 - `node scripts/coop-probe.cjs` (dev server up on 8787): two tabs play together over the stand-in
   live room (`?fakeroom`): join, move, bark, start a run, host leaves.
+- `npm run test:online`: the online rooms in real browsers, several players each in their own
+  profile, both matchmaking paths, host away / host leaving. Boots its own servers. Run it after
+  any change to `src/client/{online,p2p,brokers}.ts` or `api/signal.ts`.
 - `node scripts/p2p-probe.cjs 8791` (a `VITE_P2P=1` build served by `PORT=8791 tsx src/server/node-dev.ts`):
   two browser profiles play an online room the Vercel way (WebRTC, /api/signal from memory),
   then the host closes their tab and the friend takes over the room. Add a third argument

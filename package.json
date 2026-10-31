@@ -9,7 +9,8 @@
     "test": "vitest run",
     "probe": "vite build && tsx scripts/probe.ts",
     "deploy": "vite build && wrangler deploy",
-    "smoke:do": "node scripts/do-smoke.mjs"
+    "smoke:do": "node scripts/do-smoke.mjs",
+    "test:online": "node scripts/online-test.cjs"
   },
   "dependencies": {
     "@fontsource/fredoka": "^5.3.0",

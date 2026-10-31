@@ -43,7 +43,7 @@ const MAX_GUESTS = 7;
 
 export async function signal(body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch('/api/signal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const res = await fetch('/api/signal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout?.(8000) });
     return res.ok ? ((await res.json()) as Record<string, unknown>) : null;
   } catch {
     return null;
@@ -74,9 +74,17 @@ export class P2PHost {
   }
 
   /** A friend's offer arrived (from the mailbox): answer it. */
-  async offer(from: string, sdp: string): Promise<void> {
+  async offer(from: string, sdp: string, n?: string): Promise<void> {
     this.drop(from);
     if (this.guests.size >= MAX_GUESTS) return;
+    try {
+      await this.answer(from, sdp, n);
+    } catch {
+      this.drop(from);
+    }
+  }
+
+  private async answer(from: string, sdp: string, n?: string): Promise<void> {
     const pc = new RTCPeerConnection({ iceServers: await iceServers() });
     const g: Guest = { pc, joined: false };
     this.guests.set(from, g);
@@ -98,7 +106,7 @@ export class P2PHost {
     await pc.setRemoteDescription({ type: 'offer', sdp });
     await pc.setLocalDescription(await pc.createAnswer());
     await gathered(pc);
-    await this.reply(from, { t: 'answer', sdp: pc.localDescription?.sdp ?? '' });
+    await this.reply(from, { t: 'answer', sdp: pc.localDescription?.sdp ?? '', n });
   }
 
   private drop(id: string): void {
@@ -151,6 +159,8 @@ export class P2PNet implements NetLike {
   private lastAt = 0;
   private closed = false;
   private answer: ((sdp: string) => void) | null = null;
+  /** This attempt's id: only an answer carrying it counts (not a late one to an earlier attempt). */
+  private nonce = Math.random().toString(36).slice(2, 10);
 
   constructor(private offerTo: (msg: Offer) => Promise<boolean>, private token: string, private look: () => Look) {}
 
@@ -185,12 +195,21 @@ export class P2PNet implements NetLike {
   }
 
   /** The host's answer arrived (through matchmaking). */
-  answered(sdp: string): void {
-    this.answer?.(sdp);
+  answered(msg: Offer): void {
+    if (msg.t === 'answer' && msg.n === this.nonce) this.answer?.(msg.sdp);
   }
 
   /** Offer, then wait for the host's answer and the first snapshot. */
   async connect(timeoutMs = 20000): Promise<JoinResult> {
+    try {
+      return await this.tryConnect(timeoutMs);
+    } catch {
+      // A browser refusing an offer or answer: treat it as no route rather than hanging.
+      return 'no-link';
+    }
+  }
+
+  private async tryConnect(timeoutMs: number): Promise<JoinResult> {
     const until = performance.now() + timeoutMs;
     const pc = (this.pc = new RTCPeerConnection({ iceServers: await iceServers() }));
     this.wire(pc);
@@ -200,7 +219,7 @@ export class P2PNet implements NetLike {
       this.answer = done;
       setTimeout(() => done(null), Math.max(0, until - performance.now()));
     });
-    if (!(await this.offerTo({ t: 'offer', sdp: pc.localDescription?.sdp ?? '' }))) return 'no-answer';
+    if (!(await this.offerTo({ t: 'offer', sdp: pc.localDescription?.sdp ?? '', n: this.nonce }))) return 'no-answer';
     const sdp = await got;
     if (!sdp || this.closed) return 'no-answer';
     await pc.setRemoteDescription({ type: 'answer', sdp });

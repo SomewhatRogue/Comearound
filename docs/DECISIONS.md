@@ -2,6 +2,38 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (afternoon): why joining failed, and real multi-player tests (Claude Opus 5.5)
+
+Kyle hosted on his iPhone, shared the code from the share sheet, came back, and his friend still
+couldn't join. A fresh review of the online code (a separate agent) plus new tests found:
+
+- **The host's matchmaking connection died in the background and never came back.** Fixed: on
+  returning to the page the host always re-attaches its room id (same token, so it works even
+  while the server still holds the dead socket), and re-registers if the socket closed.
+- **A friend opening the code while the host was away could become the host of an empty copy of
+  the room** (and see "send this link" instead of the game). Fixed: claiming takes a `take` flag;
+  a joiner (opened someone's code, never hosted it on this device) only ever joins, waits up to
+  two minutes while the host isn't answering ("Waiting for room X's host..."), and can choose
+  "Host this room myself". Players already in the room may still take it over if the host leaves.
+  `/api/signal` gained `peek` (who hosts, without claiming).
+- **Tapping your own link opened a new tab that didn't know it was the host.** The host token is
+  per device now (localStorage), so the new tab re-attaches to the room.
+- **A late answer to an old attempt could jam the next one**: offers carry a nonce; answers must
+  echo it. **Errors could strand a friend on "Connecting"**: caught, they show the failure screen.
+  Friend ids keep one token across retries (no clashes with a lingering socket); a back/forward
+  cache restore reconnects; `signal()` times out after 8 s.
+- **Controls checked "typing in a box?" only once a frame**, so steering right after typing a
+  room code and pressing Enter could be ignored. Now checked live.
+- **Tests that show several players in one room:** `tests/matchmaking.test.ts` (in `npm test`)
+  runs a real PeerServer in-process: three friends reach one host and each gets its own answer, a
+  dropped host re-attaches, a host told when its room was taken, a joiner never takes a room, the
+  host's new tab takes the room back, and the Redis path with three friends. `npm run test:online`
+  (scripts/online-test.cjs) boots everything and plays in real browsers, each player in its own
+  profile: (A) host + two friends (link and typed code) on /api/signal, (B) the same on the
+  PeerJS fallback, (C) host's page frozen when the friend joins then back, (D) host leaves and a
+  friend takes over with the other following, (E) host's connection dropped while away. All pass.
+- Still unverifiable from here: the live 0.peerjs.com and the Open Relay TURN server.
+
 ## 2026-10-31 (midday): new room button; the chihuahua (Claude Opus 5.5)
 
 - **"new code"** next to the room code (and "Start my own room" on the failure screen, "Leave and

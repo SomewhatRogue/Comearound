@@ -31,6 +31,13 @@ export class Input {
   /** Set while a text field has focus or a panel is open, so typing doesn't walk you around. */
   blocked = false;
   /**
+   * Blocked right now: a menu is open or you're typing in a box. Checked live, not just once a
+   * frame, so steering straight after typing a room code and pressing Enter works.
+   */
+  private get blockedNow(): boolean {
+    return !!document.querySelector('#modal:not(.hidden):not(.glance)') || document.activeElement?.tagName === 'INPUT';
+  }
+  /**
    * Which finger (or mouse) holds the stick, as a key like t3 or p1; null when nobody does.
    * Never compare ids to zero: iOS hands out touch identifiers that can be negative, and an
    * `id >= 0` test once made every drag on an iPhone count as "not held".
@@ -42,7 +49,7 @@ export class Input {
   constructor() {
     addEventListener('keydown', (e) => {
       if (e.key === 'Escape') return this.onEscape();
-      if (this.blocked || (e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (this.blockedNow || (e.target as HTMLElement)?.tagName === 'INPUT') return;
       const k = e.key.toLowerCase();
       if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
       if (!e.repeat && (k === 'e' || k === 'b' || k === 'enter')) this.onBark();
@@ -74,7 +81,7 @@ export class Input {
     }
     sprint ||= this.touchSprint;
     crouch ||= this.touchCrouch;
-    if (this.blocked) [dx, dz, sprint, crouch] = [0, 0, false, false];
+    if (this.blockedNow) [dx, dz, sprint, crouch] = [0, 0, false, false];
     [this.dx, this.dz, this.sprint, this.crouch] = [dx, dz, sprint && !crouch, crouch];
     this.onChange();
   }
