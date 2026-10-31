@@ -12,7 +12,7 @@ export class LocalNet implements NetLike {
   me: PrivateView | null = null;
   onEvent: (ev: PrivateEvent) => void = () => {};
   onState: () => void = () => {};
-  private room: GameRoom;
+  readonly room: GameRoom;
 
   constructor(look: () => Look) {
     this.room = new GameRoom((_conn, raw) => this.receive(raw), { seed: Math.floor(Math.random() * 1e9) });

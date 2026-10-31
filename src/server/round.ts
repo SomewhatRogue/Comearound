@@ -54,7 +54,8 @@ function atBoard(p: Player): boolean {
 
 export function accuse(room: Room, p: Player, targetId: string): void {
   const target = room.players.get(targetId);
-  if (room.phase !== 'playing' || p.inPen || p.spectator || p.accusationUsed || !atBoard(p)) return;
+  // :( players only guess the thing; accusing is for knowers (Kyle, 2026-10-30).
+  if (room.phase !== 'playing' || p.role === 'sad' || p.inPen || p.spectator || p.accusationUsed || !atBoard(p)) return;
   if (!target || target === p || target.inPen || target.spectator) return;
   p.accusationUsed = true;
   if (target.role === 'sad') {

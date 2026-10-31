@@ -15,6 +15,7 @@ const name = (pub: PublicView, id: string) => esc(pub.players.find((p) => p.id =
 
 export class Panels {
   boardOpen = false;
+  menuOpen = false;
   private keys = { lobby: '', modal: '' };
   private confirmGuess: string | null = null;
   private roundSec = 420;
@@ -47,7 +48,11 @@ export class Panels {
     if (act === 'bots') [this.bots, this.keys.lobby] = [!this.bots, ''];
     if (act === 'start') this.send({ t: 'start', roundSec: this.roundSec, fillBots: this.bots });
     if (act === 'copy') void navigator.clipboard?.writeText(location.href);
-    if (act === 'close') [this.boardOpen, this.confirmGuess] = [false, null];
+    if (act === 'close') [this.boardOpen, this.menuOpen, this.confirmGuess] = [false, false, null];
+    if (act === 'endRound') {
+      this.send({ t: 'endRound' });
+      this.menuOpen = false;
+    }
     if (act === 'guess') {
       if (this.confirmGuess === v) {
         this.send({ t: 'guess', thingId: v });
@@ -60,7 +65,10 @@ export class Panels {
       this.boardOpen = false;
     }
     if (act === 'end') this.send({ t: 'choice', endNow: v === '1' });
-    if (act === 'lobby') this.send({ t: 'toLobby' });
+    if (act === 'lobby') {
+      this.send({ t: 'toLobby' });
+      this.menuOpen = false;
+    }
     this.keys.modal = '';
   }
 
@@ -75,10 +83,10 @@ export class Panels {
     }
     if (pub.phase !== 'playing') this.boardOpen = false;
     const modal = document.getElementById('modal')!;
-    const mk = JSON.stringify([pub.phase, this.boardOpen, this.confirmGuess, me.awaitingChoice, me.canLastChance, me.guessesLeft, me.accusationUsed, pub.players.map((p) => p.inPen), !!pub.reveal, pub.hostId === me.you]);
+    const mk = JSON.stringify([pub.phase, this.menuOpen, this.boardOpen, this.confirmGuess, me.awaitingChoice, me.canLastChance, me.guessesLeft, me.accusationUsed, pub.players.map((p) => p.inPen), !!pub.reveal, pub.hostId === me.you]);
     if (mk !== this.keys.modal) {
       this.keys.modal = mk;
-      const html = me.awaitingChoice ? choiceHtml() : me.canLastChance ? lastChanceHtml() : pub.reveal ? revealHtml(pub, me) : this.boardOpen ? this.boardHtml(pub, me) : '';
+      const html = this.menuOpen ? menuHtml(pub, me) : me.awaitingChoice ? choiceHtml() : me.canLastChance ? lastChanceHtml() : pub.reveal ? revealHtml(pub, me) : this.boardOpen ? this.boardHtml(pub, me) : '';
       modal.innerHTML = html;
       modal.classList.toggle('hidden', !html);
     }
@@ -100,6 +108,7 @@ export class Panels {
       <label>Your name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>
       <div class="label">Colour</div><div class="swatches">${colors}</div>
       <div class="label">Hat</div><div class="row wrap">${hats}</div>
+      <div class="label">How to play</div><ul class="how-mini"><li>Everyone gets the same secret thing to make, except the :( player.</li><li>Carry parts (<b>E</b>) to a table in the right area and build it.</li><li>Knowers: catch the :( at the board. The :( player: guess the thing.</li><li>Wrong accusation? Off to the Pen. <b>Esc</b> for the full rules.</li></ul>
       <div class="label">Villagers (${pub.players.length})</div><ul class="who">${who}</ul>${controls}`;
   }
 
@@ -113,12 +122,30 @@ export class Panels {
       return `<div class="group"><h4>${a.name}</h4><ul class="things">${rows}</ul></div>`;
     }).join('');
     const suspects = pub.players.filter((p) => p.id !== me.you && !p.inPen && !p.spectator);
-    const accuse = me.accusationUsed
+    const accuse = me.role === 'sad'
+      ? `<p class="quiet">Only knowers can accuse. You get one guess at the thing${me.guessesLeft ? '' : ', and you have used it'}.</p>`
+      : me.accusationUsed
       ? '<p class="quiet">You have used your accusation.</p>'
       : `<ul class="suspects">${suspects.map((p) => `<li><i style="background:${p.look.color}"></i>${esc(p.look.name)}<button class="chip danger" data-act="accuse" data-v="${p.id}">Accuse</button></li>`).join('')}</ul><p class="quiet">One accusation. Wrong, and you go to the Pen.</p>`;
     return `<div class="sheet board"><button class="x" data-act="close">Close</button><h2>The Board</h2>
-      <div class="cols"><div><h3>Every thing it could be</h3>${groups}</div><div><h3>Accuse a :(</h3>${accuse}</div></div></div>`;
+      <div class="cols"><div><h3>Every thing it could be</h3>${groups}</div><div><h3>${me.role === 'sad' ? 'Your guess' : 'Accuse a :('}</h3>${accuse}</div></div></div>`;
   }
+}
+
+function menuHtml(pub: PublicView, me: PrivateView): string {
+  const host = pub.hostId === me.you && pub.phase !== 'lobby';
+  const hostTools = host
+    ? `<div class="host"><h3>Host</h3>${pub.phase === 'playing' || pub.phase === 'lastcall' ? '<button class="big alt" data-act="endRound">End the round now (go to the reveal)</button>' : ''}<button class="big danger" data-act="lobby">Back to the lobby</button></div>`
+    : '';
+  return `<div class="sheet menu"><button class="x" data-act="close">Close</button><h2>How to play</h2><ol>
+    <li><b>Everyone gets the same secret thing to make</b>, shown on the card at the top left. Except one player (more in big games), who gets a <b>:(</b> instead.</li>
+    <li><b>Build it.</b> Each thing has 3 parts, and each part can be one of a few items. Pick items up with <b>E</b>, carry them to an empty table in the right area, and put them down with <b>E</b>. Points pop up for every part that fits something.</li>
+    <li><b>Act natural.</b> Everyone is watching what you carry. Save your most telling part for last call.</li>
+    <li><b>The board</b> (walk up and press <b>Q</b>) lists every thing it could be. Knowers can accuse one player of being the :(. The :( player gets one guess at the thing.</li>
+    <li><b>Wrong accusation:</b> you go to the Pen with a sign. <b>Right:</b> they go, and only you know it was a catch. End the round, or keep playing and watch your meter climb.</li>
+    <li><b>Last call</b> closes the board. At the reveal, every creation is judged. The :( player wins by guessing the thing, or by surviving with the right creation.</li>
+    <li><b>In the Pen:</b> snowball fight. <b>E</b> throws. Knock the crows off the fence. Do not hit the goat.</li>
+  </ol>${hostTools}</div>`;
 }
 
 function choiceHtml(): string {

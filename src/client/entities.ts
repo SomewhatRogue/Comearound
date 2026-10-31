@@ -6,7 +6,9 @@ import * as THREE from 'three';
 import type { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { itemById } from '../shared/catalog';
 import type { PublicView } from '../shared/protocol';
-import { goatMesh, itemMesh, playerMesh } from './models';
+import { itemModel as itemMesh } from './items';
+import { PEN_TARGETS } from '../shared/map';
+import { crowMesh, goatMesh, playerMesh } from './models';
 import { label, type Stage } from './scene';
 
 interface PlayerView { root: THREE.Group; tag: CSS2DObject; sign: CSS2DObject; held: THREE.Object3D | null; heldId: string | null; key: string; facing: number; phase: number }
@@ -18,8 +20,31 @@ export class Entities {
   /** Smoothed render positions, readable by the HUD for pops and prompts. */
   readonly pos = new Map<string, THREE.Vector3>();
 
+  private snowballs = new Map<number, THREE.Mesh>();
+  private crows: THREE.Group[] = [];
+  private itemTag = label('', 'item-tag');
+  private snowGeo = new THREE.SphereGeometry(0.16, 10, 8);
+  private snowMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6 });
+
   constructor(private stage: Stage) {
     stage.scene.add(this.goat);
+    stage.scene.add(this.itemTag);
+    this.itemTag.visible = false;
+    for (const t of PEN_TARGETS) {
+      const crow = crowMesh();
+      crow.position.set(t.x, 0, t.z);
+      stage.scene.add(crow);
+      this.crows.push(crow);
+    }
+  }
+
+  /** Name the item you are about to pick up, right above it. */
+  highlight(uid: number | null): void {
+    const v = uid == null ? undefined : this.items.get(uid);
+    this.itemTag.visible = !!v;
+    if (!v) return;
+    this.itemTag.element.textContent = itemById.get(v.id)!.name;
+    this.itemTag.position.copy(v.obj.position).setY(v.obj.position.y + 0.95);
   }
 
   sync(pub: PublicView, you: string, predicted: THREE.Vector3 | null, dt: number, time: number): void {
@@ -80,6 +105,7 @@ export class Entities {
     for (const id of [...this.players.keys()]) if (!seen.has(id)) this.remove(id);
     this.syncItems(pub, time, k);
     this.syncGoat(pub, k, time);
+    this.syncPen(pub, k);
   }
 
   private syncItems(pub: PublicView, time: number, k: number): void {
@@ -127,6 +153,29 @@ export class Entities {
     this.goat.rotation.y += angleDiff(this.goat.rotation.y, face) * k;
     const head = this.goat.getObjectByName('head')!;
     head.rotation.x = g.mood === 'eat' ? 0.6 : g.mood === 'stare' ? -0.15 + Math.sin(time * 0.7) * 0.03 : Math.sin(time * 3) * 0.08;
+  }
+
+  private syncPen(pub: PublicView, k: number): void {
+    const seen = new Set<number>();
+    for (const s of pub.snowballs) {
+      seen.add(s.id);
+      let m = this.snowballs.get(s.id);
+      if (!m) {
+        m = new THREE.Mesh(this.snowGeo, this.snowMat);
+        m.position.set(s.x, 1.1, s.z);
+        this.stage.scene.add(m);
+        this.snowballs.set(s.id, m);
+      }
+      m.position.lerp(new THREE.Vector3(s.x, 1.1, s.z), Math.max(k, 0.6));
+    }
+    for (const [id, m] of this.snowballs) if (!seen.has(id)) {
+      this.stage.scene.remove(m);
+      this.snowballs.delete(id);
+    }
+    pub.targets.forEach((up, i) => {
+      const bird = this.crows[i]?.getObjectByName('bird');
+      if (bird) bird.rotation.x += ((up ? 0 : -Math.PI / 2) - bird.rotation.x) * k;
+    });
   }
 
   private remove(id: string): void {

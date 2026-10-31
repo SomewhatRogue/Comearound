@@ -32,6 +32,9 @@ export const STATIONS: StationDef[] = AREAS.flatMap((a) =>
 export const BOARD = { x: 0, z: -2 };
 /** The Pen, south of the square, in view of everyone (and the goat). */
 export const PEN: Rect = { x: 0, z: 13, w: 8, d: 5 };
+/** Crow targets for the Pen snowball fight, along the back fence inside the Pen. */
+export const PEN_TARGETS = [-1, 0, 1].map((i) => ({ x: PEN.x + i * (PEN.w / 3), z: PEN.z + PEN.d / 2 - 0.35 }));
+
 /** Where everyone stands in the lobby and at round start. */
 export const SQUARE = { x: 0, z: 2, r: 3.5 };
 

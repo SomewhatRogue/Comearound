@@ -17,7 +17,9 @@ export type ClientMsg =
   | { t: 'choice'; endNow: boolean }
   | { t: 'look'; look: Look }
   | { t: 'start'; roundSec: number; fillBots: boolean }
-  | { t: 'toLobby' };
+  | { t: 'toLobby' }
+  /** Host only: skip to the reveal now. */
+  | { t: 'endRound' };
 
 export interface PlayerPub {
   id: string;
@@ -34,7 +36,8 @@ export interface PlayerPub {
 
 export interface ItemPub { uid: number; id: string; x: number; z: number; heldBy: string | null; station: string | null }
 export interface StationPub { id: string; owner: string | null; items: string[] }
-export interface GoatPub { x: number; z: number; mood: 'wander' | 'eat' | 'stare'; target: string | null }
+export interface GoatPub { x: number; z: number; mood: 'wander' | 'eat' | 'stare' | 'pester'; target: string | null }
+export interface SnowballPub { id: number; x: number; z: number }
 
 export interface RevealRow {
   id: string;
@@ -55,6 +58,9 @@ export interface PublicView {
   items: ItemPub[];
   stations: StationPub[];
   goat: GoatPub;
+  /** The Pen minigame: snowballs in flight and which crow targets are standing. */
+  snowballs: SnowballPub[];
+  targets: boolean[];
   /** Filled only in 'results'. */
   reveal: { thingId: string; winner: 'knowers' | 'sad'; rows: RevealRow[] } | null;
 }
@@ -78,7 +84,8 @@ export type PrivateEvent =
   | { kind: 'caught' }
   | { kind: 'wrongAccusation' }
   | { kind: 'wrongGuess' }
-  | { kind: 'naughty' }
+  | { kind: 'naughty'; words: string }
+  | { kind: 'bonked' }
   | { kind: 'toast'; text: string };
 
 export type ServerMsg =

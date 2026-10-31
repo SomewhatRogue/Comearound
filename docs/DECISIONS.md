@@ -2,6 +2,31 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-30 (evening): first playtest notes from Kyle (Claude Opus 5.5)
+
+- **:( players only guess the thing; they cannot accuse.** Kyle's call after playing. The board
+  shows a :( player the guess list only. Server enforces it; tested.
+- **The host can end or abandon a round** from the Esc menu (End the round now / Back to the lobby).
+- **People did not know what they could do.** Esc opens How to play; the lobby has a 4-line version;
+  role cards now say what to do next; the item E would pick up shows its name above it.
+- **The goat gets in the way, and stares at the Pen less.** It walks into a player's path and knocks
+  a carried item loose, pulls items off tables, and blocks you (you cannot walk through it). Free
+  players get a WHAT ARE YOU DOING close-up (every 35 s at most); the Pen stare is every 70 s at most.
+  The close-up fades in over ~1.3 s, the goat has ears and horns, and the words sit on a dark band.
+- **Pen minigame: snowball fight.** E throws the way you last walked. Bonk another Pen player (+5),
+  knock a crow off the fence (+10, it pops back up), hit the goat (it stares at you next).
+- **Items are recognisable.** Each item has its own model (stem and leaf on the apple, ribbed pumpkin,
+  teacup with handle and saucer, candle with flame...), 25% bigger.
+- **Areas are places.** Pond (water, bank, lily pads, cattails, thistle, rocks, dock), cottage kitchen
+  (plank floor, walls, stove, counter, rug), garden (rows, cabbages, sunflowers, picket fence), chapel
+  (stone floor, chapel with bell tower, candles everywhere, the well), dirt paths, trees and bushes.
+  All primitives, instanced; still a placeholder for an art pass.
+- **Bots pick up exactly the item they walked to.** With the goat dropping things beside tables, a bot
+  grabbing "whatever is nearest" picked up its giveaway part early. The act-natural test now runs on
+  five seeds.
+- **Solo mode** (`?solo`, and the single-file build behind the shareable link) runs the real room and
+  bots in the browser.
+
 ## 2026-10-30: slice 1 built (Claude Opus 5.5)
 
 **Stack.** Three.js r187 with the WebGL renderer (WebGPU buys nothing for this look, and most

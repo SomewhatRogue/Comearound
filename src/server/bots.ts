@@ -10,8 +10,8 @@ import { THINGS, thingById } from '../shared/catalog';
 import { filledParts, thingsAccepting } from '../shared/judge';
 import { BOARD, REACH, dist } from '../shared/map';
 import { guess, lastChance } from './round';
-import type { Player, Room, Station } from './state';
-import { interact, stationItems } from './world';
+import type { Item, Player, Room, Station } from './state';
+import { interact, pickUp, stationItems } from './world';
 
 function steer(p: Player, x: number, z: number, stopAt = 0.6): boolean {
   const d = dist(p.x, p.z, x, z);
@@ -100,7 +100,7 @@ export function tickBot(room: Room, p: Player, dt: number): void {
     if (!b.target || steer(p, b.target.x, b.target.z)) b.target = { x: station.x + room.rng.range(-3, 3), z: station.z + room.rng.range(-3, 3) };
     return;
   }
-  let pick = null as null | { x: number; z: number };
+  let pick = null as null | Item;
   let bd = Infinity;
   for (const it of room.items) {
     if (it.gone || it.heldBy || it.station || !missing.includes(it.id)) continue;
@@ -109,7 +109,7 @@ export function tickBot(room: Room, p: Player, dt: number): void {
   }
   if (!pick) return;
   if (steer(p, pick.x, pick.z, REACH.item - 0.5)) {
-    interact(room, p);
+    pickUp(room, p, pick);
     b.wait = room.rng.range(0.3, 1.2);
   }
 }

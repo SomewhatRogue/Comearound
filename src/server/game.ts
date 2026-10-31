@@ -9,8 +9,9 @@ import type { ClientMsg, Look, PrivateEvent, ServerMsg } from '../shared/protoco
 import { COLORS, HATS } from '../shared/looks';
 import { Rng } from '../shared/rng';
 import { tickBot } from './bots';
-import { makeGoat, tickGoat } from './goat';
-import { accuse, choose, guess, lastChance, startRound, tickRound } from './round';
+import { makeGoat, pushOffGoat, tickGoat } from './goat';
+import { makeTargets, throwSnowball, tickPen } from './pen';
+import { accuse, beginReveal, choose, guess, lastChance, startRound, tickRound } from './round';
 import { activePlayers, type Player, type Room } from './state';
 import { privateView, publicView } from './view';
 import { interact, makeStations, movePlayer, placeInSquare } from './world';
@@ -38,6 +39,8 @@ export class GameRoom implements Room {
   items: Room['items'] = [];
   stations = makeStations();
   goat = makeGoat();
+  snowballs: Room['snowballs'] = [];
+  targets = makeTargets();
   rng: Rng;
   reveal: Room['reveal'] = null;
   private conns = new Map<string, string>();
@@ -94,7 +97,8 @@ export class GameRoom implements Room {
         [p.dx, p.dz] = [clamp(m.dx), clamp(m.dz)];
         break;
       case 'interact':
-        interact(this, p);
+        if (p.inPen) throwSnowball(this, p);
+        else interact(this, p);
         break;
       case 'guess':
         if (this.phase === 'lastchance') lastChance(this, p, m.thingId);
@@ -113,7 +117,11 @@ export class GameRoom implements Room {
         if (p.id === this.hostId && this.phase === 'lobby') this.start(m.roundSec, m.fillBots);
         break;
       case 'toLobby':
-        if (p.id === this.hostId && this.phase === 'results') this.toLobby();
+        // The host can abandon a round from any phase (the menu's Back to lobby).
+        if (p.id === this.hostId && this.phase !== 'lobby') this.toLobby();
+        break;
+      case 'endRound':
+        if (p.id === this.hostId && (this.phase === 'playing' || this.phase === 'lastcall')) beginReveal(this);
         break;
     }
   }
@@ -155,6 +163,7 @@ export class GameRoom implements Room {
     }
     this.items = [];
     this.stations = makeStations();
+    this.snowballs = [];
     this.reveal = null;
     this.phase = 'lobby';
   }
@@ -167,12 +176,16 @@ export class GameRoom implements Room {
     for (const p of this.players.values()) {
       if (p.bot) tickBot(this, p, dt);
       movePlayer(p, dt);
+      if (Math.hypot(p.dx, p.dz) > 0.1) [p.fx, p.fz] = [p.dx, p.dz];
+      p.throwCd -= dt;
+      pushOffGoat(this, p);
       if (p.carrying != null) {
         const it = this.items.find((i) => i.uid === p.carrying);
         if (it) [it.x, it.z] = [p.x, p.z];
       }
     }
     tickGoat(this, dt);
+    tickPen(this, dt);
     tickRound(this, dt);
     for (const [conn, pid] of this.conns) {
       const p = this.players.get(pid);
@@ -205,7 +218,7 @@ function cleanLook(l: Partial<Look> | undefined): Look {
 
 function blankPlayer(id: string, token: string, look: Look): Player {
   return {
-    id, token, look, x: 0, z: 0, dx: 0, dz: 0, carrying: null, inPen: false, sign: null, spectator: false, connected: false,
+    id, token, look, x: 0, z: 0, dx: 0, dz: 0, fx: 0, fz: 1, throwCd: 0, carrying: null, inPen: false, sign: null, spectator: false, connected: false,
     role: null, guessesLeft: 0, accusationUsed: false, score: 0, stationPoints: 0, roundStart: 0, meter: 0, meterActive: false,
     awaitingChoice: false, caughtBy: null, lastChance: null, bot: null, leftAt: 0,
   };

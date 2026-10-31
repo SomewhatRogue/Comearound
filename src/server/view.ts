@@ -28,6 +28,8 @@ export function publicView(room: Room): PublicView {
     items: room.items.filter((i) => !i.gone && !i.heldBy).map((i) => ({ uid: i.uid, id: i.id, x: r2(i.x), z: r2(i.z), heldBy: null, station: i.station })),
     stations: room.stations.map((s) => ({ id: s.id, owner: s.owner, items: s.items.map((u) => room.items.find((i) => i.uid === u)!.id) })),
     goat: { x: r2(room.goat.x), z: r2(room.goat.z), mood: room.goat.mood, target: room.goat.target },
+    snowballs: room.snowballs.map((s) => ({ id: s.id, x: r2(s.x), z: r2(s.z) })),
+    targets: room.targets.map((t) => t.up),
     reveal: room.phase === 'results' ? room.reveal : null,
   };
 }

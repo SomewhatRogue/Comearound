@@ -134,3 +134,20 @@ export function goatMesh(): THREE.Group {
   }
   return g;
 }
+
+/** A crow target for the Pen snowball fight: a post with a crow that tips over when hit. */
+export function crowMesh(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(at(mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.9, 6), '#8b6a45'), 0, 0.45, 0));
+  const bird = new THREE.Group();
+  bird.name = 'bird';
+  bird.position.y = 0.9;
+  bird.add(at(mesh(new THREE.SphereGeometry(0.2, 8, 6), '#222228'), 0, 0.18, 0));
+  bird.add(at(mesh(new THREE.SphereGeometry(0.13, 8, 6), '#222228'), 0, 0.42, -0.06));
+  const beak = at(mesh(new THREE.ConeGeometry(0.05, 0.16, 5), '#e0a92e'), 0, 0.42, -0.22);
+  beak.rotation.x = -Math.PI / 2;
+  bird.add(beak);
+  for (const s of [-1, 1]) bird.add(at(mesh(new THREE.SphereGeometry(0.03, 5, 4), '#f5f5f5', false), s * 0.06, 0.47, -0.17));
+  g.add(bird);
+  return g;
+}

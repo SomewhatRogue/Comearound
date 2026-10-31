@@ -104,6 +104,58 @@ describe('round', () => {
     expect(SIGNS).toContain(a.sign);
   });
 
+  it('a :( player cannot accuse; they only guess', () => {
+    const h = harness(5);
+    h.say('p1', { t: 'start', roundSec: 120, fillBots: false });
+    const sad = h.players().find((p) => p.role === 'sad')!;
+    const k = h.players().find((p) => p.role === 'knower')!;
+    h.atBoard(sad.id);
+    h.say(sad.id, { t: 'accuse', targetId: k.id });
+    expect(sad.accusationUsed).toBe(false);
+    expect(sad.inPen).toBe(false);
+    expect(k.inPen).toBe(false);
+  });
+
+  it('the host can end a round early or abandon it to the lobby', () => {
+    const h = harness(3);
+    h.say('p1', { t: 'start', roundSec: 120, fillBots: true });
+    h.say('p2', { t: 'endRound' });
+    expect(h.room.phase).toBe('playing');
+    h.say('p1', { t: 'endRound' });
+    expect(['lastchance', 'results']).toContain(h.room.phase);
+    h.say('p1', { t: 'toLobby' });
+    expect(h.room.phase).toBe('lobby');
+  });
+
+  it('Pen snowballs knock down crow targets and score', () => {
+    const h = harness(5);
+    h.say('p1', { t: 'start', roundSec: 120, fillBots: false });
+    const [a, b] = h.players().filter((p) => p.role === 'knower');
+    h.atBoard(a.id);
+    h.say(a.id, { t: 'accuse', targetId: b.id });
+    expect(a.inPen).toBe(true);
+    const t = h.room.targets[1];
+    Object.assign(a, { x: t.x, z: t.z - 2, fx: 0, fz: 1 });
+    const before = a.score;
+    h.say(a.id, { t: 'interact' });
+    for (let i = 0; i < 10; i++) h.room.tick(0.05);
+    expect(t.up).toBe(false);
+    expect(a.score).toBe(before + 10);
+  });
+
+  it('the goat knocks a carried item loose', () => {
+    const h = harness(5);
+    h.say('p1', { t: 'start', roundSec: 120, fillBots: false });
+    const p = h.players()[0];
+    const it = h.room.items[0];
+    Object.assign(p, { x: 5, z: 0 });
+    [it.heldBy, p.carrying] = [p.id, it.uid];
+    Object.assign(h.room.goat, { x: 3, z: 0, mood: 'pester', target: p.id, timer: 5 });
+    for (let i = 0; i < 40 && p.carrying != null; i++) h.room.tick(0.05);
+    expect(p.carrying).toBe(null);
+    expect(it.heldBy).toBe(null);
+  });
+
   it('a :( player who guesses right at the board wins; one guess only', () => {
     const h = harness(5);
     h.say('p1', { t: 'start', roundSec: 120, fillBots: false });
@@ -147,14 +199,18 @@ describe('round', () => {
     expect(h.room.hostId).toBe('p2');
   });
 
-  it('bots act natural: nothing real is finished before last call, then they finish', () => {
-    const h = harness(1, { seed: 3 });
+  it.each([3, 5, 8, 13, 21])('bots act natural (seed %i): nothing real is finished before last call, then they finish', (seed) => {
+    const h = harness(1, { seed });
     h.say('p1', { t: 'start', roundSec: 120, fillBots: true });
     const thing = thingById.get(h.room.thingId!)!;
     for (let i = 0; i < 20 * 140 && h.room.phase === 'playing'; i++) h.room.tick(0.05);
+    // A :( bot may legitimately guess the thing and end the round before last call.
+    if (h.room.phase === 'results') return void expect(h.room.reveal!.winner).toBe('sad');
     expect(h.room.phase).toBe('lastcall');
-    const early = h.room.stations.filter((s) => makes(thing, s.area, s.items.map((u) => h.room.items.find((it) => it.uid === u)!.id)));
-    expect(early.length, 'a bot gave the thing away before last call').toBe(0);
+    // Knower bots must not finish the real thing early. (A :( bot stumbling into it is fair play.)
+    const knowers = new Set(h.players().filter((p) => p.role === 'knower').map((p) => p.id));
+    const early = h.room.stations.filter((s) => s.owner && knowers.has(s.owner) && makes(thing, s.area, s.items.map((u) => h.room.items.find((it) => it.uid === u)!.id)));
+    expect(early.length, 'a knower bot gave the thing away before last call').toBe(0);
     for (let i = 0; i < 20 * 140 && h.room.phase !== 'results'; i++) h.room.tick(0.05);
     expect(h.room.phase).toBe('results');
     const made = h.room.reveal!.rows.filter((r) => r.creation).length;

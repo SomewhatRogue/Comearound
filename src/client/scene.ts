@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { AREAS, AREA_RADIUS, BOARD, PEN, STATIONS, WORLD } from '../shared/map';
 import { mat } from './models';
+import { buildVillage } from './village';
 
 export interface Stage {
   renderer: THREE.WebGLRenderer;
@@ -62,12 +63,8 @@ export function makeStage(host: HTMLElement, lowfx = false): Stage {
   village.receiveShadow = true;
   scene.add(village);
 
+  buildVillage(scene);
   for (const a of AREAS) {
-    const patch = new THREE.Mesh(new THREE.CircleGeometry(AREA_RADIUS, 28), mat(a.color));
-    patch.rotation.x = -Math.PI / 2;
-    patch.position.set(a.x, 0.01, a.z);
-    patch.receiveShadow = true;
-    scene.add(patch);
     const l = label(a.name, 'area-label');
     l.position.set(a.x, 0.2, a.z - AREA_RADIUS + 0.6);
     scene.add(l);

@@ -98,16 +98,21 @@ export function interact(room: Room, p: Player): void {
     const d = dist(p.x, p.z, s ? s.x : it.x, s ? s.z : it.z);
     if (d < bd) [best, bd] = [it, d];
   }
-  if (!best) return;
-  if (best.station) {
+  if (best) pickUp(room, p, best);
+}
+
+/** Take this exact item (bots use this so they never grab the wrong thing by accident). */
+export function pickUp(room: Room, p: Player, it: Item): void {
+  if (p.carrying != null || it.heldBy || it.gone) return;
+  if (it.station) {
     // Taking from any station is allowed. Chaos is a feature.
-    const s = room.stations.find((st) => st.id === best!.station)!;
-    s.items = s.items.filter((u) => u !== best!.uid);
+    const s = room.stations.find((st) => st.id === it.station)!;
+    s.items = s.items.filter((u) => u !== it.uid);
     if (s.items.length === 0) s.owner = null;
-    best.station = null;
+    it.station = null;
   }
-  best.heldBy = p.id;
-  p.carrying = best.uid;
+  it.heldBy = p.id;
+  p.carrying = it.uid;
 }
 
 function putDown(room: Room, p: Player): void {

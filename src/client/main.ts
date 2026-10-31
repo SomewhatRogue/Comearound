@@ -62,7 +62,8 @@ let havePrediction = false;
 
 input.onInteract = () => net.send({ t: 'interact' });
 input.onEscape = () => {
-  panels.boardOpen = false;
+  if (panels.boardOpen) panels.boardOpen = false;
+  else panels.menuOpen = !panels.menuOpen;
 };
 input.onBoard = () => {
   if (net.pub?.phase === 'playing' && nearBoard()) panels.boardOpen = !panels.boardOpen;
@@ -74,7 +75,8 @@ net.onEvent = (ev) => {
     hud.pop(ev.amount, ev.label, at, stage.camera);
     if (ev.label === 'Something made!') sfx.fanfare();
   }
-  if (ev.kind === 'naughty') hud.naughty();
+  if (ev.kind === 'naughty') hud.naughty(ev.words);
+  if (ev.kind === 'bonked') hud.bonked();
   if (ev.kind === 'wrongAccusation') { hud.toast('Wrong! Off to the Pen with you.', 'bad'); sfx.thud(); }
   if (ev.kind === 'wrongGuess') { hud.toast('Not it. Your guess is spent. Act natural.', 'bad'); sfx.thud(); }
   if (ev.kind === 'caught') hud.toast('Got one! Only you know.', 'good');
@@ -92,7 +94,8 @@ function nearBoard(): boolean {
 function promptText(): string {
   const pub = net.pub;
   const me = self();
-  if (!pub || !me || me.spectator || me.inPen) return '';
+  if (!pub || !me || me.spectator) return '';
+  if (me.inPen) return pub.phase === 'playing' || pub.phase === 'lastcall' ? 'E: throw a snowball' : '';
   if (pub.phase === 'playing' && nearBoard()) return 'Q: open the board';
   if (pub.phase === 'lastcall' && nearBoard()) return 'The board is closed';
   if (me.carrying) {
@@ -102,11 +105,20 @@ function promptText(): string {
     if (st && pub.phase !== 'lobby' && (owner === me.id || (!owner && !mine))) return `E: place the ${itemById.get(me.carrying)!.name.toLowerCase()}`;
     return `E: drop the ${itemById.get(me.carrying)!.name.toLowerCase()}`;
   }
-  const near = pub.items.find((it) => {
-    const s = it.station ? STATIONS.find((st) => st.id === it.station)! : null;
-    return dist(predicted.x, predicted.z, s ? s.x : it.x, s ? s.z : it.z) <= REACH.item;
-  });
+  const near = net.pub?.items.find((it) => it.uid === nearestItem());
   return near ? `E: pick up the ${itemById.get(near.id)!.name.toLowerCase()}` : '';
+}
+
+/** The item E would pick up: the closest one in reach (the same rule as the server). */
+function nearestItem(): number | null {
+  let best: number | null = null;
+  let bd = REACH.item;
+  for (const it of net.pub?.items ?? []) {
+    const s = it.station ? STATIONS.find((st) => st.id === it.station)! : null;
+    const d = dist(predicted.x, predicted.z, s ? s.x : it.x, s ? s.z : it.z);
+    if (d < bd) [best, bd] = [it.uid, d];
+  }
+  return best;
 }
 
 let lastSent = '';
@@ -140,6 +152,7 @@ function frame(now: number) {
     predicted.x += (me.x - predicted.x) * pull;
     predicted.z += (me.z - predicted.z) * pull;
     entities.sync(pub, me.id, predicted, dt, now / 1000);
+    entities.highlight(me.carrying || me.inPen || me.spectator ? null : nearestItem());
     followCamera(stage, predicted.x, predicted.z, dt);
     hud.update(pub, net.me!, panels.boardOpen ? '' : promptText());
     panels.render(pub, net.me!);
@@ -162,5 +175,6 @@ w.render_game_to_text = () => {
   const s = self();
   return JSON.stringify({ phase: net.pub.phase, timeLeft: net.pub.timeLeft, you: s?.look.name, role: net.me.role, thing: net.me.thingId, inPen: s?.inPen, carrying: s?.carrying, score: net.me.score, players: net.pub.players.length, prompt: promptText() });
 };
-w.__debug_naughty = () => hud.naughty();
+if (net instanceof LocalNet) w.__solo_room = net.room;
+w.__debug_naughty = (words?: string) => hud.naughty(words);
 w.__game_actions__ = { send: (m: Parameters<NetLike['send']>[0]) => net.send(m), teleportHint: () => predicted.toArray() };

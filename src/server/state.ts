@@ -24,6 +24,10 @@ export interface Player {
   z: number;
   dx: number;
   dz: number;
+  /** Last direction moved: where a snowball goes. */
+  fx: number;
+  fz: number;
+  throwCd: number;
   carrying: number | null;
   inPen: boolean;
   sign: string | null;
@@ -74,14 +78,20 @@ export interface Station {
 export interface Goat {
   x: number;
   z: number;
-  mood: 'wander' | 'eat' | 'stare';
+  mood: 'wander' | 'eat' | 'stare' | 'pester';
   target: string | null;
   tx: number;
   tz: number;
   timer: number;
   stareCooldown: number;
   eatItem: number | null;
+  pesterCd: number;
+  /** Cooldown on staring down someone who is NOT in the Pen. */
+  freeStareCd: number;
 }
+
+export interface Snowball { id: number; x: number; z: number; vx: number; vz: number; owner: string; life: number }
+export interface PenTarget { x: number; z: number; up: boolean; downUntil: number }
 
 export interface Room {
   phase: Phase;
@@ -95,6 +105,8 @@ export interface Room {
   items: Item[];
   stations: Station[];
   goat: Goat;
+  snowballs: Snowball[];
+  targets: PenTarget[];
   rng: Rng;
   reveal: import('../shared/protocol').PublicView['reveal'];
   emit(playerId: string, ev: PrivateEvent): void;

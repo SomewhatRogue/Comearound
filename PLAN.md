@@ -18,13 +18,21 @@ waiting on Kyle's first play.
 - [x] Reconnect: token rejoin, seat grace, dead-socket detection
 - [x] Tests: 12 unit tests (< 1 s); probe with 3 real browsers and screenshots
 
+## Done since (playtest 1)
+
+- [x] :( guess only; host Esc menu; How to play; clearer role cards; item name labels
+- [x] Goat mischief (path-blocking, knocking items loose, nibbling tables, free-player stares)
+- [x] Pen snowball fight with crow targets
+- [x] Recognisable item models; pond, kitchen, garden and chapel dressed as places
+- [x] Solo mode and a shareable solo link
+
 ## Next (in order)
 
 1. Kyle plays it with a friend or two. Collect taste calls.
 2. Decide the location question (see DECISIONS 2026-10-30: everyone converging on one area is a tell).
 3. Deploy to Cloudflare (`npm run deploy`) on a custom domain; test from two networks.
 4. Art pass: KayKit characters (shared rig, toggled hats), props, outlines on characters and held items.
-5. Pen minigames (snowball fight first), tomato throwing.
+5. More Pen minigames (sword duels), tomato throwing from outside the Pen.
 6. Single-player tutorial (reuses bots).
 7. Guest identity + saved meta score and cosmetics (D1), then Discord linking.
 8. Discord Activity: touch controls, URL mappings, instanceId as room.

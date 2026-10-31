@@ -45,6 +45,7 @@ button { font: inherit; cursor: pointer; }
 .card h3 { margin: 2px 0 6px; font-size: 19px; line-height: 1.2; }
 .card p { margin: 6px 0 0; font-size: 14px; line-height: 1.35; }
 .card .where { color: var(--ink-soft); }
+.card .how { font-size: 13px; color: var(--ink-soft); border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 10px; }
 .card ul { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
 .card li { display: grid; font-size: 13px; background: var(--paper-2); border-radius: 8px; padding: 5px 9px; }
 .card li span { color: var(--ink-soft); }
@@ -97,7 +98,7 @@ button { font: inherit; cursor: pointer; }
 .sheet h2 { margin: 0 0 6px; font-size: 28px; }
 .sheet h3 { margin: 12px 0 6px; font-size: 16px; }
 .sheet h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); }
-.sheet .x { position: absolute; top: 14px; right: 14px; background: var(--paper-2); border: 2px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+.sheet .x { color: var(--ink); position: absolute; top: 14px; right: 14px; background: var(--paper-2); border: 2px solid var(--line); border-radius: 999px; padding: 4px 12px; }
 .cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 22px; }
 .group h4 { margin-top: 10px; }
 .things, .suspects { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; }
@@ -115,15 +116,28 @@ button { font: inherit; cursor: pointer; }
 .banner.sad { background: #8e5572; }
 
 /* The goat's close-up */
-#naughty { position: fixed; inset: 0; background: #120f18; display: grid; place-items: center; z-index: 50; overflow: hidden; }
-#naughty .goatface { position: absolute; width: 120vmin; height: 120vmin; border-radius: 42% 42% 48% 48%; background: radial-gradient(circle at 50% 40%, #fffaf0, #e3dccb 70%); transform: scale(0.6); }
-#naughty.play .goatface { animation: loom 3.6s cubic-bezier(.2,.7,.2,1) forwards; }
-#naughty .eye { position: absolute; top: 34%; width: 18%; height: 11%; border-radius: 50%; background: #c8a24a; }
-#naughty .eye::after { content: ''; position: absolute; left: 12%; right: 12%; top: 42%; height: 18%; background: #120f18; border-radius: 3px; }
-#naughty .eye.l { left: 22%; } #naughty .eye.r { right: 22%; }
-#naughty .snout { position: absolute; left: 36%; right: 36%; top: 62%; height: 16%; border-radius: 40%; background: #d8cdb6; }
-#naughty .word { position: relative; font-size: min(15vw, 140px); font-weight: 700; letter-spacing: 0.12em; color: #e23b2e; -webkit-text-stroke: 4px #120f18; paint-order: stroke fill; text-shadow: 0 8px 0 #120f18; opacity: 0; margin-top: 62vmin; }
-#naughty.play .word { animation: slowfade 2.6s 0.8s ease-in forwards; }
+#naughty { position: fixed; inset: 0; background: #120f18; display: grid; place-items: center; z-index: 50; overflow: hidden; opacity: 0; }
+#naughty.play { animation: closeup 6s ease-in-out forwards; }
+#naughty .goatface { position: absolute; width: 100vmin; height: 100vmin; transform: scale(0.55); }
+#naughty.play .goatface { animation: loom 5.6s cubic-bezier(.25,.6,.25,1) forwards; }
+#naughty .head { position: absolute; left: 18%; right: 18%; top: 8%; bottom: 4%; border-radius: 46% 46% 50% 50% / 40% 40% 60% 60%; background: radial-gradient(circle at 50% 38%, #fffaf0, #e6dfcf 72%); box-shadow: inset 0 -3vmin 0 #d8cfbc; }
+#naughty .ear { position: absolute; top: 20%; width: 30%; height: 12%; border-radius: 50%; background: #e6dfcf; box-shadow: inset 0 0 0 2.2vmin #e6dfcf, inset 0 0 0 10vmin #e9b7b0; }
+#naughty .ear.l { left: -4%; transform: rotate(18deg); transform-origin: right center; }
+#naughty .ear.r { right: -4%; transform: rotate(-18deg); transform-origin: left center; }
+#naughty .horn { position: absolute; top: -6%; width: 12%; height: 26%; border-radius: 50% 50% 10% 10% / 90% 90% 10% 10%; background: linear-gradient(#cdbb92, #a8956b); }
+#naughty .horn.l { left: 30%; transform: rotate(-24deg); }
+#naughty .horn.r { right: 30%; transform: rotate(24deg); }
+#naughty .eye { position: absolute; top: 36%; width: 15%; height: 9%; border-radius: 50%; background: #c8a24a; box-shadow: 0 0 0 0.6vmin #8f7426; }
+#naughty .eye::after { content: ''; position: absolute; left: 10%; right: 10%; top: 40%; height: 20%; background: #120f18; border-radius: 3px; }
+#naughty .eye.l { left: 27%; } #naughty .eye.r { right: 27%; }
+#naughty .snout { position: absolute; left: 35%; right: 35%; top: 64%; height: 17%; border-radius: 42%; background: #d8cdb6; }
+#naughty .snout i { position: absolute; top: 38%; width: 14%; height: 22%; border-radius: 50%; background: #5a4a3a; }
+#naughty .snout i:first-child { left: 26%; } #naughty .snout i:last-child { right: 26%; }
+#naughty .word { position: relative; background: #120f18b3; padding: 0.2em 0.5em 0.28em; border-radius: 0.3em; font-size: min(15vw, 140px); font-weight: 700; letter-spacing: 0.12em; color: #e23b2e; -webkit-text-stroke: 4px #120f18; paint-order: stroke fill; text-shadow: 0 8px 0 #120f18; opacity: 0; margin-top: 64vmin; text-align: center; line-height: 1; }
+#naughty.long .word { font-size: min(9vw, 92px); letter-spacing: 0.06em; }
+#naughty.play .word { animation: slowfade 2.6s 2s ease-in forwards; }
+#bonk { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 45%, #ffffffee 0 18%, #ffffff88 34%, transparent 60%); z-index: 40; }
+#bonk.play { animation: bonk 0.7s ease-out; }
 
 #conn { position: fixed; bottom: 14px; right: 14px; background: var(--bad); color: #fff; padding: 6px 12px; border-radius: 999px; font-weight: 600; font-size: 13px; }
 
@@ -134,7 +148,9 @@ button { font: inherit; cursor: pointer; }
 @keyframes rise { from { transform: translateY(24px) scale(0.96); opacity: 0; } }
 @keyframes tally { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
 @keyframes throb { to { transform: scale(1.06); } }
-@keyframes loom { 0% { transform: scale(0.5); } 100% { transform: scale(1.25); } }
+@keyframes loom { 0% { transform: scale(0.55); } 100% { transform: scale(1.2); } }
+@keyframes closeup { 0% { opacity: 0; } 22% { opacity: 1; } 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes bonk { 0% { opacity: 1; transform: scale(0.8); } 100% { opacity: 0; transform: scale(1.3); } }
 @keyframes slowfade { from { opacity: 0; letter-spacing: 0.5em; } to { opacity: 1; letter-spacing: 0.12em; } }
 
 @media (max-width: 700px) {
@@ -142,3 +158,10 @@ button { font: inherit; cursor: pointer; }
   #rolecard { max-width: calc(100% - 28px); top: 58px; }
   .side { left: 14px; right: 14px; width: auto; top: auto; bottom: 14px; max-height: 55%; }
 }
+
+/* Esc menu and how to play */
+.menu ol { padding-left: 20px; display: grid; gap: 8px; font-size: 15px; line-height: 1.4; }
+.menu .host { border-top: 2px solid var(--line); margin-top: 16px; padding-top: 6px; }
+.menu .big.danger { background: var(--bad); box-shadow: 0 4px 0 #8c2f27; }
+.side .how-mini { font-size: 13px; color: var(--ink-soft); margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.item-tag { font-weight: 600; font-size: 12px; color: var(--ink); background: #fffbe8; border: 2px solid var(--ink); padding: 1px 8px; border-radius: 999px; white-space: nowrap; }

@@ -16,6 +16,7 @@ export class Hud {
   private chimeStep = 0;
   private lastPop = 0;
   private shownScore = 0;
+  private naughtyTimer: ReturnType<typeof setTimeout> | undefined;
 
   update(pub: PublicView, me: PrivateView, prompt: string): void {
     $('phase').textContent = PHASE[pub.phase];
@@ -75,13 +76,25 @@ export class Hud {
   }
 
   /** The goat picked you. Whatever you were doing, you get the close-up. */
-  naughty(): void {
+  naughty(words = 'NAUGHTY'): void {
     const n = $('naughty');
+    n.querySelector('.word')!.textContent = words;
+    n.classList.toggle('long', words.length > 10);
     n.classList.remove('hidden', 'play');
     void n.offsetWidth;
     n.classList.add('play');
     sfx.naughty();
-    setTimeout(() => n.classList.add('hidden'), 3800);
+    clearTimeout(this.naughtyTimer);
+    this.naughtyTimer = setTimeout(() => n.classList.add('hidden'), 6000);
+  }
+
+  /** Hit by a snowball: a quick white splat. */
+  bonked(): void {
+    const b = $('bonk');
+    b.classList.remove('play');
+    void b.offsetWidth;
+    b.classList.add('play');
+    sfx.thud();
   }
 
   connection(ok: boolean): void {
@@ -92,13 +105,15 @@ export class Hud {
 function roleCard(pub: PublicView, me: PrivateView, inPen: boolean, sign: string | null, spectator: boolean): string {
   if (pub.phase === 'lobby' || pub.phase === 'results') return '';
   if (spectator) return `<div class="card"><h3>Round in progress</h3><p>You'll join the next one. Watch the chaos.</p></div>`;
-  const pen = inPen ? `<p class="pen-note">You're in the Pen${sign ? `, wearing <b>${sign}</b>` : ''}.</p>` : '';
+  const pen = inPen ? `<p class="pen-note">You're in the Pen${sign ? `, wearing <b>${sign}</b>` : ''}. Snowball fight! <b>E</b> throws the way you're facing. Knock the crows off the fence for points.</p>` : '';
   const sads = pub.sadCount > 1 ? `<p class="quiet">There are ${pub.sadCount} :( players this round.</p>` : '';
   if (me.role === 'knower' && me.thingId) {
     const t = thingById.get(me.thingId)!;
     const area = AREAS.find((a) => a.id === t.area)!.name;
     const parts = t.parts.map((p) => `<li><b>${p.label}</b><span>${p.accepts.map((a) => itemById.get(a)!.name).join(', ')}</span></li>`).join('');
-    return `<div class="card knower"><h4>The thing</h4><h3>${t.name}</h3><p class="where">Build it at the <b>${area}</b></p><ul>${parts}</ul>${pen}${sads}</div>`;
+    const how = inPen ? '' : `<p class="how">Pick up a part (<b>E</b>), carry it to an empty table at the ${area}, put it down (<b>E</b>). Hold your most telling part until last call. Think you've spotted the :( player? Accuse them at the board (<b>Q</b>).</p>`;
+    return `<div class="card knower"><h4>The thing</h4><h3>${t.name}</h3><p class="where">Build it at the <b>${area}</b></p><ul>${parts}</ul>${how}${pen}${sads}</div>`;
   }
-  return `<div class="card sad"><div class="frown">:(</div><h3>You don't know the thing</h3><p>Watch what people build. Act natural. ${me.guessesLeft ? 'One guess at the board.' : 'Your guess is spent.'}</p>${pen}${sads}</div>`;
+  const how = inPen ? '' : `<p class="how">Walk to the board and press <b>Q</b> to see every thing it could be. Watch where people build and what they carry. Pick one and make it too, so you blend in. ${me.guessesLeft ? 'When you are sure, guess at the board: you get <b>one</b> guess, before last call.' : 'Your guess is spent. Build the right thing and survive to the reveal.'}</p>`;
+  return `<div class="card sad"><div class="frown">:(</div><h3>You don't know the thing</h3>${how}${pen}${sads}</div>`;
 }
