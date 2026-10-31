@@ -10,6 +10,8 @@ import { TEAM_NAMES } from './scene';
 /** Extra lobby lines from whichever online layer is running (friends on the page, or an online room). */
 export interface LobbyExtra { html(pub?: PublicView, me?: PrivateView): string; key(): string; forceBots?: boolean; join?(v: string): void; leave?(): void; retry?(): void; share?(): void; joinCode?(code: string): void; newRoom?(): void; hostRoom?(): void; copyDetails?(): void }
 import { sfx } from './sfx';
+/** Whether sound and music are on, for the menu (main.ts fills these in). */
+export const audioState = { sound: () => true, music: () => true };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const store = {
@@ -234,7 +236,9 @@ function menuHtml(pub: PublicView, me: PrivateView): string {
   const hostTools = host
     ? `<div class="host"><h3>Host</h3>${pub.phase === 'playing' ? '<button class="big alt" data-act="endField">End this field now</button>' : ''}<button class="big danger" data-act="lobby">Back to the lobby</button></div>`
     : '';
-  return `<div class="sheet menu"><button class="x" data-act="close">Close</button><h2>How to herd</h2><ol>
+  const on = (k: 'sound' | 'music') => audioState[k]();
+  const chip = (k: 'sound' | 'music', name: string) => `<button class="chip ${on(k) ? 'on' : ''}" data-act="toggle" data-v="${k}">${name}: ${on(k) ? 'on' : 'off'}</button>`;
+  return `<div class="sheet menu"><button class="x" data-act="close">Close</button><div class="audio-row">${chip('sound', 'Sound')}${chip('music', 'Music')}</div><h2>How to herd</h2><ol>
     <li><b>Get the sheep into the pen</b>, through the gate. They count once they're inside. Every sheep in (and held for a moment) ends the field early, and the time left is bonus points.</li>
     <li><b>Sheep move away from dogs.</b> Walking pushes them; sprinting scatters them. Circle wide to get <b>behind</b> them (on the far side from the gate) before you push.</li>
     <li><b>Crouch</b> (<b>Space</b>, or <b>DOWN</b> on a phone) to stalk. Face the sheep and you give them <b>the eye</b> (the pale cone): they drift away calmly, without panicking.</li>
@@ -243,6 +247,6 @@ function menuHtml(pub: PublicView, me: PrivateView): string {
     <li><b>The goat</b> wanders, bleats and scatters sheep. It only gives way to a dog giving it the eye. Pen it for a bonus.</li>
     <li><b>Versus:</b> blue sheep go in the blue pen, orange in the orange pen. Pen yours, or herd the goat over to their side and let it bleat.</li>
     <li><b>Keys:</b> WASD or arrows move, Shift sprints, Space crouches, E barks, M mutes, Esc for this menu.</li>
-  </ol><div class="row"><button class="chip" data-act="toggle" data-v="sound">Sound on / off</button><button class="chip" data-act="toggle" data-v="music">Music on / off</button></div>${hostTools}</div>`;
+  </ol>${hostTools}</div>`;
 }
 

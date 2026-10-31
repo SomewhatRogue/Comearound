@@ -2,6 +2,28 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (night, later): versus lost its host at five minutes; sound and music on screen (Claude Opus 5.5)
+
+Co-op worked, versus "said host left". The relay log: the host's connection ended almost exactly
+300 s after it opened, Vercel's default maximum duration for a function, and the host's phone
+didn't hear about it until its heartbeat noticed 10 s later; meanwhile the friend was told the
+host left, took the room over after 6 to 9 s, and the match was gone. Co-op had simply ended
+within five minutes. Nothing to do with versus.
+
+- **Every socket swaps itself for a fresh one every 4 minutes** (`RelaySocket.rotate`), new one
+  first, the old one closing once the new one talks, so nobody ever reaches the limit. Only the
+  newest connection may say goodbye, so the swap is invisible to the room.
+- **`api/room.ts` maxDuration raised to 800 s** (Pro with Fluid compute), as a second margin.
+- **A friend waits 13 to 16 s, not 6 to 9, before taking over a room whose host left**, longer
+  than a host needs to notice a silently cut connection and come back.
+- **Tests:** the dev server can cut every relay connection after `RELAY_MAX_MS` without telling
+  the browser (what was seen live); browser scenario (V) plays a versus match for a minute on a
+  relay that cuts connections every 25 s. Without the swap it fails with "The host left", like
+  Kyle's match; with it, the host holds throughout.
+- **Sound and music are on screen at every size** (they were hidden on phones, reachable only in
+  the menu): small speaker and note buttons in the top bar, labelled on wide screens, crossed out
+  when off; the menu leads with Sound: on/off and Music: on/off.
+
 ## 2026-10-31 (night): friends were told an empty room had no host; sound on iPhones (Claude Opus 5.5)
 
 Kyle made a room and texted his friend the code; when she typed it in she was told there was no

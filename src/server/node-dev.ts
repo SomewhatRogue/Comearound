@@ -59,6 +59,16 @@ const wss = new WebSocketServer({ server: http });
 wss.on('connection', (ws, req) => {
   if ((req.url ?? '').startsWith('/api/room')) {
     void relays.then((r) => r[relayTurn++ % 2].attach(ws, new URL(req.url ?? '/', 'http://localhost')));
+    // RELAY_MAX_MS: end each connection after this long, the way Vercel ends a function at its
+    // maximum duration. The relay sees it close; the browser isn't told (seen live: a host's phone
+    // only noticed by its heartbeat), so its socket goes silent, then really closes later.
+    const max = Number(process.env.RELAY_MAX_MS) || 0;
+    if (max) setTimeout(() => {
+      ws.send = () => {};
+      ws.removeAllListeners('message');
+      ws.emit('close');
+      setTimeout(() => ws.terminate(), 20000);
+    }, max);
     return;
   }
   const m = /^\/parties\/game-server\/([\w-]{1,32})/.exec(req.url ?? '');

@@ -151,10 +151,11 @@ export class Online {
     this.set('waiting');
     if (this.joiner) return;
     clearTimeout(this.takeTimer);
-    // Give a host who's only reconnecting (a phone back from the background) time to come back first.
+    // Give a host who's only reconnecting time to come back first: a phone whose connection was
+    // cut without it hearing (seen live) only notices by its 10 s heartbeat.
     this.takeTimer = window.setTimeout(() => {
       if (this.state === 'waiting' && this.mode === 'friends') this.sock?.reconnect('take');
-    }, 6000 + Math.random() * 3000);
+    }, 13000 + Math.random() * 3000);
   }
 
   private dropGuest(): void {

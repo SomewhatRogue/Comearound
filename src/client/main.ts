@@ -15,7 +15,7 @@ import { Online } from './online';
 import { Party, SwitchNet } from './party';
 import { breedScale, dogMesh } from './models';
 import { Net, type NetLike } from './net';
-import { Panels } from './panels';
+import { audioState, Panels } from './panels';
 import { FieldView, followCamera, glLost, glRestored, makeStage } from './scene';
 import { sfx } from './sfx';
 import { SoundDirector } from './sounds';
@@ -97,7 +97,15 @@ const music = new Music();
 
 if (!isTouch) document.getElementById('controls')!.hidden = false;
 const muteBtn = document.getElementById('mute')!;
-const showMute = () => (muteBtn.textContent = sfx.muted ? 'Sound off' : 'Sound on');
+const showAudio = (btn: HTMLElement, on: boolean, name: string) => {
+  btn.classList.toggle('is-off', !on);
+  btn.querySelector('.lbl')!.textContent = `${name} ${on ? 'on' : 'off'}`;
+  btn.setAttribute('aria-pressed', String(on));
+  btn.title = `${name} ${on ? 'on' : 'off'}${name === 'Sound' ? ' (M)' : ''}`;
+  // The menu's buttons show the same.
+  for (const el of document.querySelectorAll<HTMLElement>(`[data-act="toggle"][data-v="${name.toLowerCase()}"]`)) el.classList.toggle('on', on), (el.textContent = `${name}: ${on ? 'on' : 'off'}`);
+};
+const showMute = () => showAudio(muteBtn, !sfx.muted, 'Sound');
 showMute();
 input.onMute = () => {
   sfx.toggleMute();
@@ -108,13 +116,15 @@ muteBtn.addEventListener('click', () => input.onMute());
 // those too; the touch controls cancel the touch's click, so touchend is the one that counts).
 for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, () => (sfx.unlock(), music.start()), { capture: true, passive: true });
 const musicBtn = document.getElementById('music')!;
-const showMusic = () => (musicBtn.textContent = music.on ? 'Music on' : 'Music off');
+const showMusic = () => showAudio(musicBtn, music.on, 'Music');
+audioState.sound = () => !sfx.muted;
+audioState.music = () => music.on;
 showMusic();
 musicBtn.addEventListener('click', () => {
   music.setOn(!music.on);
   showMusic();
 });
-// The menu's sound and music buttons (on phones the top bar hides them).
+// The menu's sound and music buttons.
 document.addEventListener('toggle-audio', (e) => {
   if ((e as CustomEvent).detail === 'music') musicBtn.click();
   else input.onMute();

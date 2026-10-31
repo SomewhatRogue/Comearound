@@ -22,6 +22,13 @@ export type RelayMsg =
   | { t: 'pong' };
 
 const MAX_GUESTS = 7;
+/**
+ * Vercel ends a function's connections at its maximum duration (5 minutes unless raised, and then
+ * without the phone always hearing about it), so every socket is swapped for a fresh one well
+ * before: the new one opens first, the old one closes once the new one is talking.
+ * `?rotate=ms` overrides it (tests).
+ */
+const ROTATE_MS = Number(new URLSearchParams(location.search).get('rotate')) || 4 * 60_000;
 
 export class RelaySocket {
   onMessage: (m: RelayMsg) => void = () => {};
@@ -33,6 +40,7 @@ export class RelaySocket {
   private timer = 0;
   private heardAt = 0;
   private beat = 0;
+  private rotateTimer = 0;
   private unlisten = () => {};
 
   constructor(private room: string, private id: string, public want: 'host' | 'take' | 'join') {
@@ -73,11 +81,17 @@ export class RelaySocket {
     if (this.closed) return;
     const ws = new WebSocket(this.url());
     this.ws = ws;
+    clearTimeout(this.rotateTimer);
+    this.rotateTimer = window.setTimeout(() => this.rotate(), ROTATE_MS);
     ws.onopen = () => {
       this.tries = 0;
       this.heardAt = performance.now();
     };
     ws.onmessage = (e) => {
+      if (this.ws !== ws) {
+        // The old socket during a swap: still deliver (nothing is lost), until the new one talks.
+        if (this.ws?.readyState === WebSocket.OPEN && this.newHeard) return void ws.close();
+      } else this.newHeard = true;
       this.heardAt = performance.now();
       try {
         const m = JSON.parse(String(e.data)) as RelayMsg;
@@ -92,6 +106,18 @@ export class RelaySocket {
       clearTimeout(this.timer);
       this.timer = window.setTimeout(() => this.open(), Math.min(8000, 400 * 2 ** Math.min(this.tries, 5)));
     };
+  }
+
+  private newHeard = false;
+
+  /** Swap to a fresh connection before Vercel ends this one: open the new one, then drop the old. */
+  private rotate(): void {
+    const old = this.ws;
+    if (this.closed || !old || old.readyState !== WebSocket.OPEN) return;
+    this.newHeard = false;
+    this.open();
+    // If the new one never talks, the old one still goes (the heartbeat recovers from there).
+    window.setTimeout(() => old.readyState <= WebSocket.OPEN && old.close(), 10000);
   }
 
   /** Reconnect now, optionally asking for a different role (taking over a room whose host left). */
@@ -115,6 +141,7 @@ export class RelaySocket {
   close(): void {
     this.closed = true;
     clearTimeout(this.timer);
+    clearTimeout(this.rotateTimer);
     clearInterval(this.beat);
     this.unlisten();
     this.ws?.close();

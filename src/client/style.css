@@ -226,9 +226,19 @@ body.touch #bark-key { display: none; }
   body.touch #dogbar { left: calc(14px + var(--safe-l)); transform: none; justify-items: start; }
   body.touch #stamina { width: 110px; }
 }
+/* Sound and music: always on screen; on narrow screens just the icon. */
+#topbar > button.audio { padding: 6px 12px 6px 10px; gap: 6px; }
+button.audio svg { width: 18px; height: 18px; flex: none; }
+button.audio .off { display: none; }
+button.audio.is-off { opacity: 0.6; }
+button.audio.is-off .on { display: none; }
+button.audio.is-off .off { display: inline; }
 @media (max-width: 760px) {
-  #mute, #music { display: none !important; }
+  #topbar > button.audio { padding: 6px 9px; }
+  button.audio .lbl { display: none; }
 }
+.menu .audio-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+.menu .audio-row .chip { font-size: 15px; padding: 8px 14px; }
 @media (max-width: 560px) {
   #topbar { gap: 4px; max-width: calc(100% - 12px); }
   #topbar > div, #topbar > button, .pen-count { padding: 4px 8px; font-size: 12px; }

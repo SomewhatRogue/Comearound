@@ -11,7 +11,10 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const ROOT = path.join(__dirname, '..');
-const PORT_MEM = 8795, PORT_REDIS = 8796, REDIS_PORT = 6411;
+const PORT_MEM = 8795, PORT_REDIS = 8796, PORT_CUT = 8797, REDIS_PORT = 6411;
+// PORT_CUT: like PORT_REDIS, but every connection is cut after CUT_MS, as Vercel does at a
+// function's maximum duration; its pages swap connections every ROTATE_MS (?rotate=).
+const CUT_MS = 25000, ROTATE_MS = Number(process.env.ROTATE_MS) || 15000;
 const timeline = [];
 const t0 = Date.now();
 const note = (s) => { const line = `${((Date.now() - t0) / 1000).toFixed(1)}s ${s}`; timeline.push(line); console.error(line); };
@@ -58,7 +61,8 @@ const FREEZE = () => {
     await new Promise((r) => setTimeout(r, 400));
     serve(PORT_MEM, {});
     if (haveRedis) serve(PORT_REDIS, { REDIS_URL: `redis://127.0.0.1:${REDIS_PORT}` });
-    await Promise.all([up(PORT_MEM), haveRedis ? up(PORT_REDIS) : null]);
+    if (haveRedis && only('V')) serve(PORT_CUT, { REDIS_URL: `redis://127.0.0.1:${REDIS_PORT}`, RELAY_MAX_MS: String(CUT_MS) });
+    await Promise.all([up(PORT_MEM), haveRedis ? up(PORT_REDIS) : null, haveRedis && only('V') ? up(PORT_CUT) : null]);
     note(`servers up${haveRedis ? ' (with Redis)' : ' (no redis-server: Redis scenario skipped)'}`);
     browser = await chromium.launch();
     const errors = report.errors;
@@ -68,7 +72,7 @@ const FREEZE = () => {
       await ctx.addInitScript(FREEZE);
       const p = await ctx.newPage();
       p.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
-      await p.goto(`http://127.0.0.1:${port}/?lowfx&norender&name=${name}${query}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      await p.goto(`http://127.0.0.1:${port}/?lowfx&norender&name=${name}${port === PORT_CUT ? `&rotate=${ROTATE_MS}` : ''}${query}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
       await p.waitForFunction(() => window.__GAME_STATE__?.pub && window.__party, null, { timeout: 60000 });
       return p;
     };
@@ -198,6 +202,31 @@ const FREEZE = () => {
       g.ok = g.friendState === 'guest' && g.hostState === 'host' && g.together === 'Kyle,Sam';
       report.scenarios['H: host alone for 20 s, then the friend types the code'] = g;
       note(`H: ${JSON.stringify(g)}`);
+      await Promise.all([h, f].map((p) => p.context().close().catch(() => {})));
+    }
+
+    // V: a versus match, host and friend, played for a minute, on a relay that cuts every
+    // connection after 25 s (Vercel's maximum duration, scaled down): nobody should lose the host.
+    if (only('V') && haveRedis) {
+      const { p: h, code } = await host(PORT_CUT, 'Kyle');
+      const f = await joinByCode(PORT_CUT, 'Sam', code);
+      await asGuest(f);
+      await hostHas(h, 1);
+      await h.click('[data-act="mode"][data-v="versus"]');
+      await h.click('[data-act="start"]');
+      await f.waitForFunction(() => window.__GAME_STATE__.pub.phase === 'playing' && window.__GAME_STATE__.pub.mode === 'versus', null, { timeout: 30000 });
+      const v = { states: [], toasts: [] };
+      await f.evaluate(() => { window.__toasts = []; new MutationObserver(() => document.querySelectorAll('.toast').forEach((t) => window.__toasts.includes(t.textContent) || window.__toasts.push(t.textContent))).observe(document.body, { childList: true, subtree: true }); });
+      for (let i = 0; i < 12; i++) {
+        await f.keyboard.down(i % 2 ? 'a' : 'w');
+        await f.waitForTimeout(5000);
+        await f.keyboard.up(i % 2 ? 'a' : 'w');
+        v.states.push(`${await state(h)}/${await state(f)}/${await f.evaluate(() => window.__GAME_STATE__.pub.phase)}`);
+      }
+      v.toasts = await f.evaluate(() => window.__toasts);
+      v.ok = v.states.every((s) => s.startsWith('host/guest/')) && !v.toasts.some((t) => /host left/i.test(t));
+      report.scenarios['V: a versus match for a minute, connections cut every 25 s, keeps its host'] = v;
+      note(`V: ${JSON.stringify(v)}`);
       await Promise.all([h, f].map((p) => p.context().close().catch(() => {})));
     }
 
