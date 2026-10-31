@@ -20,6 +20,9 @@ within five minutes. Nothing to do with versus.
   the browser (what was seen live); browser scenario (V) plays a versus match for a minute on a
   relay that cuts connections every 25 s. Without the swap it fails with "The host left", like
   Kyle's match; with it, the host holds throughout.
+- **Verified live:** a host and a friend (by code) on comearound-lyart.vercel.app for 9 minutes,
+  a whole versus match and then the results screen; checked every 30 s, the host stayed host and
+  both dogs stayed connected throughout, well past the old 5-minute cut.
 - **Sound and music are on screen at every size** (they were hidden on phones, reachable only in
   the menu): small speaker and note buttons in the top bar, labelled on wide screens, crossed out
   when off; the menu leads with Sound: on/off and Music: on/off.
