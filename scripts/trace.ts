@@ -14,7 +14,7 @@ while (room.phase === 'playing') {
   room.tick(0.05); t += 0.05; k++;
   if (t >= from && k % Math.round(every * 20) === 0) {
     const open = room.sheep.filter((o) => !isPenned(room.field, o));
-    console.log(`t=${f(t)} pen=${room.sheep.length - open.length}/${room.sheep.length} open=${open.map((o) => `${f(o.x)},${f(o.z)}`).join(' ')}${room.goat ? ` goat=${f(room.goat.x)},${f(room.goat.z)} ${room.goat.mood}` : ''}`);
+    console.log(`t=${f(t)} pen=${room.sheep.length - open.length}/${room.sheep.length} open=${open.map((o) => `${f(o.x)},${f(o.z)}`).join(' ')}${room.goats.map((g) => ` goat=${f(g.x)},${f(g.z)} ${g.mood}`).join('')}`);
     console.log('   dogs ' + [...room.dogs.values()].map((d) => `(${f(d.x)},${f(d.z)})${d.posture[0]}${d.frozen > 0 ? 'F' : ''}`).join(' '));
   }
 }

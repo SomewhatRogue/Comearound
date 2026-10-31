@@ -1,7 +1,7 @@
 /**
  * Server-side state. Everything here is authoritative and lives only on the server.
  */
-import type { FieldDef } from '../shared/field';
+import type { CourseId, FieldDef } from '../shared/field';
 import type { FieldScore, LeaderRow, Look, Mode, Phase, Posture, PrivateEvent } from '../shared/protocol';
 import type { Rng } from '../shared/rng';
 
@@ -63,17 +63,23 @@ export interface Sheep {
   wx: number;
   wz: number;
   wanderT: number;
+  /** Got out through a gap in the fence: gone for this field. */
+  lost: boolean;
 }
 
 export interface Goat {
+  id: number;
   x: number;
   z: number;
   vx: number;
   vz: number;
   rot: number;
-  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee' | 'stroll' | 'block' | 'escape';
+  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee' | 'stroll' | 'block' | 'escape' | 'charge';
   /** What it's up to next, and for how long. */
-  plan: 'graze' | 'flock' | 'gate';
+  plan: 'graze' | 'flock' | 'gate' | 'charge' | 'raid';
+  /** Where a charge is headed (straight through the flock and out the other side). */
+  cx: number;
+  cz: number;
   planT: number;
   /** Pushed around by dogs recently: plans wait. */
   pushedT: number;
@@ -106,11 +112,14 @@ export interface Room {
   fieldCount: number;
   dogs: Map<string, Dog>;
   sheep: Sheep[];
-  goat: Goat | null;
+  goats: Goat[];
+  /** Wind: the unit direction it blows toward, and strength 0..1 (gusts included). */
+  wind: { x: number; z: number; s: number };
+  course: CourseId;
   fieldScores: FieldScore[][];
   leaderboard: LeaderRow[];
   /** Barks and bleats this tick, for the flock to react to. */
-  noises: { kind: 'bark' | 'bleat'; x: number; z: number; by: string | null }[];
+  noises: { kind: 'bark' | 'bleat'; x: number; z: number; by: string | null; power?: number }[];
   rng: Rng;
   emit(dogId: string, ev: PrivateEvent): void;
 }

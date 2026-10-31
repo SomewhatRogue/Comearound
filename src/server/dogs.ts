@@ -2,7 +2,8 @@
  * Dogs: movement by posture (walk, sprint with stamina, crouch to stalk), lying down when crouched
  * and still, and barking. What dogs do TO sheep lives in flock.ts.
  */
-import { DOG } from '../shared/tuning';
+import { inMud, inWater } from '../shared/field';
+import { DOG, HAZARD } from '../shared/tuning';
 import { collide, separate } from './physics';
 import type { Dog, Room } from './state';
 
@@ -20,13 +21,15 @@ export function moveDog(room: Room, d: Dog, dt: number): void {
   d.stillFor = moving ? 0 : d.stillFor + dt;
   const from = { x: d.x, z: d.z };
   if (moving) {
-    const speed = d.posture === 'sprint' ? DOG.sprint : d.posture === 'crouch' ? DOG.crouch : DOG.walk;
+    // Mud slows you; so does wading a stream or pond.
+    const ground = inMud(room.field, d.x, d.z) ? HAZARD.mudSlow : inWater(room.field, d.x, d.z) ? HAZARD.wadeSlow : 1;
+    const speed = (d.posture === 'sprint' ? DOG.sprint : d.posture === 'crouch' ? DOG.crouch : DOG.walk) * ground;
     const k = Math.min(1, len);
     d.x += (d.dx / len) * speed * k * dt;
     d.z += (d.dz / len) * speed * k * dt;
     d.rot = Math.atan2(d.dx, d.dz);
   }
-  [d.x, d.z] = collide(room.field, d.x, d.z, DOG.radius, { from, gateShut: true });
+  [d.x, d.z] = collide(room.field, d.x, d.z, DOG.radius, { from, gateShut: true, water: false });
 }
 
 /** Dogs don't stack on top of each other. */

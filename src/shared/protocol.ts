@@ -2,6 +2,7 @@
  * Every message that crosses the wire. Herding has no secrets, so the public view is most of it;
  * the private view carries your own stamina and cooldowns.
  */
+import type { CourseId } from './field';
 import type { Breed } from './looks';
 
 export type Phase = 'lobby' | 'intro' | 'playing' | 'fieldEnd' | 'results';
@@ -16,7 +17,7 @@ export type ClientMsg =
   | { t: 'input'; dx: number; dz: number; sprint: boolean; crouch: boolean }
   | { t: 'bark' }
   | { t: 'look'; look: Look }
-  | { t: 'start'; mode: Mode; fillBots: boolean }
+  | { t: 'start'; mode: Mode; fillBots: boolean; course?: CourseId }
   | { t: 'toLobby' }
   /** Host only: skip the rest of this field. */
   | { t: 'endField' };
@@ -49,14 +50,17 @@ export interface SheepPub {
   fear: number;
   team: 0 | 1 | null;
   penned: boolean;
+  /** Got out through a gap in the fence. */
+  lost: boolean;
 }
 
 export interface GoatPub {
+  id: number;
   x: number;
   z: number;
   rot: number;
   /** stroll: heading for the flock to make trouble; block: loitering in a gateway; escape: leaving a pen. */
-  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee' | 'stroll' | 'block' | 'escape';
+  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee' | 'stroll' | 'block' | 'escape' | 'charge';
   /** 0 to 1: how close the goat is to coming over to stare someone down. */
   annoy: number;
   target: string | null;
@@ -71,10 +75,13 @@ export interface FieldScore {
   timeBonus: number;
   calmBonus: number;
   goatBonus: number;
+  /** Sheep lost through gaps in the fence, and the points that cost. */
+  lost: number;
+  lostPenalty: number;
   score: number;
 }
 
-export interface LeaderRow { names: string[]; score: number; mode: Mode; when: number }
+export interface LeaderRow { names: string[]; score: number; mode: Mode; course: CourseId; when: number }
 
 export interface PublicView {
   phase: Phase;
@@ -88,7 +95,11 @@ export interface PublicView {
   timeLeft: number;
   dogs: DogPub[];
   sheep: SheepPub[];
-  goat: GoatPub | null;
+  goats: GoatPub[];
+  /** Which trials course this run is (gentle or tricky). */
+  course: CourseId;
+  /** The direction the wind blows toward (unit x, z) and its strength 0..1. */
+  wind: { x: number; z: number; s: number };
   /** Scores per field so far this run; filled in as each field ends. */
   fieldScores: FieldScore[][];
   /** Best runs in this room (and, for solo, this browser keeps its own). */

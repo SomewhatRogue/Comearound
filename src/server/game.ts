@@ -13,7 +13,8 @@ import { DOG } from '../shared/tuning';
 import { makeBrain, tickBot } from './bots';
 import { bark, moveDog, separateDogs } from './dogs';
 import { spawnFlock, tickFlock } from './flock';
-import { tickGoat } from './goat';
+import { tickGoats } from './goat';
+import { tickWind } from './wind';
 import { endField, startRun, tickRound } from './round';
 import { activeDogs, type Dog, type Room } from './state';
 import { privateView, publicView } from './view';
@@ -44,7 +45,9 @@ export class GameRoom implements Room {
   fieldCount = TRIALS.length;
   dogs = new Map<string, Dog>();
   sheep: Room['sheep'] = [];
-  goat: Room['goat'] = null;
+  goats: Room['goats'] = [];
+  wind: Room['wind'] = { x: 1, z: 0, s: 0 };
+  course: Room['course'] = 'gentle';
   fieldScores: Room['fieldScores'] = [];
   leaderboard: Room['leaderboard'] = [];
   noises: Room['noises'] = [];
@@ -99,7 +102,10 @@ export class GameRoom implements Room {
         if (this.phase === 'lobby') d.look = cleanLook(m.look);
         break;
       case 'start':
-        if (d.id === this.hostId && (this.phase === 'lobby' || this.phase === 'results')) this.start(m.mode === 'versus' ? 'versus' : 'trials', m.fillBots);
+        if (d.id === this.hostId && (this.phase === 'lobby' || this.phase === 'results')) {
+          this.course = m.course === 'tricky' ? 'tricky' : 'gentle';
+          this.start(m.mode === 'versus' ? 'versus' : 'trials', m.fillBots);
+        }
         break;
       case 'toLobby':
         if (d.id === this.hostId && this.phase !== 'lobby') this.toLobby();
@@ -156,8 +162,9 @@ export class GameRoom implements Room {
       if (d.bot || !d.connected) this.dogs.delete(id);
       else Object.assign(d, { spectator: false, frozen: 0, auto: null });
     }
-    this.goat = null;
+    this.goats = [];
     this.field = TRIALS[0];
+    this.wind = { x: 1, z: 0, s: 0 };
     this.phase = 'lobby';
     this.sheep = spawnFlock(this);
   }
@@ -172,7 +179,10 @@ export class GameRoom implements Room {
     }
     for (const d of this.dogs.values()) if (!d.spectator) moveDog(this, d, this.phase === 'playing' || this.phase === 'lobby' ? dt : 0);
     separateDogs(this);
-    if (this.phase === 'playing') tickGoat(this, dt);
+    if (this.phase === 'playing') {
+      tickWind(this, dt);
+      tickGoats(this, dt);
+    }
     if (this.phase === 'playing' || this.phase === 'lobby') tickFlock(this, dt);
     this.noises = [];
     tickRound(this, dt);
@@ -197,7 +207,7 @@ export class GameRoom implements Room {
   /** One blocking call for probes: where the run stands, as one line. */
   report(): string {
     const penned = publicView(this).sheep.filter((s) => s.penned).length;
-    return `phase=${this.phase} mode=${this.mode} field=${this.fieldIdx + 1}/${this.fieldCount} t=${this.timeLeft.toFixed(1)} dogs=${this.dogs.size} sheep=${penned}/${this.sheep.length} goat=${this.goat?.mood ?? '-'}`;
+    return `phase=${this.phase} mode=${this.mode} field=${this.fieldIdx + 1}/${this.fieldCount} t=${this.timeLeft.toFixed(1)} dogs=${this.dogs.size} sheep=${penned}/${this.sheep.length} goats=${this.goats.map((q) => q.mood).join(',') || '-'}`;
   }
 }
 

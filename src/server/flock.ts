@@ -7,8 +7,9 @@
  * - a bark kicks every sheep in earshot away fast and makes them panic
  * Penned sheep are calmer, so a held pen stays held.
  */
-import { gateOf, inPen, type FieldDef } from '../shared/field';
-import { DOG, GOAT, SHEEP } from '../shared/tuning';
+import { gateOf, inMud, inPen, outOfField, type FieldDef } from '../shared/field';
+import { DOG, GOAT, HAZARD, SHEEP } from '../shared/tuning';
+import { hazardForces } from './hazards';
 import { isDown } from './dogs';
 import { clampLen, collide, separate } from './physics';
 import type { Room, Sheep } from './state';
@@ -22,7 +23,7 @@ export function spawnFlock(room: Room): Sheep[] {
       const r = Math.sqrt(room.rng.next()) * 2.5;
       const x = f.x + Math.cos(a) * r;
       const z = f.z + Math.sin(a) * r;
-      out.push({ id: id++, x, z, vx: 0, vz: 0, rot: room.rng.range(-3, 3), fear: 0, startle: 0, team: f.team, wx: x, wz: z, wanderT: room.rng.range(0, 4) });
+      out.push({ id: id++, x, z, vx: 0, vz: 0, rot: room.rng.range(-3, 3), fear: 0, startle: 0, team: f.team, wx: x, wz: z, wanderT: room.rng.range(0, 4), lost: false });
     }
   }
   return out;
@@ -39,6 +40,7 @@ export function tickFlock(room: Room, dt: number): void {
   const before = flock.map((s) => ({ x: s.x, z: s.z }));
   const pennedNow = flock.map((s) => isPenned(room.field, s));
   for (const s of flock) {
+    if (s.lost) continue;
     const penned = pennedNow[flock.indexOf(s)];
     const calm = penned ? SHEEP.pennedCalm : 1;
     let ax = 0;
@@ -51,7 +53,7 @@ export function tickFlock(room: Room, dt: number): void {
     let nearD = Infinity;
     for (const o of flock) {
       // Sheep on the other side of a pen fence aren't company.
-      if (o === s || pennedNow[flock.indexOf(o)] !== penned) continue;
+      if (o === s || o.lost || pennedNow[flock.indexOf(o)] !== penned) continue;
       const dx = o.x - s.x;
       const dz = o.z - s.z;
       const d = Math.hypot(dx, dz);
@@ -134,41 +136,24 @@ export function tickFlock(room: Room, dt: number): void {
       }
     }
 
-    // The goat: sheep give it room, so a goat standing in a gateway blocks it.
-    const goat = room.goat;
-    if (goat) {
-      const dx = s.x - goat.x;
-      const dz = s.z - goat.z;
-      const d = Math.hypot(dx, dz) || 1e-3;
-      if (d < GOAT.sheepAvoid) {
-        const k = 1 - d / GOAT.sheepAvoid;
-        ax += (dx / d) * k * 5;
-        az += (dz / d) * k * 5;
-        push = Math.max(push, k * 0.6);
-      }
-    }
-
-    // Now and then a sheep takes fright at nothing at all and bolts (not near a dog lying down).
-    if (!penned && room.phase === 'playing' && room.rng.next() < dt / SHEEP.spookEvery && !dogs.some((d) => isDown(d) && Math.hypot(d.x - s.x, d.z - s.z) < DOG.calmRadius)) {
-      const a = room.rng.range(0, Math.PI * 2);
-      s.vx += Math.cos(a) * SHEEP.spookKick;
-      s.vz += Math.sin(a) * SHEEP.spookKick;
-      s.startle = Math.max(s.startle, 0.8);
-      s.fear = Math.min(1, s.fear + 0.5);
-    }
+    // Goats, brambles, the wind, frights (hazards.ts).
+    const hf = hazardForces(room, s, dogs, penned, dt);
+    ax += hf.ax;
+    az += hf.az;
+    push = Math.max(push, hf.push);
 
     // Barks and bleats: a kick away and a fright.
     for (const nz of room.noises) {
       const dx = s.x - nz.x;
       const dz = s.z - nz.z;
       const d = Math.hypot(dx, dz) || 1e-3;
-      const r = nz.kind === 'bark' ? SHEEP.barkRadius : 6.5;
+      const r = nz.kind === 'bark' ? SHEEP.barkRadius : GOAT.bleatRadius;
       if (d > r) continue;
-      const kick = (nz.kind === 'bark' ? SHEEP.barkKick : 5) * (1 - d / r) * calm;
+      const kick = (nz.kind === 'bark' ? SHEEP.barkKick : GOAT.bleatKick) * (1 - d / r) * Math.min(1, calm * (nz.power ?? 1));
       s.vx += (dx / d) * kick;
       s.vz += (dz / d) * kick;
       s.startle = Math.max(s.startle, 1 - d / r);
-      s.fear = Math.min(1, s.fear + (nz.kind === 'bark' ? 0.8 : 1) * (1 - d / r) * calm);
+      s.fear = Math.min(1, s.fear + (nz.kind === 'bark' ? 0.8 : 1) * (1 - d / r) * Math.min(1, calm * (nz.power ?? 1)));
     }
 
     // Graze: drift toward a patch of grass near where the flock is, or around the pen when penned.
@@ -194,12 +179,12 @@ export function tickFlock(room: Room, dt: number): void {
     // Integrate: scared sheep run, calm sheep amble.
     s.vx = (s.vx + ax * dt) * Math.exp(-dt * (push > 0 ? 1.2 : 2.4));
     s.vz = (s.vz + az * dt) * Math.exp(-dt * (push > 0 ? 1.2 : 2.4));
-    const max = push > 0 || s.fear > 0.3 ? SHEEP.flee * (0.6 + 0.4 * Math.max(s.fear, push)) : SHEEP.graze * 2;
+    const max = (push > 0 || s.fear > 0.3 ? SHEEP.flee * (0.6 + 0.4 * Math.max(s.fear, push)) : SHEEP.graze * 2) * (inMud(room.field, s.x, s.z) ? HAZARD.mudSlow : 1);
     [s.vx, s.vz] = clampLen(s.vx, s.vz, max);
     s.x += s.vx * dt;
     s.z += s.vz * dt;
     const [hx, hz] = [s.x, s.z];
-    [s.x, s.z] = collide(room.field, s.x, s.z, SHEEP.radius, { from: before[flock.indexOf(s)] });
+    [s.x, s.z] = collide(room.field, s.x, s.z, SHEEP.radius, { from: before[flock.indexOf(s)], leak: true });
     // Hitting a fence stops you going into it (no pressing on through it forever).
     const [cx2, cz2] = [s.x - hx, s.z - hz];
     const cl = Math.hypot(cx2, cz2);
@@ -210,9 +195,18 @@ export function tickFlock(room: Room, dt: number): void {
     if (Math.hypot(s.vx, s.vz) > 0.15) s.rot = Math.atan2(s.vx, s.vz);
     s.fear = Math.max(0, s.fear - 0.12 * dt);
   }
-  for (let i = 0; i < flock.length; i++) for (let j = i + 1; j < flock.length; j++) separate(flock[i], flock[j], SHEEP.radius * 2);
+  const live = flock.filter((s) => !s.lost);
+  for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) separate(live[i], live[j], SHEEP.radius * 2);
   // Sheep give way to dogs entirely (a dog can stand in a gap and block it).
-  for (const s of flock) for (const d of dogs) separate(s, d, SHEEP.radius + DOG.radius, 1);
+  for (const s of live) for (const d of dogs) separate(s, d, SHEEP.radius + DOG.radius, 1);
   // Being shoved never puts a sheep through a fence.
-  flock.forEach((s, i) => ([s.x, s.z] = collide(room.field, s.x, s.z, SHEEP.radius, { from: before[i] })));
+  flock.forEach((s, i) => {
+    if (s.lost) return;
+    [s.x, s.z] = collide(room.field, s.x, s.z, SHEEP.radius, { from: before[i], leak: true });
+    // Out through a gap in the fence: gone.
+    if (outOfField(room.field, s.x, s.z, 1.2)) {
+      s.lost = true;
+      if (room.phase === 'playing') for (const d of dogs) room.emit(d.id, { kind: 'toast', text: 'A sheep got out through the broken fence!' });
+    }
+  });
 }

@@ -103,13 +103,13 @@ describe('the goat', () => {
   it('barking near it annoys it until it comes over, stares, freezes you and says NAUGHTY', () => {
     const h = harness(2);
     h.say(0, { t: 'start', mode: 'trials', fillBots: false });
-    // Field 2 has the goat.
-    h.room.fieldIdx = 1;
+    // Field 2 (the orchard) has the goat: end field 1 to get there.
+    h.room.fieldIdx = 0;
     (h.room as any).phase = 'fieldEnd';
     h.room.timeLeft = 0;
     h.toPlaying();
     const [a, b] = [h.dog(0), h.dog(1)];
-    const g = h.room.goat!;
+    const g = h.room.goats[0];
     Object.assign(a, { x: g.x - 6, z: g.z });
     Object.assign(b, { x: -19, z: -14 });
     g.stareCd = 0;
@@ -148,7 +148,7 @@ describe('goat mischief', () => {
   it('a goat standing in the gateway keeps sheep out of it', () => {
     const h = orchard();
     const pen = h.room.field.pens[0];
-    const g = h.room.goat!;
+    const g = h.room.goats[0];
     const gt = { x: pen.x, z: pen.z + pen.d / 2 };
     Object.assign(g, { x: gt.x, z: gt.z + 0.9, plan: 'gate', planT: 99, timer: 0, bleatIn: 99 });
     const s = h.room.sheep[0];
@@ -161,7 +161,7 @@ describe('goat mischief', () => {
     const escaped = (guard: boolean) => {
       const h = orchard();
       const pen = h.room.field.pens[0];
-      const g = h.room.goat!;
+      const g = h.room.goats[0];
       Object.assign(g, { x: pen.x, z: pen.z, planT: 0, bleatIn: 99 });
       const d = h.dog(0);
       if (guard) {

@@ -11,7 +11,6 @@ import type { Dog, Room } from './state';
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export function publicView(room: Room): PublicView {
-  const g = room.goat;
   return {
     phase: room.phase,
     mode: room.mode,
@@ -24,8 +23,10 @@ export function publicView(room: Room): PublicView {
       id: d.id, look: d.look, team: d.team, x: r2(d.x), z: r2(d.z), rot: r2(d.rot), posture: d.posture,
       down: isDown(d), frozen: d.frozen > 0, barks: d.barks, bot: !!d.bot, connected: d.connected || !!d.bot, spectator: d.spectator,
     })),
-    sheep: room.sheep.map((s) => ({ id: s.id, x: r2(s.x), z: r2(s.z), rot: r2(s.rot), fear: r2(s.fear), team: s.team, penned: isPenned(room.field, s) })),
-    goat: g ? { x: r2(g.x), z: r2(g.z), rot: r2(g.rot), mood: g.mood, annoy: r2(g.annoy), target: g.target, bleats: g.bleats, penned: goatPenned(room) } : null,
+    sheep: room.sheep.map((s) => ({ id: s.id, x: r2(s.x), z: r2(s.z), rot: r2(s.rot), fear: r2(s.fear), team: s.team, penned: !s.lost && isPenned(room.field, s), lost: s.lost })),
+    goats: room.goats.map((g) => ({ id: g.id, x: r2(g.x), z: r2(g.z), rot: r2(g.rot), mood: g.mood, annoy: r2(g.annoy), target: g.target, bleats: g.bleats, penned: goatPenned(room, g) })),
+    course: room.course,
+    wind: { x: r2(room.wind.x), z: r2(room.wind.z), s: r2(room.wind.s) },
     fieldScores: room.fieldScores,
     leaderboard: room.leaderboard,
   };

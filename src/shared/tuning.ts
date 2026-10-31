@@ -49,12 +49,16 @@ export const GOAT = {
   /** A crouched dog facing it within this range eases it away; a walking dog this close shoves it. */
   eyeRange: 4.5,
   shoveRange: 2.2,
-  bleatEvery: [8, 14] as [number, number],
-  bleatRadius: 6.5,
-  bleatKick: 5,
+  bleatEvery: [7, 12] as [number, number],
+  bleatRadius: 8,
+  bleatKick: 6.5,
+  /** Charging through the flock. */
+  chargeSpeed: 4.6,
+  /** A bleat in the middle of a pen it's raiding is this many times louder. */
+  raidPower: 2.2,
   /** Every so often it picks some mischief: how often, and how likely each kind is. */
-  planEvery: [7, 12] as [number, number],
-  mischief: { flock: 0.45, gate: 0.3 },
+  planEvery: [6, 10] as [number, number],
+  mischief: { flock: 0.3, charge: 0.2, gate: 0.2, raid: 0.15 },
   /** How long it stands in a gateway. */
   blockSec: 7,
   /** Sheep keep this far from the goat (so a goat in the gate blocks it). */
@@ -68,6 +72,28 @@ export const GOAT = {
   /** The stare freezes the dog it picked. */
   stareSec: 4,
   stareCooldown: 12,
+};
+
+/** Wind carries your scent: sheep downwind of a dog, within range, get nervous and drift away. */
+export const SCENT = {
+  range: 12,
+  /** How well lined up with the wind the sheep has to be (cosine). */
+  cone: 0.72,
+  /** A crouched dog smells less (lower, slower). Lying down: nothing. */
+  crouch: 0.4,
+  push: 2.6,
+  fear: 0.5,
+};
+
+/** Hazards. */
+export const HAZARD = {
+  mudSlow: 0.5,
+  wadeSlow: 0.55,
+  /** Sheep shy away from brambles within this distance, and bolt if they touch one. */
+  brambleShy: 1.1,
+  brambleKick: 4.5,
+  /** Sheep out through a gap in the fence: points lost each. */
+  lostPenalty: 75,
 };
 
 export const SCORE = {

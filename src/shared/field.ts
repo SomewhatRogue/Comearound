@@ -3,6 +3,7 @@
  * and what is decided never disagree. Metres on the XZ plane; north is negative z.
  *
  * A pen is a fenced box with a gate gap on one side. Sheep inside the pen's interior are penned.
+ * The levels themselves live in levels.ts.
  */
 
 export interface Box { x: number; z: number; w: number; d: number }
@@ -13,7 +14,15 @@ export interface Pen extends Box {
   /** Versus: which team this pen scores for (co-op pens score for everyone). */
   team: 0 | 1 | null;
 }
-export interface Obstacle { kind: 'tree' | 'rock' | 'pond' | 'hay'; x: number; z: number; r: number }
+/** Solid things. Brambles also frighten sheep that get close. Ponds are water: dogs can wade them. */
+export interface Obstacle { kind: 'tree' | 'rock' | 'pond' | 'hay' | 'bramble'; x: number; z: number; r: number }
+/** A stream: a line of water sheep and goats won't cross except at a bridge. Dogs wade it, slowly. */
+export interface Stream { pts: [number, number][]; w: number; bridges: { x: number; z: number; w: number }[] }
+/** A broken bit of the outer fence: sheep that wander out through it are lost. */
+export interface FenceGap { side: 'n' | 's' | 'e' | 'w'; at: number; w: number }
+export interface Circle { x: number; z: number; r: number }
+/** Wind: the direction it blows toward (radians, 0 = east, +z is south), and 0..1 strength. */
+export interface Wind { dir: number; strength: number; gusty?: boolean }
 
 export interface FieldDef {
   id: string;
@@ -25,58 +34,15 @@ export interface FieldDef {
   obstacles: Obstacle[];
   /** Flocks to spawn: where, how many, and (versus) whose. */
   flocks: { x: number; z: number; n: number; team: 0 | 1 | null }[];
-  goat: { x: number; z: number } | null;
+  goats: { x: number; z: number }[];
+  streams?: Stream[];
+  mud?: Circle[];
+  gaps?: FenceGap[];
+  wind?: Wind;
   /** Where dogs start, per team (co-op uses team 0). */
   starts: { x: number; z: number; team: 0 | 1 }[];
   timeLimit: number;
 }
-
-export const TRIALS: FieldDef[] = [
-  {
-    id: 'meadow', name: 'The Meadow', w: 40, d: 30, timeLimit: 100,
-    pens: [{ x: 13, z: 0, w: 7, d: 6, gate: 'w', gateW: 3.2, team: null }],
-    obstacles: [{ kind: 'tree', x: -6, z: -9, r: 1.2 }, { kind: 'tree', x: 2, z: 10, r: 1.2 }, { kind: 'rock', x: 4, z: -4, r: 0.9 }],
-    flocks: [{ x: -8, z: 2, n: 8, team: null }],
-    goat: null,
-    starts: [{ x: -16, z: -3, team: 0 }, { x: -16, z: 3, team: 0 }, { x: -15, z: 0, team: 0 }],
-  },
-  {
-    id: 'orchard', name: 'Old Orchard', w: 44, d: 32, timeLimit: 120,
-    pens: [{ x: 0, z: -11, w: 8, d: 6, gate: 's', gateW: 2.8, team: null }],
-    obstacles: [
-      ...[-12, -6, 6, 12].flatMap((x) => [{ kind: 'tree' as const, x, z: -2, r: 1.2 }, { kind: 'tree' as const, x: x + 3, z: 4, r: 1.2 }]),
-      { kind: 'pond', x: -14, z: 9, r: 3 }, { kind: 'hay', x: 9, z: -9, r: 1 },
-    ],
-    flocks: [{ x: -7, z: 7, n: 7, team: null }, { x: 11, z: 8, n: 5, team: null }],
-    goat: { x: 2, z: 7 },
-    starts: [{ x: 2, z: 14.5, team: 0 }, { x: -1, z: 14.5, team: 0 }, { x: 5, z: 14.5, team: 0 }],
-  },
-  {
-    id: 'hillside', name: 'Windy Hillside', w: 48, d: 34, timeLimit: 150,
-    pens: [{ x: -17, z: -11, w: 7, d: 6, gate: 'e', gateW: 2.4, team: null }],
-    obstacles: [
-      { kind: 'pond', x: 0, z: 0, r: 4 }, { kind: 'rock', x: -8, z: -4, r: 1.2 }, { kind: 'rock', x: 9, z: -8, r: 1.4 },
-      { kind: 'tree', x: -12, z: 6, r: 1.3 }, { kind: 'tree', x: 13, z: 7, r: 1.3 }, { kind: 'hay', x: -6, z: -12, r: 1 }, { kind: 'hay', x: 4, z: 11, r: 1 },
-    ],
-    flocks: [{ x: 12, z: 8, n: 8, team: null }, { x: 14, z: -6, n: 8, team: null }],
-    goat: { x: 6, z: 2 },
-    starts: [{ x: 20, z: 0, team: 0 }, { x: 20, z: 4, team: 0 }, { x: 20, z: -4, team: 0 }],
-  },
-];
-
-/** Versus: one field, two halves, two pens. Sheep wear their team's colour and only count in their own pen. */
-export const VERSUS: FieldDef = {
-  id: 'fieldday', name: 'Field Day', w: 52, d: 30, timeLimit: 150,
-  pens: [
-    { x: -21, z: 0, w: 6, d: 7, gate: 'e', gateW: 3, team: 0 },
-    { x: 21, z: 0, w: 6, d: 7, gate: 'w', gateW: 3, team: 1 },
-  ],
-  obstacles: [{ kind: 'tree', x: -8, z: -8, r: 1.2 }, { kind: 'tree', x: 8, z: 8, r: 1.2 }, { kind: 'rock', x: -9, z: 7, r: 1 }, { kind: 'rock', x: 9, z: -7, r: 1 }, { kind: 'hay', x: 0, z: -11, r: 1 }, { kind: 'hay', x: 0, z: 11, r: 1 }],
-  // Both flocks graze in the middle, side by side: you have to get yours out past theirs.
-  flocks: [{ x: 1, z: -5, n: 7, team: 0 }, { x: -1, z: 5, n: 7, team: 1 }],
-  goat: { x: 0, z: 0 },
-  starts: [{ x: -16, z: -9, team: 0 }, { x: -16, z: 9, team: 0 }, { x: -17, z: 0, team: 0 }, { x: 16, z: 9, team: 1 }, { x: 16, z: -9, team: 1 }, { x: 17, z: 0, team: 1 }],
-};
 
 /** The pen's interior (inset from the fence): penned means inside this. */
 export function inPen(p: Pen, x: number, z: number, inset = 0.35): boolean {
@@ -109,6 +75,97 @@ export function gateOf(p: Pen): { x: number; z: number; ox: number; oz: number }
   }
 }
 
-export function fieldById(id: string): FieldDef {
-  return [...TRIALS, VERSUS].find((f) => f.id === id) ?? TRIALS[0];
+
+type Seg = { ax: number; az: number; bx: number; bz: number };
+
+/** A stream's water as segments, with the bridges cut out (widened by half the stream's width,
+ * so the round ends of the water don't pinch the crossing). */
+export function waterSegments(s: Stream): Seg[] {
+  const out: Seg[] = [];
+  for (let i = 0; i < s.pts.length - 1; i++) {
+    const [ax, az] = s.pts[i];
+    const [bx, bz] = s.pts[i + 1];
+    const len = Math.hypot(bx - ax, bz - az);
+    const cuts: [number, number][] = [];
+    for (const b of s.bridges) {
+      const t = ((b.x - ax) * (bx - ax) + (b.z - az) * (bz - az)) / (len * len);
+      const px = ax + (bx - ax) * t;
+      const pz = az + (bz - az) * t;
+      if (t < -0.2 || t > 1.2 || Math.hypot(b.x - px, b.z - pz) > s.w) continue;
+      const half = (b.w / 2 + s.w / 2) / len;
+      cuts.push([t - half, t + half]);
+    }
+    cuts.sort((p, q) => p[0] - q[0]);
+    let t0 = 0;
+    for (const [c0, c1] of cuts) {
+      if (c0 > t0) out.push({ ax: ax + (bx - ax) * t0, az: az + (bz - az) * t0, bx: ax + (bx - ax) * Math.min(1, c0), bz: az + (bz - az) * Math.min(1, c0) });
+      t0 = Math.max(t0, c1);
+    }
+    if (t0 < 1) out.push({ ax: ax + (bx - ax) * t0, az: az + (bz - az) * t0, bx, bz });
+  }
+  return out.filter((q) => Math.hypot(q.bx - q.ax, q.bz - q.az) > 0.05);
 }
+
+export function distToSeg(x: number, z: number, q: Seg): number {
+  const ex = q.bx - q.ax;
+  const ez = q.bz - q.az;
+  const t = Math.max(0, Math.min(1, ((x - q.ax) * ex + (z - q.az) * ez) / (ex * ex + ez * ez || 1)));
+  return Math.hypot(x - (q.ax + ex * t), z - (q.az + ez * t));
+}
+
+/** Standing in water (a stream, off its bridges, or a pond)? Dogs wade slowly there. */
+export function inWater(f: FieldDef, x: number, z: number, pad = 0): boolean {
+  if (f.obstacles.some((o) => o.kind === 'pond' && Math.hypot(x - o.x, z - o.z) < o.r + pad)) return true;
+  return (f.streams ?? []).some((s) => waterSegments(s).some((q) => distToSeg(x, z, q) < s.w / 2 + pad));
+}
+
+export function inMud(f: FieldDef, x: number, z: number): boolean {
+  return (f.mud ?? []).some((m) => Math.hypot(x - m.x, z - m.z) < m.r);
+}
+
+/** Is this point (just inside the fence) in line with a gap in the fence? */
+export function gapFor(f: FieldDef, x: number, z: number): FenceGap | null {
+  for (const g of f.gaps ?? []) {
+    const along = g.side === 'n' || g.side === 's' ? x : z;
+    if (Math.abs(along - g.at) > g.w / 2) continue;
+    const edge = g.side === 'n' ? -z - f.d / 2 : g.side === 's' ? z - f.d / 2 : g.side === 'w' ? -x - f.w / 2 : x - f.w / 2;
+    if (edge > -3) return g;
+  }
+  return null;
+}
+
+/** Outside the fence (past a gap): lost. */
+export function outOfField(f: FieldDef, x: number, z: number, margin = 0): boolean {
+  return Math.abs(x) > f.w / 2 + margin || Math.abs(z) > f.d / 2 + margin;
+}
+
+/** A bridge's two ends (a little way out on each bank) and the way across. */
+export function bridgeEnds(s: Stream, b: { x: number; z: number; w: number }): { a: { x: number; z: number }; b: { x: number; z: number }; ux: number; uz: number } {
+  // The stream's direction at the bridge, from the nearest stretch of it.
+  let best = { d: Infinity, ux: 1, uz: 0 };
+  for (let i = 0; i < s.pts.length - 1; i++) {
+    const [ax, az] = s.pts[i];
+    const [bx, bz] = s.pts[i + 1];
+    const d = distToSeg(b.x, b.z, { ax, az, bx, bz });
+    const l = Math.hypot(bx - ax, bz - az) || 1;
+    if (d < best.d) best = { d, ux: (bx - ax) / l, uz: (bz - az) / l };
+  }
+  // Across = perpendicular to the flow.
+  const [cx, cz] = [-best.uz, best.ux];
+  const out = s.w / 2 + 1.8;
+  return { a: { x: b.x - cx * out, z: b.z - cz * out }, b: { x: b.x + cx * out, z: b.z + cz * out }, ux: cx, uz: cz };
+}
+
+/** Does the straight line from p to q cross water (a stream off its bridges)? */
+export function crossesWater(f: FieldDef, p: { x: number; z: number }, q: { x: number; z: number }): boolean {
+  const steps = Math.ceil(Math.hypot(q.x - p.x, q.z - p.z) / 0.8);
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = p.x + (q.x - p.x) * t;
+    const z = p.z + (q.z - p.z) * t;
+    if ((f.streams ?? []).some((s) => waterSegments(s).some((w) => distToSeg(x, z, w) < s.w / 2))) return true;
+  }
+  return false;
+}
+
+export { COURSES, TRIALS, VERSUS, VERSUS_FIELDS, fieldById, type CourseId } from './levels';

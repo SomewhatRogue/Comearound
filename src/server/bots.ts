@@ -7,7 +7,7 @@
  * Bots bark rarely (it costs calm points and annoys the goat).
  * In versus, one bot per team may go raiding: it trots through the other team's flock.
  */
-import { gateOf, type FieldDef, type Pen } from '../shared/field';
+import { bridgeEnds, crossesWater, gateOf, type FieldDef, type Pen } from '../shared/field';
 import { DOG, SHEEP } from '../shared/tuning';
 import { bark } from './dogs';
 import { isPenned } from './flock';
@@ -57,8 +57,8 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
   }
 
   // The goat is standing in our gateway: the nearest bot eases it aside, crouched and staring.
-  const goat = room.goat;
-  if (goat && goat.mood === 'block' && Math.hypot(goat.x - g.x, goat.z - g.z) < 2.5 && nearestTo(mates, goat.x, goat.z) === d) {
+  const goat = room.goats.find((q) => q.mood === 'block' && Math.hypot(q.x - g.x, q.z - g.z) < 2.5);
+  if (goat && nearestTo(mates, goat.x, goat.z) === d) {
     const side = (goat.x - g.x) * -g.oz + (goat.z - g.z) * g.ox >= 0 ? -1 : 1;
     const [sx, sz] = [goat.x - g.oz * side * 1.8 + g.ox * 0.6, goat.z + g.ox * side * 1.8 + g.oz * 0.6];
     if (steerTo(d, sx, sz) < 0.7) {
@@ -82,7 +82,7 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
   const i = mineG.dogs.indexOf(d);
   const n = mineG.dogs.length;
   const flank = n === 1 ? 0 : (i / (n - 1)) * 2 - 1;
-  const target = approach(pen, c);
+  const target = viaBridge(room.field, c, approach(pen, c));
   const u = unit(target.x - c.x, target.z - c.z);
   const fan = flank * (spread * 0.9 + 1.2);
   const [px, pz] = behind(room.field, c, u, spread + 3, fan);
@@ -274,6 +274,24 @@ function crosses(a: P, b: P, pen: Pen, m: number): boolean {
     if (t0 > t1) return false;
   }
   return true;
+}
+
+/** If the way to `target` crosses a stream, go by the best bridge: to its near end, then over. */
+function viaBridge(f: FieldDef, c: P, target: P): P {
+  if (!f.streams?.length || !crossesWater(f, c, target)) return target;
+  let best: { score: number; go: P } | null = null;
+  for (const s of f.streams) {
+    for (const br of s.bridges) {
+      const e = bridgeEnds(s, br);
+      // Which end is on our bank?
+      const [near, far] = crossesWater(f, c, e.a) ? [e.b, e.a] : [e.a, e.b];
+      if (crossesWater(f, c, near)) continue;
+      const score = Math.hypot(near.x - c.x, near.z - c.z) + Math.hypot(target.x - far.x, target.z - far.z);
+      const atNear = Math.hypot(near.x - c.x, near.z - c.z) < 2.2;
+      if (!best || score < best.score) best = { score, go: atNear ? far : near };
+    }
+  }
+  return best?.go ?? target;
 }
 
 function centroid(s: P[]): P {

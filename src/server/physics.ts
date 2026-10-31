@@ -2,7 +2,7 @@
  * Shared collision helpers: field fence, pen fences (with their gate gaps), obstacles.
  * Everything is a circle pushed out of walls and other circles. Cheap, stable, good enough.
  */
-import { penWalls, type FieldDef } from '../shared/field';
+import { gapFor, penWalls, waterSegments, type FieldDef } from '../shared/field';
 
 type Wall = { ax: number; az: number; bx: number; bz: number };
 const wallCache = new WeakMap<FieldDef, Wall[]>();
@@ -16,9 +16,50 @@ function walls(f: FieldDef, gateShut: boolean): Wall[] {
   return w;
 }
 
+type Water = Wall & { r: number };
+const waterCache = new WeakMap<FieldDef, Water[]>();
+function water(f: FieldDef): Water[] {
+  let w = waterCache.get(f);
+  if (!w) waterCache.set(f, (w = (f.streams ?? []).flatMap((s) => waterSegments(s).map((q) => ({ ...q, r: s.w / 2 })))));
+  return w;
+}
+
+/** Push (x, z) out of a thick line (a wall of half-width `half`), staying on the side it came from. */
+function pushOff(w: Wall, half: number, x: number, z: number, r: number, from?: { x: number; z: number }): [number, number] {
+  const ex = w.bx - w.ax;
+  const ez = w.bz - w.az;
+  const len2 = ex * ex + ez * ez;
+  if (len2 < 1e-9) return [x, z];
+  const len = Math.sqrt(len2);
+  const raw = ((x - w.ax) * ex + (z - w.az) * ez) / len2;
+  const min = r + half + 0.08;
+  if (from && raw > 0 && raw < 1) {
+    // Along the line: stay on the side we came from (nothing tunnels through).
+    const side = Math.sign((ex * (from.z - w.az) - ez * (from.x - w.ax)) / len) || 1;
+    const now = (ex * (z - w.az) - ez * (x - w.ax)) / len;
+    if (Math.abs(now) > min + 1.5) return [x, z];
+    if (now * side < min) {
+      const fix = side * min - now;
+      return [x + (-ez / len) * fix, z + (ex / len) * fix];
+    }
+    return [x, z];
+  }
+  const t = Math.max(0, Math.min(1, raw));
+  const px = w.ax + ex * t;
+  const pz = w.az + ez * t;
+  const dx = x - px;
+  const dz = z - pz;
+  const d = Math.hypot(dx, dz);
+  if (d >= min) return [x, z];
+  if (d > 1e-6) return [px + (dx / d) * min, pz + (dz / d) * min];
+  return [px - (ez / len) * min, pz + (ex / len) * min];
+}
+
 export interface CollideOpts {
-  /** Ponds are solid (sheep and dogs walk around them). */
+  /** Water (ponds, streams) is solid: true for sheep and goats; dogs wade (and are slowed). */
   water?: boolean;
+  /** Sheep can slip out through gaps in the outer fence (and are then lost). */
+  leak?: boolean;
   /** Where the circle was before this move: walls push back to that side, so nothing tunnels through a fence. */
   from?: { x: number; z: number };
   /** Treat pen gates as shut (dogs). */
@@ -28,9 +69,12 @@ export interface CollideOpts {
 /** Push a circle at (x, z) with radius r out of everything solid. Returns the corrected position. */
 export function collide(f: FieldDef, x: number, z: number, r: number, opts: CollideOpts = {}): [number, number] {
   const isWater = opts.water ?? true;
-  // Outer fence.
-  x = Math.max(-f.w / 2 + r, Math.min(f.w / 2 - r, x));
-  z = Math.max(-f.d / 2 + r, Math.min(f.d / 2 - r, z));
+  // Outer fence (with gaps, for sheep).
+  const gap = opts.leak ? gapFor(f, opts.from?.x ?? x, opts.from?.z ?? z) : null;
+  const [mx, mz] = [f.w / 2 - r, f.d / 2 - r];
+  x = Math.max(gap?.side === 'w' ? -Infinity : -mx, Math.min(gap?.side === 'e' ? Infinity : mx, x));
+  z = Math.max(gap?.side === 'n' ? -Infinity : -mz, Math.min(gap?.side === 's' ? Infinity : mz, z));
+  if (isWater) for (const w of water(f)) [x, z] = pushOff(w, w.r, x, z, r, opts.from);
   for (const o of f.obstacles) {
     if (o.kind === 'pond' && !isWater) continue;
     const dx = x - o.x;
@@ -39,39 +83,7 @@ export function collide(f: FieldDef, x: number, z: number, r: number, opts: Coll
     const min = o.r + r;
     if (d < min && d > 1e-6) [x, z] = [o.x + (dx / d) * min, o.z + (dz / d) * min];
   }
-  for (const w of walls(f, !!opts.gateShut)) {
-    const ex = w.bx - w.ax;
-    const ez = w.bz - w.az;
-    const len2 = ex * ex + ez * ez;
-    if (len2 < 1e-9) continue;
-    const len = Math.sqrt(len2);
-    const raw = ((x - w.ax) * ex + (z - w.az) * ez) / len2;
-    const from = opts.from;
-    if (from && raw > 0 && raw < 1) {
-      // Along the wall's length: stay on the side we came from.
-      const side = Math.sign((ex * (from.z - w.az) - ez * (from.x - w.ax)) / len) || 1;
-      const now = (ex * (z - w.az) - ez * (x - w.ax)) / len;
-      const min = r + 0.08;
-      if (Math.abs(now) > r + 1.5) continue;
-      if (now * side < min) {
-        const fix = side * min - now;
-        x += (-ez / len) * fix;
-        z += (ex / len) * fix;
-      }
-      continue;
-    }
-    const t = Math.max(0, Math.min(1, raw));
-    const px = w.ax + ex * t;
-    const pz = w.az + ez * t;
-    const dx = x - px;
-    const dz = z - pz;
-    const d = Math.hypot(dx, dz);
-    const min = r + 0.08;
-    if (d < min) {
-      if (d > 1e-6) [x, z] = [px + (dx / d) * min, pz + (dz / d) * min];
-      else [x, z] = [px - (ez / Math.sqrt(len2)) * min, pz + (ex / Math.sqrt(len2)) * min];
-    }
-  }
+  for (const w of walls(f, !!opts.gateShut)) [x, z] = pushOff(w, 0, x, z, r, opts.from);
   return [x, z];
 }
 
