@@ -133,6 +133,49 @@ describe('the goat', () => {
   });
 });
 
+describe('goat mischief', () => {
+  const orchard = () => {
+    const h = harness(1);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+    h.room.fieldIdx = 0;
+    (h.room as any).phase = 'fieldEnd';
+    h.room.timeLeft = 0;
+    h.toPlaying();
+    for (const d of h.room.dogs.values()) Object.assign(d, { x: -20, z: 14, bot: null });
+    return h;
+  };
+
+  it('a goat standing in the gateway keeps sheep out of it', () => {
+    const h = orchard();
+    const pen = h.room.field.pens[0];
+    const g = h.room.goat!;
+    const gt = { x: pen.x, z: pen.z + pen.d / 2 };
+    Object.assign(g, { x: gt.x, z: gt.z + 0.9, plan: 'gate', planT: 99, timer: 0, bleatIn: 99 });
+    const s = h.room.sheep[0];
+    Object.assign(s, { x: gt.x + 0.3, z: gt.z + 1.6, vx: 0, vz: 0 });
+    h.run(1.5);
+    expect(Math.hypot(s.x - g.x, s.z - g.z)).toBeGreaterThan(1.6);
+  });
+
+  it('a penned goat wanders back out, unless a dog lies down at the gate', () => {
+    const escaped = (guard: boolean) => {
+      const h = orchard();
+      const pen = h.room.field.pens[0];
+      const g = h.room.goat!;
+      Object.assign(g, { x: pen.x, z: pen.z, planT: 0, bleatIn: 99 });
+      const d = h.dog(0);
+      if (guard) {
+        Object.assign(d, { x: pen.x + 1.8, z: pen.z + pen.d / 2 + 1.2 });
+        h.say(0, { t: 'input', dx: 0, dz: 0, sprint: false, crouch: true });
+      }
+      h.run(12);
+      return !inPen(pen, g.x, g.z, 0);
+    };
+    expect(escaped(false)).toBe(true);
+    expect(escaped(true)).toBe(false);
+  });
+});
+
 describe('fields, scores and bots', () => {
   it('a field ends once every sheep is in and held; you score sheep, time and calm', () => {
     const h = harness(1);
@@ -150,15 +193,20 @@ describe('fields, scores and bots', () => {
     expect(s.score).toBe(s.penned * 100 + s.timeBonus + s.calmBonus + s.goatBonus);
   });
 
-  it('bots alone clear The Meadow in time, on several seeds', () => {
-    for (const seed of [1, 2, 3]) {
+  it('bots alone clear The Meadow most of the time (it is meant to be a challenge now)', () => {
+    let clears = 0;
+    let penned = 0;
+    for (const seed of [1, 2, 3, 4]) {
       const h = harness(1, seed);
       h.say(0, { t: 'start', mode: 'trials', fillBots: true });
       h.dog(0).bot = makeBrain(0);
       while (h.room.phase !== 'fieldEnd') h.room.tick(0.05);
       const s = h.room.fieldScores[0][0];
-      expect(s.penned, `seed ${seed}`).toBe(s.total);
+      penned += s.penned / s.total;
+      if (s.penned === s.total) clears++;
     }
+    expect(clears).toBeGreaterThanOrEqual(2);
+    expect(penned / 4).toBeGreaterThan(0.8);
   });
 
   it('versus: teams are even, sheep only count in their own pen, and three fields make a match', () => {

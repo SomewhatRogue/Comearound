@@ -33,7 +33,7 @@ export interface FieldDef {
 
 export const TRIALS: FieldDef[] = [
   {
-    id: 'meadow', name: 'The Meadow', w: 40, d: 30, timeLimit: 120,
+    id: 'meadow', name: 'The Meadow', w: 40, d: 30, timeLimit: 100,
     pens: [{ x: 13, z: 0, w: 7, d: 6, gate: 'w', gateW: 3.2, team: null }],
     obstacles: [{ kind: 'tree', x: -6, z: -9, r: 1.2 }, { kind: 'tree', x: 2, z: 10, r: 1.2 }, { kind: 'rock', x: 4, z: -4, r: 0.9 }],
     flocks: [{ x: -8, z: 2, n: 8, team: null }],
@@ -41,7 +41,7 @@ export const TRIALS: FieldDef[] = [
     starts: [{ x: -16, z: -3, team: 0 }, { x: -16, z: 3, team: 0 }, { x: -15, z: 0, team: 0 }],
   },
   {
-    id: 'orchard', name: 'Old Orchard', w: 44, d: 32, timeLimit: 150,
+    id: 'orchard', name: 'Old Orchard', w: 44, d: 32, timeLimit: 120,
     pens: [{ x: 0, z: -11, w: 8, d: 6, gate: 's', gateW: 2.8, team: null }],
     obstacles: [
       ...[-12, -6, 6, 12].flatMap((x) => [{ kind: 'tree' as const, x, z: -2, r: 1.2 }, { kind: 'tree' as const, x: x + 3, z: 4, r: 1.2 }]),
@@ -52,7 +52,7 @@ export const TRIALS: FieldDef[] = [
     starts: [{ x: 2, z: 14.5, team: 0 }, { x: -1, z: 14.5, team: 0 }, { x: 5, z: 14.5, team: 0 }],
   },
   {
-    id: 'hillside', name: 'Windy Hillside', w: 48, d: 34, timeLimit: 180,
+    id: 'hillside', name: 'Windy Hillside', w: 48, d: 34, timeLimit: 150,
     pens: [{ x: -17, z: -11, w: 7, d: 6, gate: 'e', gateW: 2.4, team: null }],
     obstacles: [
       { kind: 'pond', x: 0, z: 0, r: 4 }, { kind: 'rock', x: -8, z: -4, r: 1.2 }, { kind: 'rock', x: 9, z: -8, r: 1.4 },
@@ -66,7 +66,7 @@ export const TRIALS: FieldDef[] = [
 
 /** Versus: one field, two halves, two pens. Sheep wear their team's colour and only count in their own pen. */
 export const VERSUS: FieldDef = {
-  id: 'fieldday', name: 'Field Day', w: 52, d: 30, timeLimit: 180,
+  id: 'fieldday', name: 'Field Day', w: 52, d: 30, timeLimit: 150,
   pens: [
     { x: -21, z: 0, w: 6, d: 7, gate: 'e', gateW: 3, team: 0 },
     { x: 21, z: 0, w: 6, d: 7, gate: 'w', gateW: 3, team: 1 },

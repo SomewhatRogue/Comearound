@@ -71,7 +71,12 @@ export interface Goat {
   vx: number;
   vz: number;
   rot: number;
-  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee';
+  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee' | 'stroll' | 'block' | 'escape';
+  /** What it's up to next, and for how long. */
+  plan: 'graze' | 'flock' | 'gate';
+  planT: number;
+  /** Pushed around by dogs recently: plans wait. */
+  pushedT: number;
   target: string | null;
   timer: number;
   bleatIn: number;

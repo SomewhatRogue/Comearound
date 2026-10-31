@@ -255,13 +255,14 @@ export class Entities {
     this.goatPhase += dt * Math.min(speed, 5) * 3;
     const amp = Math.min(0.5, speed * 0.15);
     this.goat.legs.forEach((l, i) => (l.rotation.x = Math.sin(this.goatPhase + (i === 0 || i === 3 ? 0 : Math.PI)) * amp));
-    this.goat.head.rotation.x = g.mood === 'bleat' ? -0.5 : g.mood === 'stare' ? 0.15 + Math.sin(time * 2) * 0.02 : 0.25;
+    // Bleating: head up. Staring: dead still. Blocking a gate: horns down, daring you.
+    this.goat.head.rotation.x = g.mood === 'bleat' ? -0.5 : g.mood === 'stare' ? 0.15 + Math.sin(time * 2) * 0.02 : g.mood === 'block' ? 0.55 + Math.sin(time * 3) * 0.05 : 0.25;
     // The patience meter: fills as barking annoys it.
     const el = this.goatTag.element;
     el.style.setProperty('--annoy', String(g.annoy));
     el.classList.toggle('hot', g.annoy > 0.6);
     el.style.opacity = g.annoy > 0.05 || g.mood === 'coming' ? '1' : '0';
-    const bubble = g.mood === 'bleat' ? 'MEHHH' : g.mood === 'coming' ? '!' : g.mood === 'stare' ? '...' : '';
+    const bubble = { bleat: 'MEHHH', coming: '!', stare: '...', block: 'NOPE', escape: 'bye!', stroll: 'hehe' }[g.mood as string] ?? '';
     this.goatBubble.element.textContent = bubble;
     this.goatBubble.element.style.display = bubble ? '' : 'none';
     if (g.bleats > this.goatLast.bleats) {

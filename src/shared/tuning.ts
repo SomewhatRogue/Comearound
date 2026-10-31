@@ -31,10 +31,13 @@ export const SHEEP = {
   cohesion: 4.5,
   separation: 1.0,
   /** A sheep with no neighbours heads for the nearest other sheep this hard. */
-  lonely: 1.6,
+  lonely: 1.1,
   /** Near the gate with others already in, sheep follow them in this hard (and this close). */
-  follow: 1.8,
-  followRange: 4.5,
+  follow: 1.1,
+  followRange: 3.2,
+  /** Each loose sheep bolts at nothing about this often (seconds), with this much of a kick. */
+  spookEvery: 40,
+  spookKick: 4,
   /** Penned sheep are calmer: flight distance scales down by this. */
   pennedCalm: 0.45,
 };
@@ -42,15 +45,25 @@ export const SHEEP = {
 export const GOAT = {
   radius: 0.6,
   speed: 3.4,
-  wander: 0.7,
-  /** The goat only gives ground to a dog this close, and only if that dog is giving it the eye. */
-  flight: 3.4,
-  bleatEvery: [10, 18] as [number, number],
+  wander: 0.9,
+  /** A crouched dog facing it within this range eases it away; a walking dog this close shoves it. */
+  eyeRange: 4.5,
+  shoveRange: 2.2,
+  bleatEvery: [8, 14] as [number, number],
   bleatRadius: 6.5,
   bleatKick: 5,
+  /** Every so often it picks some mischief: how often, and how likely each kind is. */
+  planEvery: [7, 12] as [number, number],
+  mischief: { flock: 0.45, gate: 0.3 },
+  /** How long it stands in a gateway. */
+  blockSec: 7,
+  /** Sheep keep this far from the goat (so a goat in the gate blocks it). */
+  sheepAvoid: 2.4,
   /** Barking within earshot annoys the goat; at 1 it comes over and stares you down. */
   earshot: 14,
-  annoyPerBark: 0.45,
+  annoyPerBark: 0.4,
+  /** Sprinting at it is rude too (per second, while close). */
+  annoySprint: 0.35,
   annoyDecay: 0.04,
   /** The stare freezes the dog it picked. */
   stareSec: 4,

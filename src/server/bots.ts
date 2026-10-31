@@ -56,6 +56,18 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
     return;
   }
 
+  // The goat is standing in our gateway: the nearest bot eases it aside, crouched and staring.
+  const goat = room.goat;
+  if (goat && goat.mood === 'block' && Math.hypot(goat.x - g.x, goat.z - g.z) < 2.5 && nearestTo(mates, goat.x, goat.z) === d) {
+    const side = (goat.x - g.x) * -g.oz + (goat.z - g.z) * g.ox >= 0 ? -1 : 1;
+    const [sx, sz] = [goat.x - g.oz * side * 1.8 + g.ox * 0.6, goat.z + g.ox * side * 1.8 + g.oz * 0.6];
+    if (steerTo(d, sx, sz) < 0.7) {
+      steerTo(d, goat.x, goat.z);
+      d.wantCrouch = true;
+    }
+    return;
+  }
+
   const groups = assign(groupsOf(open), mates.filter((o) => o !== keeper));
   const mineG = groups.find((gr) => gr.dogs.includes(d));
   if (!mineG) {

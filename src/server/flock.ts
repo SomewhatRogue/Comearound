@@ -8,7 +8,7 @@
  * Penned sheep are calmer, so a held pen stays held.
  */
 import { gateOf, inPen, type FieldDef } from '../shared/field';
-import { DOG, SHEEP } from '../shared/tuning';
+import { DOG, GOAT, SHEEP } from '../shared/tuning';
 import { isDown } from './dogs';
 import { clampLen, collide, separate } from './physics';
 import type { Room, Sheep } from './state';
@@ -132,6 +132,29 @@ export function tickFlock(room: Room, dt: number): void {
           push = Math.max(push, 0.35);
         }
       }
+    }
+
+    // The goat: sheep give it room, so a goat standing in a gateway blocks it.
+    const goat = room.goat;
+    if (goat) {
+      const dx = s.x - goat.x;
+      const dz = s.z - goat.z;
+      const d = Math.hypot(dx, dz) || 1e-3;
+      if (d < GOAT.sheepAvoid) {
+        const k = 1 - d / GOAT.sheepAvoid;
+        ax += (dx / d) * k * 5;
+        az += (dz / d) * k * 5;
+        push = Math.max(push, k * 0.6);
+      }
+    }
+
+    // Now and then a sheep takes fright at nothing at all and bolts (not near a dog lying down).
+    if (!penned && room.phase === 'playing' && room.rng.next() < dt / SHEEP.spookEvery && !dogs.some((d) => isDown(d) && Math.hypot(d.x - s.x, d.z - s.z) < DOG.calmRadius)) {
+      const a = room.rng.range(0, Math.PI * 2);
+      s.vx += Math.cos(a) * SHEEP.spookKick;
+      s.vz += Math.sin(a) * SHEEP.spookKick;
+      s.startle = Math.max(s.startle, 0.8);
+      s.fear = Math.min(1, s.fear + 0.5);
     }
 
     // Barks and bleats: a kick away and a fright.

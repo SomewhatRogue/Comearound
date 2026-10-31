@@ -55,7 +55,8 @@ export interface GoatPub {
   x: number;
   z: number;
   rot: number;
-  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee';
+  /** stroll: heading for the flock to make trouble; block: loitering in a gateway; escape: leaving a pen. */
+  mood: 'wander' | 'bleat' | 'coming' | 'stare' | 'flee' | 'stroll' | 'block' | 'escape';
   /** 0 to 1: how close the goat is to coming over to stare someone down. */
   annoy: number;
   target: string | null;
