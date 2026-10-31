@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Threes a crowd</title>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="hud">
+    <div id="topbar">
+      <div id="phase">Lobby</div>
+      <div id="clock"><div id="moon"><div id="moon-shadow"></div></div><span id="clock-text">0:00</span></div>
+      <div id="score-box"><span class="coin"></span><span id="score">0</span></div>
+    </div>
+    <div id="rolecard"></div>
+    <div id="meter" style="display:none"><span class="coin"></span> Your meter <b id="meter-n">0</b></div>
+    <div id="prompt" style="display:none"></div>
+    <div id="toasts"></div>
+    <div id="pops"></div>
+    <div id="controls">WASD move &middot; E pick up / put down &middot; Q board</div>
+  </div>
+  <div id="lobby" class="side"></div>
+  <div id="modal" class="hidden"></div>
+  <div id="naughty" class="hidden"><div class="goatface"><div class="eye l"></div><div class="eye r"></div><div class="snout"></div></div><div class="word">NAUGHTY</div></div>
+  <div id="conn">Connecting to the village&hellip;</div>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
