@@ -1,7 +1,9 @@
-# Threes a crowd: agent instructions
+# Come Bye!: agent instructions
 
-Browser multiplayer party game. The current game is **Come Bye!**: you're a sheepdog herding a
-flock (and one goat) into a pen with friends, in Co-op Trials or two-team Versus.
+**Come Bye!** (call it Come Bye or comebye; "Threes a crowd" was the project's old working name):
+a browser multiplayer party game. You're a sheepdog herding a flock (and one goat) into a pen with
+friends, in Co-op Trials or two-team Versus. Live at https://comebye.online (Vercel project
+`comearound`, GitHub `SomewhatRogue/Comearound`).
 Three.js client, TypeScript game rooms. Deployed on Vercel (`vercel.json`): the host's browser runs
 the room; every player connects to `api/room.ts`, a WebSocket relay Function that shares rooms
 across instances through Marketplace Redis (Vercel's documented realtime pattern). The PartyServer

@@ -1,4 +1,4 @@
-# Threes a crowd: Come Bye!
+# Come Bye!
 
 A browser party game for friends. You're a sheepdog. Herd the flock into the pen together
 (Co-op Trials) or in two teams (Versus), with crouching, staring, lying down and very careful

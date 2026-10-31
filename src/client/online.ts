@@ -239,10 +239,15 @@ export class Online {
     else void navigator.clipboard?.writeText(url).then(() => this.net.onEvent({ kind: 'toast', text: 'Invite link copied' })).catch(() => {});
   }
 
-  /** The invite: always on the site's public domain (a deployment's own URL asks friends to sign in to Vercel). */
+  /**
+   * The invite: the address this game is on (comebye.online, say), except on a deployment's own
+   * Vercel URL, which asks friends to sign in to Vercel: then the site's public domain.
+   */
   private link(): string {
     const site = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    return site ? `https://${site}/?room=${this.room}` : `${location.origin}${location.pathname}?room=${this.room}`;
+    const privateHosts = String(import.meta.env.VITE_PRIVATE_HOSTS ?? '').split(',').filter(Boolean);
+    if (site && privateHosts.includes(location.host)) return `https://${site}/?room=${this.room}`;
+    return `${location.origin}${location.pathname}?room=${this.room}`;
   }
 
   get friends(): number {

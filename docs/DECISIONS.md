@@ -2,6 +2,18 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (evening, late): comebye.online, and the name is Come Bye (Claude Opus 5.5)
+
+- Kyle bought **comebye.online**. Added to the Vercel project as the main domain, with
+  www.comebye.online redirecting to it (308). DNS at the registrar: A @ 216.150.1.1 and
+  216.150.16.1, CNAME www 3b3a6fcf3ab08f8e.vercel-dns-016.com (what Vercel recommends for it).
+- **Invite links use the address the player is on** (comebye.online, or the vercel.app alias),
+  except on a deployment's own Vercel URL, which sits behind Vercel's sign-in; only there do they
+  switch to the public production domain. Before, links always used the build-time production
+  domain, which would have pointed at comebye.online before its DNS worked.
+- **The project is called Come Bye** (comebye), not "Threes a crowd": tab title, README,
+  CLAUDE.md, package names.
+
 ## 2026-10-31 (night, later): versus lost its host at five minutes; sound and music on screen (Claude Opus 5.5)
 
 Co-op worked, versus "said host left". The relay log: the host's connection ended almost exactly

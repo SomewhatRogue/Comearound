@@ -92,4 +92,4 @@ setInterval(() => {
   for (const r of rooms.values()) if (r.sockets.size) r.game.tick(dt);
 }, 1000 / TICK_HZ);
 
-http.listen(PORT, () => console.log(`Threes a crowd dev server on http://localhost:${PORT}`));
+http.listen(PORT, () => console.log(`Come Bye dev server on http://localhost:${PORT}`));

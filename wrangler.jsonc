@@ -1,6 +1,6 @@
 {
   // Cloudflare deploy: one Durable Object per room, static client from dist/.
-  "name": "threes-a-crowd",
+  "name": "comebye",
   "main": "src/server/worker.ts",
   "compatibility_date": "2026-10-01",
   "assets": { "directory": "dist", "not_found_handling": "single-page-application", "run_worker_first": ["/parties/*"] },
