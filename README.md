@@ -53,3 +53,10 @@ One Worker serves the client and one Durable Object per room. See `docs/RESEARCH
 - `src/server/` the authoritative room (`game.ts`): flock, goat, dogs, bots, round, view; adapters `node-dev.ts`, `worker.ts`
 - `src/client/` Three.js scene, models, HUD, panels, touch controls, synthesized sounds
 - `docs/` design, decisions, research, slice specs
+
+## Vercel
+
+`vercel.json` builds the solo game (your dog plus bot dogs, all in the browser) as a static site:
+import the GitHub repo in Vercel and every push to `main` deploys. Online rooms need a WebSocket
+host that keeps one room's players together (the PartyServer worker on Cloudflare, `npm run deploy`);
+Vercel's WebSocket functions pin each connection to its own instance, so they can't hold a room.
