@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { gateOf, penWalls, type FieldDef } from '../shared/field';
+import type { PublicView } from '../shared/protocol';
 import { at, hayMesh, mat, mesh, pondMesh, rockMesh, treeMesh } from './models';
 import { buildHazards } from './hazardsview';
 import { Scenery } from './scenery';
@@ -110,9 +111,21 @@ export class FieldView {
   }
 
   /** Clouds and butterflies. */
-  update(time: number, dt: number, wind: { x: number; z: number; s: number }): void {
-    this.scenery?.update(time, dt, wind);
-    if (this.group && this.scenery) animateProps(this.group, time, dt, wind.s, this.scenery.ducks);
+  update(time: number, dt: number, pub: PublicView): void {
+    this.scenery?.update(time, dt, pub.wind);
+    if (!this.group || !this.scenery) return;
+    animateProps(this.group, time, dt, pub.wind.s, this.scenery.ducks);
+    // Challenge pens: live counts on the signs, and gates that swing shut when the count is right.
+    for (const o of this.group.children) {
+      const st = pub.pens[o.userData.pen as number];
+      if (!st) continue;
+      if (o.name === 'gate') o.rotation.y += ((st.closed ? o.userData.shut : o.userData.open) - o.rotation.y) * Math.min(1, dt * 6);
+      if (o.name === 'quota' && o instanceof CSS2DObject) {
+        o.element.textContent = `${st.count} / ${st.quota}${st.closed ? ' \u2713' : st.quota !== null && st.count > st.quota ? ' too many!' : ''}`;
+        o.element.classList.toggle('done', st.closed);
+        o.element.classList.toggle('over', st.quota !== null && st.count > st.quota);
+      }
+    }
   }
 }
 
@@ -182,11 +195,18 @@ function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
     leaf.position.set(hinge.x, 0, hinge.z);
     // Open outward: the leaf points out of the pen, angled slightly toward the side.
     leaf.rotation.y = -Math.atan2(gt.oz + sz * 0.5, gt.ox + sx * 0.5);
+    // Challenge pens: the gate swings shut across the gap when the count is right.
+    leaf.name = 'gate';
+    leaf.userData = { pen: f.pens.indexOf(p), open: leaf.rotation.y, shut: -Math.atan2(-sz, -sx) };
     g.add(leaf);
     // Sorting fields: a white pen and a black pen. Versus: team pens.
-    const name = p.team === null ? 'PEN' : f.sort ? `${p.team ? 'Black' : 'White'} sheep` : `${TEAM_NAMES[p.team]} pen`;
+    const name = p.quota !== undefined ? `0 / ${p.quota}` : p.team === null ? 'PEN' : f.sort ? `${p.team ? 'Black' : 'White'} sheep` : `${TEAM_NAMES[p.team]} pen`;
     const sign = label(name, `pen-label${p.team === null ? '' : f.sort ? ` wool${p.team}` : ` team${p.team}`}`);
     sign.position.set(gt.x + gt.ox * 1.2, 0.3, gt.z + gt.oz * 1.2);
+    if (p.quota !== undefined) {
+      sign.name = 'quota';
+      sign.userData = { pen: f.pens.indexOf(p) };
+    }
     g.add(sign);
     if (p.team !== null && !f.sort) {
       const flag = new THREE.Group();
@@ -220,12 +240,13 @@ function post(geo: THREE.BufferGeometry, x: number, z: number, color = '#a8834f'
  * The camera follows your dog from above and behind. In the lobby it sits closer, so you can
  * see your dog (breed, coat, those blue eyes). It eases, never snaps.
  */
-export function followCamera(stage: Stage, x: number, z: number, dt: number, close: boolean): void {
+export function followCamera(stage: Stage, x: number, z: number, dt: number, close: boolean, tour = false): void {
   const portrait = stage.camera.aspect < 1;
-  const h = close ? 7 : portrait ? 28 : 19;
-  const back = close ? 7.5 : portrait ? 17 : 14;
+  // On tour (a field's intro) the camera rides higher and glides more slowly between shots.
+  const h = close ? 7 : (portrait ? 28 : 19) * (tour ? 1.25 : 1);
+  const back = close ? 7.5 : (portrait ? 17 : 14) * (tour ? 1.25 : 1);
   const want = new THREE.Vector3(x, h, z + back);
-  const k = 1 - Math.exp(-dt * (close ? 3 : 5));
+  const k = 1 - Math.exp(-dt * (close ? 3 : tour ? 3.2 : 5));
   stage.camera.position.lerp(want, k);
   stage.camera.lookAt(stage.camera.position.x, 0, stage.camera.position.z - back);
 }

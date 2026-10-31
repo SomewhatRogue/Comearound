@@ -156,6 +156,50 @@ export const WILD: FieldDef[] = [
   },
 ];
 
+/** Challenge course: an exact number of sheep in each pen. A pen's gate shuts when its count is right. */
+export const CHALLENGE: FieldDef[] = [
+  {
+    id: 'split', name: 'Split the Flock', w: 46, d: 32, timeLimit: 140,
+    pens: [
+      { x: -14, z: -10, w: 6.5, d: 6, gate: 's', gateW: 3, team: null, quota: 5 },
+      { x: 14, z: -10, w: 6.5, d: 6, gate: 's', gateW: 3, team: null, quota: 5 },
+    ],
+    obstacles: [{ kind: 'tree', x: 0, z: -11, r: 1.4 }, { kind: 'rock', x: -6, z: 4, r: 1 }, { kind: 'rock', x: 7, z: 6, r: 1 }, { kind: 'hay', x: -19, z: 10, r: 1 }],
+    flocks: [{ x: 0, z: 6, n: 10, team: null }],
+    goats: [],
+    starts: [{ x: -3, z: 14, team: 0 }, { x: 3, z: 14, team: 0 }, { x: 0, z: 14.5, team: 0 }],
+    wind: { dir: -Math.PI / 2, strength: 0.15 },
+  },
+  {
+    id: 'threepens', name: 'Three Little Pens', w: 52, d: 36, timeLimit: 160,
+    pens: [
+      { x: -18, z: -12, w: 5.5, d: 5.5, gate: 's', gateW: 2.8, team: null, quota: 3 },
+      { x: 0, z: -13, w: 6, d: 5.5, gate: 's', gateW: 2.8, team: null, quota: 4 },
+      { x: 18, z: -12, w: 6.5, d: 6, gate: 's', gateW: 2.8, team: null, quota: 5 },
+    ],
+    obstacles: [{ kind: 'tree', x: -9, z: -12, r: 1.3 }, { kind: 'tree', x: 9, z: -12, r: 1.3 }, { kind: 'pond', x: 0, z: 4, r: 3 }, { kind: 'bramble', x: -14, z: 4, r: 1.1 }, { kind: 'bramble', x: 14, z: 4, r: 1.1 }],
+    flocks: [{ x: -12, z: 11, n: 6, team: null }, { x: 12, z: 11, n: 6, team: null }],
+    goats: [{ x: 0, z: 11 }],
+    starts: [{ x: -3, z: 16, team: 0 }, { x: 3, z: 16, team: 0 }, { x: 0, z: 16.5, team: 0 }],
+    wind: { dir: 0, strength: 0.3 },
+  },
+  {
+    // One sheep in the little pen, nine in the big one, across a stream, in the rain, with goats.
+    id: 'oddone', name: 'Odd One Out', w: 54, d: 36, timeLimit: 170, weather: 'rain',
+    pens: [
+      { x: -20, z: -12, w: 4, d: 4, gate: 'e', gateW: 2.4, team: null, quota: 1 },
+      { x: 18, z: -11, w: 8, d: 7, gate: 'w', gateW: 3, team: null, quota: 9 },
+    ],
+    streams: [{ pts: [[-28, 2], [-14, 4], [-2, 1], [10, 4], [28, 2]], w: 2.2, bridges: [{ x: -8, z: 2.5, w: 3 }, { x: 14, z: 3.3, w: 3 }] }],
+    mud: [{ x: 0, z: -8, r: 2 }],
+    obstacles: [{ kind: 'tree', x: -2, z: -14, r: 1.3 }, { kind: 'tree', x: 4, z: 13, r: 1.3 }, { kind: 'rock', x: -16, z: 11, r: 1 }, { kind: 'bramble', x: 8, z: -6, r: 1.1 }],
+    flocks: [{ x: -6, z: 11, n: 10, team: null }],
+    goats: [{ x: 10, z: 10 }, { x: -12, z: -6 }],
+    starts: [{ x: -3, z: 16, team: 0 }, { x: 3, z: 16, team: 0 }, { x: 0, z: 16.5, team: 0 }],
+    wind: { dir: Math.PI, strength: 0.35, gusty: true },
+  },
+];
+
 /** Versus Riverside: your sheep start on the far bank. Two bridges, one goat, everybody crossing. */
 const RIVERSIDE: FieldDef = {
   id: 'riverside', name: 'Riverside', w: 54, d: 32, timeLimit: 150,
@@ -175,13 +219,14 @@ const RIVERSIDE: FieldDef = {
 /** A versus match is three fields. */
 export const VERSUS_FIELDS: FieldDef[] = [VERSUS, RIVERSIDE, VERSUS];
 
-export type CourseId = 'gentle' | 'tricky' | 'wild';
+export type CourseId = 'gentle' | 'tricky' | 'wild' | 'challenge';
 export const COURSES: Record<CourseId, { name: string; blurb: string; fields: FieldDef[] }> = {
   gentle: { name: 'Gentle', blurb: 'Meadow, Orchard, Windy Hillside', fields: TRIALS },
   tricky: { name: 'Tricky', blurb: 'Streams, brambles, a broken fence and three goats', fields: TRICKY },
   wild: { name: 'Wild', blurb: 'Big fields, black and white sheep to sort, rain and a thunderstorm', fields: WILD },
+  challenge: { name: 'Challenge', blurb: 'Exact numbers: so many sheep in each pen, and not one more', fields: CHALLENGE },
 };
 
 export function fieldById(id: string): FieldDef {
-  return [...TRIALS, ...TRICKY, ...WILD, VERSUS, RIVERSIDE].find((f) => f.id === id) ?? TRIALS[0];
+  return [...TRIALS, ...TRICKY, ...WILD, ...CHALLENGE, VERSUS, RIVERSIDE].find((f) => f.id === id) ?? TRIALS[0];
 }

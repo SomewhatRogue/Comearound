@@ -49,6 +49,7 @@ export class GameRoom implements Room {
   goats: Room['goats'] = [];
   wind: Room['wind'] = { x: 1, z: 0, s: 0 };
   course: Room['course'] = 'gentle';
+  closedPens: Room['closedPens'] = [];
   weather: Room['weather'] = { kind: 'clear', flashes: 0, nextFlash: 99, fx: 0, fz: 0 };
   fieldScores: Room['fieldScores'] = [];
   leaderboard: Room['leaderboard'] = [];
@@ -105,7 +106,7 @@ export class GameRoom implements Room {
         break;
       case 'start':
         if (d.id === this.hostId && (this.phase === 'lobby' || this.phase === 'results')) {
-          this.course = m.course === 'tricky' || m.course === 'wild' ? m.course : 'gentle';
+          this.course = m.course === 'tricky' || m.course === 'wild' || m.course === 'challenge' ? m.course : 'gentle';
           this.start(m.mode === 'versus' ? 'versus' : 'trials', m.fillBots);
         }
         break;

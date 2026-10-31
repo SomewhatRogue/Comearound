@@ -20,6 +20,7 @@ import { SoundDirector } from './sounds';
 import { WeatherView } from './weatherview';
 import { Music } from './music';
 import { Minimap } from './minimap';
+import { IntroTour } from './intro';
 import '@fontsource/fredoka/400.css';
 import '@fontsource/fredoka/600.css';
 import '@fontsource/fredoka/700.css';
@@ -69,6 +70,7 @@ const fieldView = new FieldView(stage, lowfx);
 const entities = new Entities(stage);
 const weather = new WeatherView(stage, lowfx);
 const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement);
+const tour = new IntroTour(stage);
 const hud = new Hud();
 const input = new Input();
 const net: NetLike = solo ? new LocalNet(() => look) : new Net(room, token, () => look);
@@ -162,7 +164,7 @@ function frame(now: number) {
   if (pub && me && net.me) {
     const field = fieldById(pub.fieldId);
     fieldView.show(field, pub.mode);
-    fieldView.update(now / 1000, dt, pub.wind);
+    fieldView.update(now / 1000, dt, pub);
     // Predict our own run; ease back toward the server so we never drift far from the truth.
     if (!havePrediction) [predicted.x, predicted.z, predicted.rot, havePrediction] = [me.x, me.z, me.rot, true];
     const len = Math.hypot(input.dx, input.dz);
@@ -188,11 +190,13 @@ function frame(now: number) {
     sounds.update(pub, net.me, dt, now);
     // Spectators watch the flock; everyone else follows their dog. Standing still in the lobby
     // brings the camera in close, to admire your dog.
-    const focus = me.spectator ? centroid(pub.sheep) ?? predicted : predicted;
+    // A new field opens with a tour: the pen, the sheep, then your dog.
+    const touring = tour.focus(pub, field, predicted, now);
+    const focus = touring ?? (me.spectator ? centroid(pub.sheep) ?? predicted : predicted);
     const close = pub.phase === 'lobby' && idleFor > 1.2;
     // In the lobby the panel sits on the right, so look a little right of your dog.
     const shift = pub.phase === 'lobby' && stage.camera.aspect > 1.2 ? (close ? 2.2 : 6) : 0;
-    if (!noLoop) followCamera(stage, focus.x + shift, focus.z, dt, close);
+    if (!noLoop) followCamera(stage, focus.x + shift, focus.z, dt, close, !!touring);
     weather.update(pub, focus, dt);
     music.setRain(pub.phase !== 'lobby' && pub.weather.kind !== 'clear');
     minimap.draw(pub, field, me.id, now);

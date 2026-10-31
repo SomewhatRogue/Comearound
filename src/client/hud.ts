@@ -29,14 +29,15 @@ export class Hud {
     // Sheep counts: one for co-op, one per team in versus.
     const sort = !!field.sort && run;
     const teams: (0 | 1 | null)[] = (pub.mode === 'versus' || sort) && run ? [0, 1] : [null];
-    const counts = teams.map((t) => {
+    const quotas = pub.pens.some((p) => p.quota !== null) && run;
+    const counts = quotas ? pub.pens.map((p) => ({ t: null as 0 | 1 | null, n: p.count, of: p.quota ?? 0, done: p.closed })) : teams.map((t) => {
       const mine = pub.sheep.filter((s) => t === null || s.team === t);
-      return { t, n: mine.filter((s) => s.penned).length, of: mine.filter((s) => !s.lost).length };
+      return { t, n: mine.filter((s) => s.penned).length, of: mine.filter((s) => !s.lost).length, done: false };
     });
     const ck = JSON.stringify(counts);
     if (ck !== this.countKey) {
       this.countKey = ck;
-      $('pens').innerHTML = counts.map((c) => `<div class="pen-count ${c.t === null ? '' : sort ? `wool${c.t}` : `team${c.t}`}"><span class="sheep-ico"></span><b>${c.n}</b>/${c.of}${c.t === null ? '' : ` <i>${sort ? (c.t ? 'Black' : 'White') : TEAM_NAMES[c.t]}</i>`}</div>`).join('');
+      $('pens').innerHTML = counts.map((c) => `<div class="pen-count ${c.done ? 'done' : ''} ${quotas && c.n > c.of ? 'over' : ''} ${c.t === null ? '' : sort ? `wool${c.t}` : `team${c.t}`}"><span class="sheep-ico"></span><b>${c.n}</b>/${c.of}${c.t === null ? '' : ` <i>${sort ? (c.t ? 'Black' : 'White') : TEAM_NAMES[c.t]}</i>`}</div>`).join('');
     }
 
     // Wind: an arrow the way it blows (north is up on screen), bolder when it's strong.

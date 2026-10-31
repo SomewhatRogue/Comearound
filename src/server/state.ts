@@ -1,7 +1,7 @@
 /**
  * Server-side state. Everything here is authoritative and lives only on the server.
  */
-import type { CourseId, FieldDef } from '../shared/field';
+import type { CourseId, FieldDef, Pen } from '../shared/field';
 import type { FieldScore, LeaderRow, Look, Mode, Phase, Posture, PrivateEvent } from '../shared/protocol';
 import type { Rng } from '../shared/rng';
 
@@ -118,6 +118,8 @@ export interface Room {
   /** Wind: the unit direction it blows toward, and strength 0..1 (gusts included). */
   wind: { x: number; z: number; s: number };
   course: CourseId;
+  /** Challenge fields: pens whose gates are shut right now (their count is exactly right). */
+  closedPens: Pen[];
   weather: { kind: 'clear' | 'rain' | 'storm'; flashes: number; nextFlash: number; fx: number; fz: number };
   fieldScores: FieldScore[][];
   leaderboard: LeaderRow[];

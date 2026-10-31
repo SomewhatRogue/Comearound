@@ -2,6 +2,18 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-30 (later still): intro tours and the Challenge course (Claude Opus 5.5)
+
+- **Every field opens with a camera tour** (Kyle): the pen or pens, then each group of sheep
+  (tagged "8 sheep"), then down to your dog. The intro is now 6 s so the tour fits; it runs on
+  the client during the server's intro countdown (`src/client/intro.ts`).
+- **Challenge course: exact numbers per pen** (Kyle). Split the Flock (5 and 5), Three Little
+  Pens (3, 4, 5), Odd One Out (1 and 9, across a stream, in the rain, with goats). Only up to
+  each quota counts; the field ends when every pen is exact. **A pen's gate swings shut when its
+  count is exactly right** (so a flock pouring in doesn't overfill it) and opens again if it does
+  get too many, so the extras can be barked back out. Signs and HUD pills show 3 / 5, green when
+  exact, red when over. Bots send each group to the nearest pen with room for it.
+
 ## 2026-10-30 (late night): scenarios, hazards, weather, music (Claude Opus 5.5)
 
 Kyle: more scenarios; the goat isn't impactful enough (more chaos or more goats); things to avoid

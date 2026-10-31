@@ -195,7 +195,7 @@ export function tickFlock(room: Room, dt: number): void {
     s.x += s.vx * dt;
     s.z += s.vz * dt;
     const [hx, hz] = [s.x, s.z];
-    [s.x, s.z] = collide(room.field, s.x, s.z, SHEEP.radius, { from: before[flock.indexOf(s)], leak: true });
+    [s.x, s.z] = collide(room.field, s.x, s.z, SHEEP.radius, { from: before[flock.indexOf(s)], leak: true, closed: room.closedPens });
     // Hitting a fence stops you going into it (no pressing on through it forever).
     const [cx2, cz2] = [s.x - hx, s.z - hz];
     const cl = Math.hypot(cx2, cz2);
@@ -213,7 +213,7 @@ export function tickFlock(room: Room, dt: number): void {
   // Being shoved never puts a sheep through a fence.
   flock.forEach((s, i) => {
     if (s.lost) return;
-    [s.x, s.z] = collide(room.field, s.x, s.z, SHEEP.radius, { from: before[i], leak: true });
+    [s.x, s.z] = collide(room.field, s.x, s.z, SHEEP.radius, { from: before[i], leak: true, closed: room.closedPens });
     // Out through a gap in the fence: gone.
     if (outOfField(room.field, s.x, s.z, 1.2)) {
       s.lost = true;

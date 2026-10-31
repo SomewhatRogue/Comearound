@@ -13,6 +13,9 @@ export interface Pen extends Box {
   gateW: number;
   /** Versus: which team this pen scores for (co-op pens score for everyone). */
   team: 0 | 1 | null;
+  /** Challenge fields: exactly this many sheep belong in this pen. Its gate swings shut when the
+   * count is right (and opens again if more get in, so the extras can be got out). */
+  quota?: number;
 }
 /** Solid things. Brambles also frighten sheep that get close. Ponds are water: dogs can wade them. */
 export interface Obstacle { kind: 'tree' | 'rock' | 'pond' | 'hay' | 'bramble' | 'windmill'; x: number; z: number; r: number }

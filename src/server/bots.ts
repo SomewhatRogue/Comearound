@@ -7,7 +7,7 @@
  * Bots bark rarely (it costs calm points and annoys the goat).
  * In versus, one bot per team may go raiding: it trots through the other team's flock.
  */
-import { bridgeEnds, crossesWater, gateOf, type FieldDef, type Pen } from '../shared/field';
+import { bridgeEnds, crossesWater, gateOf, inPen, type FieldDef, type Pen } from '../shared/field';
 import { DOG, SHEEP } from '../shared/tuning';
 import { bark } from './dogs';
 import { isPenned } from './flock';
@@ -46,9 +46,10 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
   const mates = activeDogs(room).filter((o) => (o.bot ?? o.auto) && o.team === d.team && !(o.bot ?? o.auto)!.raider);
 
   // The gate keeper: lies down beside the gate, outside, on the side away from the incoming sheep.
-  const keeper = !room.field.sort && open.length && open.length < mine.length / 2 && mates.length > 1 ? nearestTo(mates, g.x + g.ox * 2.4, g.z + g.oz * 2.4) : undefined;
+  const single = room.mode === 'versus' || room.field.pens.length === 1;
+  const keeper = single && open.length && open.length < mine.length / 2 && mates.length > 1 ? nearestTo(mates, g.x + g.ox * 2.4, g.z + g.oz * 2.4) : undefined;
   if (!open.length || keeper === d) {
-    if (!open.length && room.field.sort) return;
+    if (!open.length && !single) return;
     const k = open.length ? sideOf(open, g) : b.flank;
     // Tucked against the fence beside the opening, so incoming sheep pass it.
     const off = pen.gateW / 2 + 1;
@@ -86,7 +87,7 @@ export function tickBot(room: Room, d: Dog, dt: number): void {
   const i = mineG.dogs.indexOf(d);
   const n = mineG.dogs.length;
   const flank = n === 1 ? 0 : (i / (n - 1)) * 2 - 1;
-  const myPen = room.field.sort ? penOf(mineG.sheep[0].team) : pen;
+  const myPen = room.field.sort ? penOf(mineG.sheep[0].team) : quotaPens(room, groups).get(mineG) ?? pen;
   const target = viaBridge(room.field, c, approach(myPen, c));
   const u = unit(target.x - c.x, target.z - c.z);
   const fan = flank * (spread * 0.9 + 1.2);
@@ -279,6 +280,26 @@ function crosses(a: P, b: P, pen: Pen, m: number): boolean {
     if (t0 > t1) return false;
   }
   return true;
+}
+
+/**
+ * Challenge fields: which pen each group should go to. Biggest groups first, each to the nearest
+ * pen that still has room for it (or, failing that, the pen with the most room left).
+ */
+function quotaPens(room: Room, groups: Group[]): Map<Group, Pen> {
+  const out = new Map<Group, Pen>();
+  if (!room.field.pens.some((p) => p.quota !== undefined)) return out;
+  const left = new Map(room.field.pens.map((p) => [p, (p.quota ?? 0) - room.sheep.filter((s) => !s.lost && inPen(p, s.x, s.z)).length]));
+  for (const gr of groups) {
+    const open = [...left.entries()].filter(([, n]) => n > 0);
+    if (!open.length) break;
+    const fits = open.filter(([, n]) => n >= gr.sheep.length);
+    const pool = fits.length ? fits : open.sort((a, z) => z[1] - a[1]).slice(0, 1);
+    const [p] = pool.sort((a, z) => Math.hypot(a[0].x - gr.c.x, a[0].z - gr.c.z) - Math.hypot(z[0].x - gr.c.x, z[0].z - gr.c.z))[0];
+    out.set(gr, p);
+    left.set(p, left.get(p)! - gr.sheep.length);
+  }
+  return out;
 }
 
 /** If the way to `target` crosses a stream, go by the best bridge: to its near end, then over. */

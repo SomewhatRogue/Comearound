@@ -98,6 +98,8 @@ export interface PublicView {
   dogs: DogPub[];
   sheep: SheepPub[];
   goats: GoatPub[];
+  /** Per pen (same order as the field's pens): sheep inside, its quota (challenge fields), gate shut. */
+  pens: { count: number; quota: number | null; closed: boolean }[];
   /** Which trials course this run is (gentle or tricky). */
   course: CourseId;
   /** The direction the wind blows toward (unit x, z) and its strength 0..1. */

@@ -39,7 +39,7 @@ of chaos. As built, 2026-10-30.
 
 ## Modes
 
-- **Co-op Trials:** pick a course of three fields: Gentle (The Meadow, Old Orchard, Windy Hillside), Tricky (Brook Farm, Bramble Lane, Three Billy Goats) or Wild (Black and White sorting, Big Sky Pasture, Thunder Hill). Score per field:
+- **Co-op Trials:** pick a course of three fields: Gentle (The Meadow, Old Orchard, Windy Hillside), Tricky (Brook Farm, Bramble Lane, Three Billy Goats) or Wild (Black and White sorting, Big Sky Pasture, Thunder Hill), or Challenge (exact numbers per pen: Split the Flock, Three Little Pens, Odd One Out; a gate swings shut when its pen's count is right). Each field opens with a camera tour: the pen, the sheep, your dog. Score per field:
   100 per sheep penned, 4 per second left (only once every sheep is in and held 2.5 s), up to 200
   for calm herding (fewer barks per sheep), 250 for the goat. Runs go on the room leaderboard;
   your browser keeps your best.

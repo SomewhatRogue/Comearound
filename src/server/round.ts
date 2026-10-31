@@ -5,7 +5,7 @@
  * then a score card. Score = penned sheep + time left (only if you penned them all) + calm
  * herding (fewer barks per sheep) + the goat, if you managed to pen it.
  */
-import { COURSES, VERSUS_FIELDS } from '../shared/field';
+import { COURSES, VERSUS_FIELDS, inPen } from '../shared/field';
 import type { FieldScore, Mode } from '../shared/protocol';
 import { DOG, HAZARD, SCORE } from '../shared/tuning';
 import { isPenned, spawnFlock } from './flock';
@@ -14,7 +14,8 @@ import { startWind } from './wind';
 import { startWeather } from './weather';
 import { activeDogs, type Room } from './state';
 
-export const INTRO_SEC = 3;
+/** The intro: long enough for the camera tour (pen, sheep, your dog). */
+export const INTRO_SEC = 6;
 export const CARD_SEC = 6;
 
 export function startRun(room: Room, mode: Mode): void {
@@ -35,6 +36,7 @@ export function startField(room: Room): void {
   startWind(room);
   startWeather(room);
   room.holdFor = [0, 0];
+  room.closedPens = [];
   room.doneAt = [null, null];
   const counts = [0, 0];
   for (const d of activeDogs(room)) {
@@ -47,7 +49,27 @@ export function startField(room: Room): void {
 }
 
 /** Sheep a team still has to pen, and how many it has penned. */
+/** Challenge pens: how many sheep are in each, and whether its count is exactly right. */
+export function penCounts(room: Room): { count: number; quota: number | null; exact: boolean }[] {
+  return room.field.pens.map((p) => {
+    const count = room.sheep.filter((s) => !s.lost && inPen(p, s.x, s.z)).length;
+    return { count, quota: p.quota ?? null, exact: p.quota !== undefined && count === p.quota };
+  });
+}
+
+/** Shut the gate of every challenge pen whose count is exactly right; open the rest. */
+function updateGates(room: Room): void {
+  const counts = penCounts(room);
+  room.closedPens = room.field.pens.filter((_, i) => counts[i].exact);
+}
+
 export function tally(room: Room, team: 0 | 1 | null): { penned: number; total: number } {
+  // Challenge fields: only up to each pen's quota counts.
+  if (room.field.pens.some((p) => p.quota !== undefined)) {
+    const counts = penCounts(room);
+    const total = room.field.pens.reduce((n, p) => n + (p.quota ?? 0), 0);
+    return { penned: counts.reduce((n, c) => n + Math.min(c.count, c.quota ?? 0), 0), total };
+  }
   // Lost sheep (out through a gap) no longer count toward "all in": they cost points instead.
   const mine = room.sheep.filter((s) => (team === null || s.team === team) && !s.lost);
   return { penned: mine.filter((s) => isPenned(room.field, s)).length, total: mine.length };
@@ -68,6 +90,7 @@ export function tickRound(room: Room, dt: number): void {
   }
   if (room.phase !== 'playing') return;
   room.timeLeft -= dt;
+  updateGates(room);
   const teams: (0 | 1 | null)[] = room.mode === 'versus' ? [0, 1] : [null];
   for (const t of teams) {
     const i = t ?? 0;

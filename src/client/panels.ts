@@ -23,7 +23,7 @@ export class Panels {
   /** What the host has picked: a trials course, or versus. */
   private pick: CourseId | 'versus' = 'gentle';
   private bots = true;
-  private bests: Record<CourseId, number> = { gentle: Number(store.get('tac-best-trials') ?? 0) || 0, tricky: Number(store.get('tac-best-tricky') ?? 0) || 0, wild: Number(store.get('tac-best-wild') ?? 0) || 0 };
+  private bests: Record<CourseId, number> = { gentle: Number(store.get('tac-best-trials') ?? 0) || 0, tricky: Number(store.get('tac-best-tricky') ?? 0) || 0, wild: Number(store.get('tac-best-wild') ?? 0) || 0, challenge: Number(store.get('tac-best-challenge') ?? 0) || 0 };
   private best = 0;
   private newBest = false;
   private savedRun = '';
@@ -126,6 +126,7 @@ export class Panels {
     const modes = ([
       ['gentle', 'Co-op Trials: Gentle', 'The Meadow, Old Orchard, Windy Hillside. Learn the ropes, meet the goat.'],
       ['tricky', 'Co-op Trials: Tricky', 'Streams and bridges, brambles, a broken fence, wind, and three goats.'],
+      ['challenge', 'Co-op Trials: Challenge', 'Exact numbers: so many sheep in each pen. A gate swings shut when its count is right.'],
       ['wild', 'Co-op Trials: Wild', 'Big fields: sort black sheep from white in the rain, a huge pasture, a thunderstorm.'],
       ['versus', 'Versus', 'Two teams, two pens. Pen yours, or go and stir up theirs.'],
     ] as const).map(([m, n, d]) => `<button class="mode ${m === this.pick ? 'on' : ''}" data-act="mode" data-v="${m}"><b>${n}</b><span>${d}</span></button>`).join('');
@@ -136,7 +137,7 @@ export class Panels {
       ? '<p class="quiet">Solo: bot dogs work alongside you. Practise on the flock while you choose your dog.</p>'
       : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
     const touchTip = document.body.classList.contains('touch') ? '<p class="touch-tip">Drag anywhere on the field to move. Tap <b>Practise</b> to fold this away and try the buttons.</p>' : '';
-    const best = this.bests.gentle || this.bests.tricky || this.bests.wild ? `<p class="quiet">Your best runs: Gentle <b>${this.bests.gentle}</b> &middot; Tricky <b>${this.bests.tricky}</b> &middot; Wild <b>${this.bests.wild}</b></p>` : '';
+    const best = this.bests.gentle || this.bests.tricky || this.bests.wild || this.bests.challenge ? `<p class="quiet">Your best runs: Gentle <b>${this.bests.gentle}</b> &middot; Tricky <b>${this.bests.tricky}</b> &middot; Wild <b>${this.bests.wild}</b> &middot; Challenge <b>${this.bests.challenge}</b></p>` : '';
     return `<button class="chip fold" data-act="fold">Practise</button><h2>Come Bye!</h2>${roomLine}
       <label>Your dog's name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>${touchTip}
       <div class="label">Breed</div><div class="row wrap">${breeds}</div>

@@ -258,9 +258,9 @@ function tickGoat(room: Room, g: Goat, dt: number): void {
   [g.vx, g.vz] = clampLen(g.vx, g.vz, speed);
   g.x += g.vx * dt;
   g.z += g.vz * dt;
-  [g.x, g.z] = collide(room.field, g.x, g.z, GOAT.radius, { from });
+  [g.x, g.z] = collide(room.field, g.x, g.z, GOAT.radius, { from, closed: room.closedPens });
   if (Math.hypot(g.vx, g.vz) > 0.1 && g.mood !== 'block') g.rot = Math.atan2(g.vx, g.vz);
   for (const s of room.sheep) if (!s.lost) separate(g, s, GOAT.radius + 0.5, g.mood === 'charge' ? 0.1 : 0.3);
   for (const d of room.dogs.values()) if (!d.spectator) separate(g, d, GOAT.radius + DOG.radius, 0.2);
-  [g.x, g.z] = collide(room.field, g.x, g.z, GOAT.radius, { from });
+  [g.x, g.z] = collide(room.field, g.x, g.z, GOAT.radius, { from, closed: room.closedPens });
 }

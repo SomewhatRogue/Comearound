@@ -4,6 +4,7 @@ import { GOAT } from '../src/shared/tuning';
 import { makeBrain } from '../src/server/bots';
 import { isPenned } from '../src/server/flock';
 import { GameRoom } from '../src/server/game';
+import { tally } from '../src/server/round';
 import type { Dog } from '../src/server/state';
 
 /** A room with a fake transport that records every message per connection. */
@@ -269,7 +270,7 @@ describe('joining', () => {
 });
 
 /** A room on a given course field, everyone parked out of the way. */
-function onField(course: 'tricky' | 'wild', idx: number, seed = 7) {
+function onField(course: 'tricky' | 'wild' | 'challenge', idx: number, seed = 7) {
   const h = harness(1, seed);
   h.say(0, { t: 'start', mode: 'trials', fillBots: false, course });
   if (idx > 0) {
@@ -369,5 +370,39 @@ describe('hazards, wind and weather', () => {
         for (const p of [...f.starts, ...f.flocks, ...f.goats]) expect(inWater(f, p.x, p.z), `${f.id} ${p.x},${p.z}`).toBe(false);
       }
     }
+  });
+});
+
+describe('challenge: exact numbers per pen', () => {
+  const fill = (h: ReturnType<typeof harness>, pen: number, n: number, from = 0) => {
+    const p = h.room.field.pens[pen];
+    h.room.sheep.slice(from, from + n).forEach((s, i) => Object.assign(s, { x: p.x + ((i % 3) - 1) * 1.1, z: p.z + (Math.floor(i / 3) - 1) * 1.1, vx: 0, vz: 0 }));
+  };
+
+  it('a gate shuts when its pen holds exactly its quota, and opens again if it gets too many', () => {
+    const h = onField('challenge', 0);
+    const [a] = h.room.field.pens;
+    expect(a.quota).toBe(5);
+    for (const s of h.room.sheep) Object.assign(s, { x: 0, z: 13 });
+    fill(h, 0, 5);
+    h.run(0.2);
+    expect(h.room.closedPens).toContain(a);
+    // A sixth one in (by teleport): the gate opens so the extra can be got out.
+    fill(h, 0, 6);
+    h.run(0.2);
+    expect(h.room.closedPens).not.toContain(a);
+  });
+
+  it('only up to each quota counts, and the field ends when every pen is exact', () => {
+    const h = onField('challenge', 0);
+    for (const s of h.room.sheep) Object.assign(s, { x: 0, z: 13 });
+    fill(h, 0, 7);
+    h.run(0.2);
+    expect(tally(h.room, null)).toEqual({ penned: 5, total: 10 });
+    fill(h, 0, 5);
+    fill(h, 1, 5, 5);
+    h.run(3);
+    expect(h.room.phase).toBe('fieldEnd');
+    expect(h.room.fieldScores[0][0].penned).toBe(10);
   });
 });

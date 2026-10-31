@@ -6,6 +6,7 @@ import type { PrivateView, PublicView } from '../shared/protocol';
 import { isDown } from './dogs';
 import { isPenned } from './flock';
 import { goatPenned } from './goat';
+import { penCounts } from './round';
 import type { Dog, Room } from './state';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -26,6 +27,7 @@ export function publicView(room: Room): PublicView {
     sheep: room.sheep.map((s) => ({ id: s.id, x: r2(s.x), z: r2(s.z), rot: r2(s.rot), fear: r2(s.fear), team: s.team, penned: !s.lost && isPenned(room.field, s), lost: s.lost })),
     goats: room.goats.map((g) => ({ id: g.id, x: r2(g.x), z: r2(g.z), rot: r2(g.rot), mood: g.mood, annoy: r2(g.annoy), target: g.target, bleats: g.bleats, penned: goatPenned(room, g) })),
     course: room.course,
+    pens: penCounts(room).map((c, i) => ({ count: c.count, quota: c.quota, closed: room.closedPens.includes(room.field.pens[i]) })),
     weather: { kind: room.weather.kind, flashes: room.weather.flashes, fx: r2(room.weather.fx), fz: r2(room.weather.fz) },
     wind: { x: r2(room.wind.x), z: r2(room.wind.z), s: r2(room.wind.s) },
     fieldScores: room.fieldScores,

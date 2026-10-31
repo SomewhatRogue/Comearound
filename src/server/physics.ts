@@ -2,7 +2,7 @@
  * Shared collision helpers: field fence, pen fences (with their gate gaps), obstacles.
  * Everything is a circle pushed out of walls and other circles. Cheap, stable, good enough.
  */
-import { gapFor, penWalls, waterSegments, type FieldDef } from '../shared/field';
+import { gapFor, penWalls, waterSegments, type FieldDef, type Pen } from '../shared/field';
 
 type Wall = { ax: number; az: number; bx: number; bz: number };
 const wallCache = new WeakMap<FieldDef, Wall[]>();
@@ -55,6 +55,18 @@ function pushOff(w: Wall, half: number, x: number, z: number, r: number, from?: 
   return [px - (ez / len) * min, pz + (ex / len) * min];
 }
 
+/** The gate gap of a pen, as a wall (for when the gate is shut). */
+function gateLine(p: Pen): Wall[] {
+  const g = p.gateW / 2;
+  const [l, r, t, b] = [p.x - p.w / 2, p.x + p.w / 2, p.z - p.d / 2, p.z + p.d / 2];
+  switch (p.gate) {
+    case 'n': return [{ ax: p.x - g, az: t, bx: p.x + g, bz: t }];
+    case 's': return [{ ax: p.x - g, az: b, bx: p.x + g, bz: b }];
+    case 'w': return [{ ax: l, az: p.z - g, bx: l, bz: p.z + g }];
+    default: return [{ ax: r, az: p.z - g, bx: r, bz: p.z + g }];
+  }
+}
+
 export interface CollideOpts {
   /** Water (ponds, streams) is solid: true for sheep and goats; dogs wade (and are slowed). */
   water?: boolean;
@@ -64,6 +76,8 @@ export interface CollideOpts {
   from?: { x: number; z: number };
   /** Treat pen gates as shut (dogs). */
   gateShut?: boolean;
+  /** Pens whose gates are closed right now (challenge fields), for sheep and goats too. */
+  closed?: Pen[];
 }
 
 /** Push a circle at (x, z) with radius r out of everything solid. Returns the corrected position. */
@@ -84,6 +98,7 @@ export function collide(f: FieldDef, x: number, z: number, r: number, opts: Coll
     if (d < min && d > 1e-6) [x, z] = [o.x + (dx / d) * min, o.z + (dz / d) * min];
   }
   for (const w of walls(f, !!opts.gateShut)) [x, z] = pushOff(w, 0, x, z, r, opts.from);
+  if (!opts.gateShut) for (const p of opts.closed ?? []) for (const w of gateLine(p)) [x, z] = pushOff(w, 0, x, z, r, opts.from);
   return [x, z];
 }
 
