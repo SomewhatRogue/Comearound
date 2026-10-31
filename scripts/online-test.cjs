@@ -185,6 +185,22 @@ const FREEZE = () => {
       await Promise.all([h, f].map((p) => p.context().close().catch(() => {})));
     }
 
+    // H: the host makes a room and waits a while (texting the code) before the friend types it in.
+    // The host is alone the whole time, sending only heartbeats; the friend must join it, not be
+    // told there's no host (which once made friends host instead, the wrong way round).
+    if (only('H')) {
+      const { p: h, code } = await host(PORT_MEM, 'Kyle');
+      await h.waitForTimeout(20000);
+      const f = await joinByCode(PORT_MEM, 'Sam', code);
+      await asGuest(f, 20000).catch(() => {});
+      await hostHas(h, 1);
+      const g = { friendState: await state(f), hostState: await state(h), together: await humans(h) };
+      g.ok = g.friendState === 'guest' && g.hostState === 'host' && g.together === 'Kyle,Sam';
+      report.scenarios['H: host alone for 20 s, then the friend types the code'] = g;
+      note(`H: ${JSON.stringify(g)}`);
+      await Promise.all([h, f].map((p) => p.context().close().catch(() => {})));
+    }
+
     // F: the friend opens the code while the host's game is closed; they wait (never host it);
     // the host opens their own link again (same device, new tab) and the friend joins.
     if (only('F')) {

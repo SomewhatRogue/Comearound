@@ -2,6 +2,26 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (night): friends were told an empty room had no host; sound on iPhones (Claude Opus 5.5)
+
+Kyle made a room and texted his friend the code; when she typed it in she was told there was no
+host, so she pressed Host and he joined her: it worked, backwards. The relay log showed it: she
+joined 22 s after he made the room and got "no host". A host alone in its room sends nothing but
+heartbeats, and the relay only counted real messages as signs of life, so after 8 s it called the
+host gone. Every test had friends joining within seconds, so none caught it.
+
+- **The relay counts the heartbeat as the host being there** (`touch` on every message, the ping
+  included; touch at most every 2 s, or a quarter of the stale time in tests). A frozen phone
+  sends no heartbeat, so it can still be replaced.
+- **Tests:** relay test "a host alone, sending only heartbeats, still gets the friend who joins
+  later" (fails on the old relay); browser scenario (H): host alone 20 s, then the friend types
+  the code.
+- **No sound (iPhone):** audio unlocked only on pointerdown, which iOS doesn't count as a tap; the
+  touch controls cancel the click too. Now unlocked on touchend, pointerup and click as well, with
+  a silent buffer played inside the tap (iOS needs that), resumed after the phone was away
+  ("interrupted"), and `navigator.audioSession.type = 'playback'` so the ringer switch doesn't
+  silence a game (Sound off still mutes it).
+
 ## 2026-10-31 (evening): a phone host that leaves to send the link (Claude Opus 5.5)
 
 Kyle hosted from his phone, tapped Share, sent the link from Messages and came back; his friend

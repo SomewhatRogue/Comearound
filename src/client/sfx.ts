@@ -2,9 +2,13 @@
  * Every sound in the game, synthesized with Web Audio: no files, nothing to load or block.
  * Cute and round on purpose: woofs, baas, plinks, chimes, a goat. One master volume with mute (M).
  * Browsers start audio suspended until the first click or key press; unlock() handles that.
+ * iPhones are the fussy ones: only a tap that ends (touchend/click, not touchdown) unlocks audio,
+ * a silent buffer has to play inside that tap, the context is "interrupted" after the phone was
+ * away, and Web Audio follows the ringer switch unless the page says it plays media.
  */
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+let unlocked = false;
 let muted = (() => {
   try {
     return localStorage.getItem('tac-muted') === '1';
@@ -16,12 +20,18 @@ let muted = (() => {
 function ac(): AudioContext | null {
   try {
     if (!ctx) {
+      // Play like a game or video (heard with the ringer on silent), not like a notification.
+      // The Sound off button is the way to quiet it.
+      try {
+        const session = (navigator as { audioSession?: { type: string } }).audioSession;
+        if (session) session.type = 'playback';
+      } catch { /* older Safari */ }
       ctx = new AudioContext();
       master = ctx.createGain();
       master.gain.value = muted ? 0 : 0.8;
       master.connect(ctx.destination);
     }
-    if (ctx.state === 'suspended') void ctx.resume();
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {});
     return ctx;
   } catch {
     return null;
@@ -102,7 +112,16 @@ export function audioOut(): { ctx: AudioContext; out: AudioNode } | null {
 export const sfx = {
   /** Call from any click or key press so the browser lets sound start. */
   unlock() {
-    ac();
+    const a = ac();
+    if (!a || unlocked) return;
+    try {
+      // iOS: a sound must start inside the tap itself to unlock the context for good.
+      const src = a.createBufferSource();
+      src.buffer = a.createBuffer(1, 1, 22050);
+      src.connect(a.destination);
+      src.start(0);
+      if (a.state === 'running') unlocked = true;
+    } catch { /* not yet */ }
   },
   get muted() {
     return muted;

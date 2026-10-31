@@ -104,8 +104,9 @@ input.onMute = () => {
   showMute();
 };
 muteBtn.addEventListener('click', () => input.onMute());
-// Browsers only allow sound after the player interacts.
-for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => (sfx.unlock(), music.start()), { capture: true });
+// Browsers only allow sound after the player interacts (iPhones: when a tap ends, so listen to
+// those too; the touch controls cancel the touch's click, so touchend is the one that counts).
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, () => (sfx.unlock(), music.start()), { capture: true, passive: true });
 const musicBtn = document.getElementById('music')!;
 const showMusic = () => (musicBtn.textContent = music.on ? 'Music on' : 'Music off');
 showMusic();

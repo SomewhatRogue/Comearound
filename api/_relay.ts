@@ -137,7 +137,7 @@ export class Relay {
 
   /** The host is alive: keep its claim and its last-seen time fresh (at most every 2 s). */
   private async touch(c: Conn, now = false): Promise<void> {
-    if (!c.host || (!now && Date.now() - c.touchedAt < 2000)) return;
+    if (!c.host || (!now && Date.now() - c.touchedAt < Math.min(2000, this.staleMs / 4))) return;
     c.touchedAt = Date.now();
     await Promise.all([this.b.store.expire(hostKey(c.room), HOST_TTL), this.b.store.set(seenKey(c.room), String(Date.now()), HOST_TTL)]);
   }
@@ -151,11 +151,13 @@ export class Relay {
       return;
     }
     c.alive = true;
+    // Anything from the host, its heartbeat included, says it's still there. A host alone in its
+    // room sends nothing but heartbeats, and must not look gone to the first friend who joins.
+    void this.touch(c);
     // The game's own heartbeat: answered here, never relayed.
     if ((m as { ping?: unknown }).ping) return this.tell(c, { t: 'pong' });
     const to = typeof m.to === 'string' ? m.to : '';
     if (!to) return;
-    void this.touch(c);
     await this.send(c.room, { k: 'msg', from: c.id, to, d: m.d, o: this.origin, cn: c.nonce });
   }
 

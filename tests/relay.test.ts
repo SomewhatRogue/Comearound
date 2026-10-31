@@ -126,6 +126,17 @@ for (const be of backends) {
       [host, ava].forEach((p) => p.close());
     });
 
+    it('a host alone in its room, sending only heartbeats, still gets the friend who joins later', async () => {
+      const room = code();
+      const host = player(A.port, room, 'kyle-0008', 'host');
+      await host.until((m) => m.t === 'role' && m.role === 'host');
+      // Waiting for the friend to type the code: far longer than this test's stale time.
+      for (let i = 0; i < 10; i++) (host.ws.send('{"ping":1}'), await wait(150));
+      const sam = player(B.port, room, 'sam-00008', 'join');
+      expect(await sam.until((m) => m.t === 'role' || m.t === 'nohost')).toMatchObject({ t: 'role', role: 'guest', host: 'kyle-0008' });
+      [host, sam].forEach((p) => p.close());
+    });
+
     it("a player's old connection closing late (after they reconnected) doesn't say they left", async () => {
       const room = code();
       const host = player(A.port, room, 'kyle-0006', 'host');
