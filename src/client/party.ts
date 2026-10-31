@@ -97,7 +97,7 @@ export class Party {
       .map((p) => ({ p, ad: p.presence.cb as { n?: unknown; k?: unknown; c?: unknown; ph?: unknown } | null | undefined }))
       .filter(({ ad }) => ad && typeof ad.k === 'string' && /^[a-z0-9]{4,16}$/.test(ad.k))
       .map(({ p, ad }) => ({ peer: p.peer, name: String(ad!.n ?? 'A friend').slice(0, 14), dogs: Number(ad!.c) || 1, phase: String(ad!.ph ?? ''), code: ad!.k as string }));
-    if (this.guestOf && !this.games.some((g) => g.peer === this.guestOf!.peer) && !this.remote?.pub) void this.leave('That game has closed.');
+    if (this.guestOf && !this.games.some((g) => g.peer === this.guestOf!.peer) && !this.remote?.pub) void this.leaveGame('That game has closed.');
     this.onChange();
   }
 
@@ -105,7 +105,15 @@ export class Party {
     return this.host?.guests.size ?? 0;
   }
 
-  async join(peer: string): Promise<void> {
+  join(peer: string): void {
+    void this.joinGame(peer);
+  }
+
+  leave(): void {
+    void this.leaveGame();
+  }
+
+  private async joinGame(peer: string): Promise<void> {
     const game = this.games.find((g) => g.peer === peer);
     if (!game || !this.room || this.busy || this.state !== 'solo' || this.guestCount) return;
     this.busy = true;
@@ -118,7 +126,7 @@ export class Party {
       this.advertise();
       this.local.paused = true;
       this.remote = new RemoteNet(named, peer, this.token, this.look());
-      this.remote.onGone = () => void this.leave(`${game.name}'s game has ended.`);
+      this.remote.onGone = () => void this.leaveGame(`${game.name}'s game has ended.`);
       this.net.use(this.remote);
     } catch {
       this.net.onEvent({ kind: 'toast', text: "Couldn't join that game." });
@@ -127,7 +135,7 @@ export class Party {
     this.onChange();
   }
 
-  async leave(why?: string): Promise<void> {
+  private async leaveGame(why?: string): Promise<void> {
     if (this.state !== 'guest' || this.busy) return;
     this.busy = true;
     this.remote?.close();

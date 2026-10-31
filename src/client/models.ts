@@ -120,10 +120,15 @@ export function dogMesh(look: Look): DogRig {
   head.position.set(0, s.girth * 0.9, half + s.girth * 0.75);
   addHead(head, s, main, accent, maskC, eye.color, look.collar);
   front.add(head);
+  if (s.fluff !== 'ruff') addCollar(front, s, half, look.collar);
   if (s.fluff === 'ruff') {
     // The keeshond's lion ruff.
     front.add(at(mesh(new THREE.IcosahedronGeometry(s.girth * 1.35, 1), main), 0, s.girth * 0.2, half - 0.06));
     front.add(at(mesh(new THREE.IcosahedronGeometry(s.girth * 0.95, 1), accent), 0, -s.girth * 0.15, half + s.girth * 0.45));
+    // The ruff swallows a neck collar, so a keeshond wears it around the ruff.
+    const ring = mesh(new THREE.TorusGeometry(s.girth * 1.0, 0.05, 6, 18), look.collar);
+    ring.rotation.x = Math.PI / 2 - 0.9;
+    front.add(at(ring, 0, s.girth * 0.25, half + s.girth * 0.35));
   }
   if (s.fluff === 'poodle') front.add(at(mesh(new THREE.IcosahedronGeometry(s.girth * 1.35, 1), main), 0, s.girth * 0.2, half * 0.6));
 
@@ -145,6 +150,26 @@ export function dogMesh(look: Look): DogRig {
   rig.position.y = hip * s.scale;
   const ears = head.children.filter((c) => c.name === 'ear');
   return { root, rig, front, back, head, tail, legs, ears, hip: hip * s.scale, leg: s.leg };
+}
+
+/**
+ * The collar goes round the neck: the gap between the chest and the head, ringed along the line
+ * from one to the other (mostly upright, leaning forward), with a brass tag hanging at the front.
+ */
+function addCollar(front: THREE.Group, s: BreedShape, half: number, collar: string): void {
+  const g = s.girth;
+  const [cy, cz] = [-g * 0.25, half + g * 0.2];
+  const [hy, hz] = [g * 0.9, half + g * 0.75];
+  const t = 0.55;
+  const [y, z] = [cy + (hy - cy) * t, cz + (hz - cz) * t];
+  const tilt = Math.atan2(hy - cy, hz - cz);
+  const r = Math.max(0.13, g * 0.78);
+  const ring = mesh(new THREE.TorusGeometry(r, 0.042, 6, 18), collar);
+  ring.rotation.x = -tilt;
+  front.add(at(ring, 0, y, z));
+  const tagDisc = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.022, 12), '#e8b93a');
+  tagDisc.rotation.x = Math.PI / 2;
+  front.add(at(tagDisc, 0, y - r * Math.cos(tilt) * 0.9 - 0.04, z + r * Math.sin(tilt) * 0.9 + 0.02));
 }
 
 function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string, maskC: string, eyeColor: string, collar: string): void {
@@ -193,9 +218,6 @@ function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string,
   }
   if (s.fluff === 'poodle') head.add(at(mesh(new THREE.IcosahedronGeometry(0.12, 1), main), 0, 0.14, -0.02));
   // Collar.
-  const c = mesh(new THREE.TorusGeometry(0.12, 0.025, 5, 12), collar);
-  c.rotation.x = Math.PI / 2 - 0.5;
-  head.add(at(c, 0, -0.1, -0.08));
 }
 
 function addTail(tail: THREE.Group, s: BreedShape, main: string, accent: string): void {

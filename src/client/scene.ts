@@ -240,8 +240,15 @@ function post(geo: THREE.BufferGeometry, x: number, z: number, color = '#a8834f'
  * The camera follows your dog from above and behind. In the lobby it sits closer, so you can
  * see your dog (breed, coat, those blue eyes). It eases, never snaps.
  */
-export function followCamera(stage: Stage, x: number, z: number, dt: number, close: boolean, tour = false): void {
+export function followCamera(stage: Stage, x: number, z: number, dt: number, close: boolean, tour = false, dress = false): void {
   const portrait = stage.camera.aspect < 1;
+  // Dressing your dog in the lobby: low and close, at the dog's eye level, so its face and collar show.
+  if (dress) {
+    const want = new THREE.Vector3(x, portrait ? 2.6 : 2.2, z + (portrait ? 5.6 : 4.4));
+    stage.camera.position.lerp(want, 1 - Math.exp(-dt * 3));
+    stage.camera.lookAt(stage.camera.position.x, 0.5, stage.camera.position.z - (portrait ? 5.6 : 4.4));
+    return;
+  }
   // On tour (a field's intro) the camera rides higher and glides more slowly between shots.
   const h = close ? 7 : (portrait ? 28 : 19) * (tour ? 1.25 : 1);
   const back = close ? 7.5 : (portrait ? 17 : 14) * (tour ? 1.25 : 1);

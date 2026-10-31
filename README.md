@@ -56,7 +56,8 @@ One Worker serves the client and one Durable Object per room. See `docs/RESEARCH
 
 ## Vercel
 
-`vercel.json` builds the solo game (your dog plus bot dogs, all in the browser) as a static site:
-import the GitHub repo in Vercel and every push to `main` deploys. Online rooms need a WebSocket
-host that keeps one room's players together (the PartyServer worker on Cloudflare, `npm run deploy`);
-Vercel's WebSocket functions pin each connection to its own instance, so they can't hold a room.
+`vercel.json` builds with `VITE_P2P=1`: the lobby has Solo / With friends; with friends, the first
+tab in a room hosts the game in the browser and friends connect to it directly (WebRTC).
+`api/signal.ts` is the matchmaking function; it needs Redis from the Vercel Marketplace (Upstash),
+which sets `KV_REST_API_URL`/`KV_REST_API_TOKEN` (or the `UPSTASH_` names). Without it the site
+says online play is off and plays solo. Every push to `main` deploys.

@@ -7,7 +7,8 @@ import { COURSES, fieldById, type CourseId } from '../shared/field';
 import { BREEDS, BREED_NAMES, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } from '../shared/looks';
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
-import type { Party } from './party';
+/** Extra lobby lines from whichever online layer is running (friends on the page, or an online room). */
+export interface LobbyExtra { html(pub?: PublicView, me?: PrivateView): string; key(): string; forceBots?: boolean; join?(v: string): void; leave?(): void; retry?(): void; share?(): void }
 import { sfx } from './sfx';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -29,7 +30,7 @@ export class Panels {
   private newBest = false;
   private savedRun = '';
 
-  constructor(private send: (m: ClientMsg) => void, private look: Look, private saveLook: (l: Look) => void, private room: string, private solo = false, private party: Party | null = null) {
+  constructor(private send: (m: ClientMsg) => void, private look: Look, private saveLook: (l: Look) => void, private room: string, private solo = false, private party: LobbyExtra | null = null) {
     document.addEventListener('click', (e) => {
       const el = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
       if (!el) return;
@@ -66,8 +67,10 @@ export class Panels {
     if (act === 'copy') void navigator.clipboard?.writeText(location.href).catch(() => {});
     if (act === 'close') this.menuOpen = false;
     if (act === 'toggle') document.dispatchEvent(new CustomEvent('toggle-audio', { detail: v }));
-    if (act === 'join') void this.party?.join(v);
-    if (act === 'leave') void this.party?.leave();
+    if (act === 'join') this.party?.join?.(v);
+    if (act === 'leave') this.party?.leave?.();
+    if (act === 'retry') this.party?.retry?.();
+    if (act === 'share') this.party?.share?.();
     if (act === 'fold') [this.collapsed, this.keys.lobby] = [!this.collapsed, ''];
     if (act === 'endField') {
       this.send({ t: 'endField' });
@@ -82,7 +85,7 @@ export class Panels {
 
   private startPick(pick: CourseId | 'versus'): void {
     const mode: Mode = pick === 'versus' ? 'versus' : 'trials';
-    this.send({ t: 'start', mode, fillBots: this.bots || this.solo, course: pick === 'versus' ? 'gentle' : pick });
+    this.send({ t: 'start', mode, fillBots: this.bots || this.solo || !!this.party?.forceBots, course: pick === 'versus' ? 'gentle' : pick });
   }
 
   render(pub: PublicView, me: PrivateView): void {
@@ -132,18 +135,20 @@ export class Panels {
     const collars = COLLARS.map((c) => `<button class="swatch ${c === this.look.collar ? 'on' : ''}" style="background:${c}" data-act="collar" data-v="${c}" aria-label="collar ${c}"></button>`).join('');
     const pack = pub.dogs.filter((d) => !d.bot).map((d) => `<li><i style="background:${d.look.collar}"></i>${esc(d.look.name)} <span class="quiet">${BREED_NAMES[d.look.breed]}</span>${d.id === pub.hostId ? ' <em>host</em>' : ''}${d.connected ? '' : ' <span class="quiet">(away)</span>'}</li>`).join('');
     const modes = ([
-      ['gentle', 'Co-op Trials: Gentle', 'The Meadow, Old Orchard, Windy Hillside. Learn the ropes, meet the goat.'],
-      ['tricky', 'Co-op Trials: Tricky', 'Streams and bridges, brambles, a broken fence, wind, and three goats.'],
-      ['challenge', 'Co-op Trials: Challenge', 'Exact numbers: so many sheep in each pen. A gate swings shut when its count is right.'],
-      ['wild', 'Co-op Trials: Wild', 'Big fields: sort black sheep from white in the rain, a huge pasture, a thunderstorm.'],
+      ['gentle', 'Trials: Gentle', 'The Meadow, Old Orchard, Windy Hillside. Learn the ropes, meet the goat.'],
+      ['tricky', 'Trials: Tricky', 'Streams and bridges, brambles, a broken fence, wind, and three goats.'],
+      ['challenge', 'Trials: Challenge', 'Exact numbers: so many sheep in each pen. A gate swings shut when its count is right.'],
+      ['wild', 'Trials: Wild', 'Big fields: sort black sheep from white in the rain, a huge pasture, a thunderstorm.'],
       ['versus', 'Versus', 'Two teams, two pens. Pen yours, or go and stir up theirs.'],
     ] as const).map(([m, n, d]) => `<button class="mode ${m === this.pick ? 'on' : ''}" data-act="mode" data-v="${m}"><b>${n}</b><span>${d}</span></button>`).join('');
     const controls = host
-      ? `<div class="label">Mode</div><div class="modes">${modes}</div>${this.solo ? '' : `<button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty spots with bot dogs</button>`}<button class="big" data-act="start">Start ${this.pick === 'versus' ? 'the match' : 'the trials'}</button>`
+      ? `<div class="label">Mode</div><div class="modes">${modes}</div>${this.solo || this.party?.forceBots ? '' : `<button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty spots with bot dogs</button>`}<button class="big" data-act="start">Start ${this.pick === 'versus' ? 'the match' : 'the trials'}</button>`
       : `<p class="quiet">Waiting for the host to start.</p>`;
     const roomLine = this.solo
       ? this.party?.html() ?? '<p class="quiet">Solo: bot dogs work alongside you. Practise on the flock while you choose your dog.</p>'
-      : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
+      : this.party
+        ? this.party.html(pub, me)
+        : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
     const touchTip = document.body.classList.contains('touch') ? '<p class="touch-tip">Drag anywhere on the field to move. Tap <b>Practise</b> to fold this away and try the buttons.</p>' : '';
     const best = this.bests.gentle || this.bests.tricky || this.bests.wild || this.bests.challenge ? `<p class="quiet">Your best runs: Gentle <b>${this.bests.gentle}</b> &middot; Tricky <b>${this.bests.tricky}</b> &middot; Wild <b>${this.bests.wild}</b> &middot; Challenge <b>${this.bests.challenge}</b></p>` : '';
     return `<button class="chip fold" data-act="fold">Practise</button><h2>Come Bye!</h2>${roomLine}
@@ -158,7 +163,7 @@ export class Panels {
         <li>Hold still while crouched to <b>lie down</b> and settle them.</li>
         <li><b>Bark</b> (E) sends them running, but the goat hates it. Bark too much and it comes to stare you down.</li>
       </ul>${best}
-      <div class="label">The pack (${pub.dogs.filter((d) => !d.bot).length})</div><ul class="who">${pack}</ul>${controls}`;
+      ${this.party && !this.solo ? '' : `<div class="label">The pack (${pub.dogs.filter((d) => !d.bot).length})</div><ul class="who">${pack}</ul>`}${controls}`;
   }
 
   private resultsHtml(pub: PublicView, me: PrivateView): string {

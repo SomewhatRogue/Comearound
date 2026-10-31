@@ -2,8 +2,9 @@
 
 Browser multiplayer party game. The current game is **Come Bye!**: you're a sheepdog herding a
 flock (and one goat) into a pen with friends, in Co-op Trials or two-team Versus.
-Three.js client, TypeScript server rooms, Cloudflare Workers + Durable Objects (PartyServer) in
-production, a Node server for local dev and tests. Design: `docs/DESIGN.md`. Research behind the
+Three.js client, TypeScript game rooms. Deployed on Vercel (`vercel.json`): the host's browser runs
+the room and friends connect peer to peer, with `api/signal.ts` + Redis for matchmaking. The
+PartyServer worker (Cloudflare) and the Node server (local dev and tests) run rooms server-side. Design: `docs/DESIGN.md`. Research behind the
 stack: `docs/RESEARCH.md`. Earlier designs (Act Natural, tasks) are in git (tag `act-natural-final`).
 
 This project is separate from Kyle's Unity games (The Old Gods, the drone game). Never touch those.
@@ -26,6 +27,9 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
   flock, goat, dog or bot behaviour. `scripts/trace.ts <field> <seed>` prints one run as text.
 - `node scripts/coop-probe.cjs` (dev server up on 8787): two tabs play together over the stand-in
   live room (`?fakeroom`): join, move, bark, start a run, host leaves.
+- `node scripts/p2p-probe.cjs 8791` (a `VITE_P2P=1` build served by `PORT=8791 tsx src/server/node-dev.ts`):
+  two browser profiles play an online room the Vercel way (WebRTC, /api/signal from memory),
+  then the host closes their tab and the friend takes over the room.
 - `npm run probe`: one blocking call, one JSON report. Boots the server with a fast clock
   (`TIMESCALE`) and `AUTOPILOT=1` (human seats herd with the bot brain), opens a laptop, a friend
   and a phone held sideways, checks move/crouch/down/bark and the touch stick, plays a full run,

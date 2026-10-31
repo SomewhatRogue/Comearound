@@ -2,6 +2,29 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-30 (midnight): online play on Vercel; dressing-room camera (Claude Opus 5.5)
+
+- **Kyle: "Use Vercel for this."** Vercel Functions now hold WebSockets, but each connection is
+  pinned to its own instance and Vercel's docs say rooms must live in an outside store, so a
+  GameRoom can't live in a function. Instead **the host's browser runs the game and friends
+  connect to it directly (WebRTC)**. `api/signal.ts` (a Vercel Function) only introduces them:
+  first tab in a room claims it, friends drop their connection offer in the host's mailbox, the
+  host answers; Redis from the Vercel Marketplace (Upstash) holds the claims and mailboxes, a
+  handful of commands per join. Snapshots go over an unreliable, unordered data channel (the
+  compact `wire.ts` format, 20 Hz); messages and events over a reliable one. If the host leaves,
+  everyone drops to their own game and the first to re-claim the room hosts it (about 6 s).
+  Trade-off: a few strict networks block direct connections; `VITE_TURN_URL/USER/PASS` add a
+  relay server if that bites. `vercel.json` builds with `VITE_P2P=1`.
+- **Lobby has a Solo / With friends switch** (Kyle couldn't see how to switch or who joined).
+  With friends shows the room link (Share or Copy), "Your pack" with who's in, and a pop-up plus a
+  whistle when someone joins or leaves. Course names lose "Co-op" (they play either way).
+- **Dressing your dog**: with the lobby panel open the camera comes down low and close, and the
+  view slides so your dog sits in the middle of the screen the panel doesn't cover (left of it on
+  a laptop, above it on a phone). Collars are chunkier with a brass tag (a keeshond wears it
+  round its ruff), and your name tag's border is your collar colour.
+- Headless Chromium paints a pale blue box over part of the canvas next to the lobby panel in
+  screenshots; the WebGL pixels underneath are right (read back), so it's a test-browser artifact.
+
 ## 2026-10-30 (near midnight): dogs in pens; co-op on the shareable page (Claude Opus 5.5)
 
 - **Pens are locked to dogs only in versus** (Kyle: "if there's too many it says so but you

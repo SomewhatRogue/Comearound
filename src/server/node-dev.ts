@@ -9,7 +9,11 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { WebSocketServer } from 'ws';
+import { handleSignal, memoryStore } from '../../api/signal';
 import { GameRoom, TICK_HZ } from './game';
+
+// The Vercel matchmaking function, served here with an in-memory store (online play over WebRTC).
+const signalStore = memoryStore();
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DIST = join(process.cwd(), 'dist');
@@ -35,6 +39,18 @@ function roomFor(name: string) {
 
 const http = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://x');
+  if (url.pathname === '/api/signal' && req.method === 'POST') {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', async () => {
+      let body = {};
+      try { body = JSON.parse(raw); } catch { /* handled as a bad request */ }
+      const { status, json } = await handleSignal(body, signalStore);
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(json));
+    });
+    return;
+  }
   if (url.pathname === '/__report') {
     const r = rooms.get(url.searchParams.get('room') ?? '');
     res.end(r ? r.game.report() : 'no such room');

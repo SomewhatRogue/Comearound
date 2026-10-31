@@ -159,6 +159,8 @@ export class Entities {
     const rig = dogMesh(d.look);
     const tag = label(d.look.name, `name-tag${d.id === you ? ' you' : ''}${versus ? ` team${d.team}` : ''}`);
     tag.position.y = 1.35;
+    // The name tag wears your collar colour too (versus tags wear the team colour instead).
+    if (!versus) tag.element.style.borderColor = d.look.collar;
     rig.root.add(tag);
     const eye = new THREE.Mesh(this.eyeGeo, new THREE.MeshBasicMaterial({ color: '#fff3b0', transparent: true, opacity: 0.12, depthWrite: false }));
     // The cone points along the dog's facing (+z in its own space).

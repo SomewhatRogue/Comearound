@@ -11,6 +11,7 @@ import { Entities } from './entities';
 import { Hud } from './hud';
 import { Input, isTouch } from './input';
 import { LocalNet } from './local';
+import { Online } from './online';
 import { Party, SwitchNet } from './party';
 import { dogMesh } from './models';
 import { Net, type NetLike } from './net';
@@ -36,13 +37,15 @@ const params = new URLSearchParams(location.search);
 // Solo: the whole room runs in this tab with bot dogs. The shareable solo build sets VITE_SOLO.
 const solo = import.meta.env.VITE_SOLO === '1' || params.has('solo');
 let room = solo ? 'solo' : (params.get('room') ?? '').replace(/[^\w-]/g, '').slice(0, 32);
-if (!room) {
+// The Vercel build plays online rooms peer to peer (the host's tab runs the game); no room in the link means solo.
+const p2p = import.meta.env.VITE_P2P === '1' && !solo;
+if (!room && !p2p) {
   room = Array.from({ length: 4 }, () => 'BCDFGHJKLMNPQRSTVWXZ'[Math.floor(Math.random() * 20)]).join('');
   params.set('room', room);
   try { history.replaceState(null, '', `?${params}`); } catch { /* sandboxed frame */ }
 }
 // A token per tab-session lets a reload rejoin your seat; ?as= gives tests distinct players.
-const tokenKey = `tac-token-${room}-${params.get('as') ?? ''}`;
+const tokenKey = `tac-token-${p2p ? 'p2p' : room}-${params.get('as') ?? ''}`;
 const token = (() => {
   try {
     const t = sessionStorage.getItem(tokenKey) ?? crypto.randomUUID();
@@ -74,10 +77,10 @@ const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElem
 const tour = new IntroTour(stage);
 const hud = new Hud();
 const input = new Input();
-const local = solo ? new LocalNet(() => look) : null;
+const local = solo || p2p ? new LocalNet(() => look) : null;
 const net = new SwitchNet(local ?? new Net(room, token, () => look));
 // The shareable page: friends who have it open can join each other's games over the viewer's live room.
-const party = local ? new Party(local, net, () => look, token) : null;
+const party = solo && local ? new Party(local, net, () => look, token) : p2p && local ? new Online(room, token, local, net, () => look) : null;
 const panels = new Panels((m) => net.send(m), look, (l) => { look = l; store.set('tac-dog', JSON.stringify(l)); }, room, solo, party);
 if (party) {
   party.onChange = () => panels.refresh();
@@ -207,15 +210,17 @@ function frame(now: number) {
     // A new field opens with a tour: the pen, the sheep, then your dog.
     const touring = tour.focus(pub, field, predicted, now);
     const focus = touring ?? (me.spectator ? centroid(pub.sheep) ?? predicted : predicted);
-    const close = pub.phase === 'lobby' && idleFor > 1.2;
-    // In the lobby the panel sits on the right, so look a little right of your dog.
-    const shift = pub.phase === 'lobby' && stage.camera.aspect > 1.2 ? (close ? 2.2 : 6) : 0;
-    if (!noLoop) followCamera(stage, focus.x + shift, focus.z, dt, close, !!touring);
+    // While you dress your dog (the lobby panel open) the camera comes in close on it.
+    const dressing = pub.phase === 'lobby' && !panels.collapsed;
+    const close = pub.phase === 'lobby' && (dressing || idleFor > 1.2);
+    if (!noLoop) followCamera(stage, focus.x, focus.z, dt, close, !!touring, dressing && !touring);
+    frameBesidePanel(dressing, dt);
     weather.update(pub, focus, dt);
     music.setRain(pub.phase !== 'lobby' && pub.weather.kind !== 'clear');
     minimap.draw(pub, field, me.id, now);
     hud.update(pub, net.me);
     input.setBarkReady(net.me.barkReady);
+    if (party) watchPack(pub, net.me.you);
     panels.render(pub, net.me);
   }
   hud.connection(net.connected && !!pub);
@@ -229,11 +234,49 @@ function frame(now: number) {
   if (!diag.hidden && now - diagAt > 250 && pub && me) {
     diagAt = now;
     const srv = local && net.inner === local ? [...local.room.dogs.values()].find((d) => d.id === me.id) : null;
-    diag.textContent = `${input.debug()} | sent ${sent} | room dx ${srv ? `${srv.dx.toFixed(2)},${srv.dz.toFixed(2)}` : '?'} | dog ${me.x.toFixed(1)},${me.z.toFixed(1)} ${me.frozen ? 'frozen' : me.down ? 'down' : me.posture}${me.spectator ? ' SPECTATOR' : ''} | me ${predicted.x.toFixed(1)},${predicted.z.toFixed(1)} | ${pub.phase} | ${fps} fps${local ? ` | ticks ${local.ticks}` : ''}${party ? ` | party ${party.state} ${party.games.length}g ${party.guestCount}f` : ''} | gl ${stage.renderer.getContext().isContextLost() ? 'LOST' : 'ok'} lost ${glLost}/${glRestored} draws ${stage.renderer.info.render.calls} | sheep0 ${pub.sheep[0] ? pub.sheep[0].x.toFixed(1) : '-'}`;
+    diag.textContent = `${input.debug()} | sent ${sent} | room dx ${srv ? `${srv.dx.toFixed(2)},${srv.dz.toFixed(2)}` : '?'} | dog ${me.x.toFixed(1)},${me.z.toFixed(1)} ${me.frozen ? 'frozen' : me.down ? 'down' : me.posture}${me.spectator ? ' SPECTATOR' : ''} | me ${predicted.x.toFixed(1)},${predicted.z.toFixed(1)} | ${pub.phase} | ${fps} fps${local ? ` | ticks ${local.ticks}` : ''}${party ? ` | net ${party.state} ${party.key()}` : ''} | gl ${stage.renderer.getContext().isContextLost() ? 'LOST' : 'ok'} lost ${glLost}/${glRestored} draws ${stage.renderer.info.render.calls} | sheep0 ${pub.sheep[0] ? pub.sheep[0].x.toFixed(1) : '-'}`;
   }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+/**
+ * Keep your dog in the middle of the part of the screen the lobby panel doesn't cover (left of it
+ * on a laptop, above it on a phone held upright), by sliding the camera's view window.
+ */
+const viewShift = { x: 0, y: 0 };
+function frameBesidePanel(on: boolean, dt: number): void {
+  const w = stage.renderer.domElement.clientWidth;
+  const h = stage.renderer.domElement.clientHeight;
+  let [tx, ty] = [0, 0];
+  const r = on ? document.getElementById('lobby')?.getBoundingClientRect() : null;
+  if (r && r.width > 0) {
+    if (r.left > w * 0.3) tx = w / 2 - r.left / 2;
+    else if (r.top > h * 0.25) ty = h / 2 - (r.top + 90) / 2;
+  }
+  const k = 1 - Math.exp(-dt * 6);
+  viewShift.x += (tx - viewShift.x) * k;
+  viewShift.y += (ty - viewShift.y) * k;
+  if (Math.abs(viewShift.x) < 0.5 && Math.abs(viewShift.y) < 0.5 && !on) {
+    if (stage.camera.view?.enabled) stage.camera.clearViewOffset();
+    return;
+  }
+  stage.camera.setViewOffset(w, h, viewShift.x, viewShift.y, w, h);
+}
+
+/** Friends coming and going: a pop-up and a whistle, so you notice someone joined your pack. */
+let packIds: Map<string, string> | null = null;
+let packRoom: unknown = null;
+function watchPack(pub: NonNullable<typeof net.pub>, you: string): void {
+  const now = new Map(pub.dogs.filter((d) => !d.bot && d.connected).map((d) => [d.id, d.look.name]));
+  // A new room (joined someone, or went back to your own) starts a fresh list.
+  if (packRoom !== net.inner) [packIds, packRoom] = [null, net.inner];
+  if (packIds) {
+    for (const [id, name] of now) if (!packIds.has(id) && id !== you) (hud.toast(`${name} joined your pack!`), sfx.whistle());
+    for (const [id, name] of packIds) if (!now.has(id) && id !== you) hud.toast(`${name} left`);
+  }
+  packIds = now;
+}
 
 function centroid(s: { x: number; z: number }[]): { x: number; z: number } | null {
   if (!s.length) return null;
@@ -261,6 +304,7 @@ if (local) {
 }
 w.__debug_naughty = (words?: string) => hud.naughty(words);
 w.__music = music;
+w.__stage = stage;
 w.__game_actions__ = { send: (m: Parameters<NetLike['send']>[0]) => net.send(m), predicted: () => ({ ...predicted }) };
 
 /** Art review: every breed in a row, in a pose, with the camera close. `__lineup('crouch')`. */
