@@ -40,6 +40,8 @@ function roomFor(name: string) {
 const http = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://x');
   if (url.pathname === '/api/signal' && req.method === 'POST') {
+    // SIGNAL_OFF=1 acts like the Vercel site before Redis is added (tests the public-server fallback).
+    if (process.env.SIGNAL_OFF === '1') return void (res.writeHead(503), res.end('{}'));
     let raw = '';
     req.on('data', (c) => (raw += c));
     req.on('end', async () => {

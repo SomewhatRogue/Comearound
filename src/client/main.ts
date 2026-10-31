@@ -316,7 +316,9 @@ w.__lineup = (pose = 'walk') => {
     rig.root.rotation.y = 0.5;
     if (pose === 'crouch') { rig.rig.position.y *= 0.6; rig.front.rotation.x = 0.2; rig.head.rotation.x = 0.38; rig.legs.forEach((l) => (l.scale.y = 0.6)); }
     if (pose === 'down') { rig.rig.position.y *= 0.3; rig.front.rotation.x = -0.12; rig.head.rotation.x = -0.25; rig.legs.forEach((l, j) => ((l.rotation.x = j < 2 ? -1.45 : -1.1), (l.scale.y = 0.55))); }
+    rig.tail.rotation.x = 0.6;
     stage.scene.add(rig.root);
+    ((w.__lineupRigs ??= []) as unknown[]).push(rig);
   });
   document.getElementById('lobby')!.hidden = true;
   stage.camera.position.set(0, 4.2, 40.5);

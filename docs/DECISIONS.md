@@ -2,6 +2,23 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (after midnight): rooms with no setup; collar and tail fixes (Claude Opus 5.5)
+
+- **Kyle wants online rooms to work with just a code, no setup.** Matchmaking now tries our own
+  Redis-backed function first and, if the site doesn't have Redis, falls back to the **free public
+  PeerJS server** (`0.peerjs.com`): the host takes the id `cbx-<code>`, anyone else opening the
+  code finds it taken and sends their offer there (`src/client/brokers.ts`). Only the offer and
+  answer pass through it; the game runs directly between players. This is the one runtime
+  dependency on an outside host (plus public STUN servers), and only for online play; adding
+  Upstash Redis on Vercel takes it out of the path. Tested against a local copy of the real
+  PeerServer (`peer` dev dependency); the container can't reach the public one.
+- Lobby shows the **room code** big and has a **"Friend's code" box** (Enter or Join).
+- **Collar redesigned** (Kyle: "giant donuts"). Now a flat open strap (both faces drawn) where the
+  neck meets the chest, square to the chest-to-head line, sized from the shapes it wraps so it sits
+  just proud of the fur, with a brass tag at the throat. A keeshond's sits on its bib and sinks into
+  the ruff at the sides. Checked in screenshots for collie, keeshond, golden and pug. **Tails** root on the rump's surface and wag about that root (rotation order
+  YXZ: lift, then swing), so they stay attached.
+
 ## 2026-10-30 (midnight): online play on Vercel; dressing-room camera (Claude Opus 5.5)
 
 - **Kyle: "Use Vercel for this."** Vercel Functions now hold WebSockets, but each connection is

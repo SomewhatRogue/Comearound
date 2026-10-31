@@ -59,5 +59,5 @@ One Worker serves the client and one Durable Object per room. See `docs/RESEARCH
 `vercel.json` builds with `VITE_P2P=1`: the lobby has Solo / With friends; with friends, the first
 tab in a room hosts the game in the browser and friends connect to it directly (WebRTC).
 `api/signal.ts` is the matchmaking function; it needs Redis from the Vercel Marketplace (Upstash),
-which sets `KV_REST_API_URL`/`KV_REST_API_TOKEN` (or the `UPSTASH_` names). Without it the site
-says online play is off and plays solo. Every push to `main` deploys.
+which sets `KV_REST_API_URL`/`KV_REST_API_TOKEN` (or the `UPSTASH_` names). Without it, matchmaking
+uses the free public PeerJS server instead, so rooms work with no setup. Every push to `main` deploys.

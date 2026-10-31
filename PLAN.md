@@ -40,7 +40,7 @@ waiting on Kyle's first play. Spec: `docs/features/slice-02.md`.
 
 1. Kyle plays it with friends (solo link first, then a hosted room). Collect taste calls:
    speeds, flight distances, bark strength, how often the goat comes over, camera height.
-2. Kyle adds Upstash Redis to the Vercel project; test online rooms from two networks and a phone. Add a TURN relay if some networks can't connect.
+2. Optional: Kyle adds Upstash Redis to the Vercel project (rooms already work through the public PeerJS server without it); test online rooms from two networks and a phone. Add a TURN relay if some networks can't connect.
 3. Persistent leaderboard (D1) keyed by the pack's names; guest identity, then Discord linking.
 4. Dog photo upload (Kyle's wish): photo becomes a collar tag / portrait at minimum; coat colours
    sampled from the photo as a stretch.

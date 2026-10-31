@@ -4,6 +4,8 @@
 const { chromium } = require('playwright');
 const PORT = process.argv[2] ?? '8791';
 const SHOTS = process.argv[3] ?? 'shots';
+// Extra query for both players, e.g. 'broker=peer&peer=ws://localhost:9000/peerjs' to test the public-server path.
+const EXTRA = process.argv[4] ? `${process.argv[4]}&` : '';
 (async () => {
   // Chromium hides local addresses behind mDNS names, which don't resolve in a container.
   const b = await chromium.launch({ args: ['--disable-features=WebRtcHideLocalIpsWithMdns'] });
@@ -13,7 +15,7 @@ const SHOTS = process.argv[3] ?? 'shots';
     const ctx = await b.newContext({ viewport: { width: 1000, height: 640 } });
     const p = await ctx.newPage();
     p.on('pageerror', (e) => errs.push(`${name}: ${e.message}`));
-    await p.goto(`http://localhost:${PORT}/?${q}name=${name}&lowfx`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await p.goto(`http://localhost:${PORT}/?${EXTRA}${q}name=${name}&lowfx`, { waitUntil: 'domcontentloaded', timeout: 90000 });
     return p;
   };
   // Kyle opens the site (solo), flips the lobby switch to With friends and gets a room link.
@@ -24,7 +26,13 @@ const SHOTS = process.argv[3] ?? 'shots';
   await host.waitForFunction(() => window.__party?.state === 'host', null, { timeout: 20000 });
   const link = new URL(host.url());
   console.log('room link', link.search);
-  const guest = await open('Sam', `room=${link.searchParams.get('room')}&`);
+  const code = link.searchParams.get('room');
+  const guest = await open('Sam', '');
+  await guest.waitForFunction(() => document.querySelector('[data-v="friends"]'), null, { timeout: 30000 });
+  await guest.click('[data-v="friends"]');
+  await guest.waitForSelector('#code-input', { timeout: 20000 });
+  await guest.fill('#code-input', code.toLowerCase());
+  await guest.press('#code-input', 'Enter');
   await guest.waitForFunction(() => window.__party?.state === 'guest', null, { timeout: 30000 });
   await host.waitForFunction(() => window.__party.friends === 1, null, { timeout: 10000 });
   await host.waitForTimeout(600);

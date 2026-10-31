@@ -29,7 +29,9 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
   live room (`?fakeroom`): join, move, bark, start a run, host leaves.
 - `node scripts/p2p-probe.cjs 8791` (a `VITE_P2P=1` build served by `PORT=8791 tsx src/server/node-dev.ts`):
   two browser profiles play an online room the Vercel way (WebRTC, /api/signal from memory),
-  then the host closes their tab and the friend takes over the room.
+  then the host closes their tab and the friend takes over the room. Add a third argument
+  `broker=peer&peer=ws://127.0.0.1:9000/peerjs` (with a local `peer` server running) to test the
+  public-server path.
 - `npm run probe`: one blocking call, one JSON report. Boots the server with a fast clock
   (`TIMESCALE`) and `AUTOPILOT=1` (human seats herd with the bot brain), opens a laptop, a friend
   and a phone held sideways, checks move/crouch/down/bark and the touch stick, plays a full run,
@@ -58,7 +60,9 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
   for bot dogs, gates are shut to dogs. Tested.
 - **Bots only use what a player could see.** They herd with the same moves a player has.
 - **No external hosts at runtime.** Fonts and assets are bundled (Discord's proxy blocks
-  unmapped hosts, and a blocked font once stalled page load for 10 s).
+  unmapped hosts, and a blocked font once stalled page load for 10 s). The one exception is online
+  play on the Vercel site: public STUN servers, and the public PeerJS server for matchmaking when
+  the site has no Redis.
 - **CSS2D labels position themselves with `transform`.** Animate them with the individual
   `rotate`/`scale` properties, never `transform`, or they jump to the top-left corner.
 - **No em dashes** anywhere: docs, UI copy, comments (Kyle's standing preference).

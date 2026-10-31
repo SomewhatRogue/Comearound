@@ -107,7 +107,9 @@ export function dogMesh(look: Look): DogRig {
   const back = group('back');
   back.add(at(along(s.girth, half * 0.9, main), 0, 0, -half * 0.45));
   const tail = group('tail');
-  tail.position.set(0, s.girth * 0.5, -half - s.girth * 0.6);
+  // The tail roots on the rump's surface, and wags about that root: lift first, then swing side to side.
+  tail.position.set(0, s.girth * 0.55, -half * 0.9 - s.girth * 0.72);
+  tail.rotation.order = 'YXZ';
   addTail(tail, s, main, accent);
   back.add(tail);
 
@@ -120,15 +122,11 @@ export function dogMesh(look: Look): DogRig {
   head.position.set(0, s.girth * 0.9, half + s.girth * 0.75);
   addHead(head, s, main, accent, maskC, eye.color, look.collar);
   front.add(head);
-  if (s.fluff !== 'ruff') addCollar(front, s, half, look.collar);
+  addCollar(front, s, half, look.collar);
   if (s.fluff === 'ruff') {
     // The keeshond's lion ruff.
     front.add(at(mesh(new THREE.IcosahedronGeometry(s.girth * 1.35, 1), main), 0, s.girth * 0.2, half - 0.06));
     front.add(at(mesh(new THREE.IcosahedronGeometry(s.girth * 0.95, 1), accent), 0, -s.girth * 0.15, half + s.girth * 0.45));
-    // The ruff swallows a neck collar, so a keeshond wears it around the ruff.
-    const ring = mesh(new THREE.TorusGeometry(s.girth * 1.0, 0.05, 6, 18), look.collar);
-    ring.rotation.x = Math.PI / 2 - 0.9;
-    front.add(at(ring, 0, s.girth * 0.25, half + s.girth * 0.35));
   }
   if (s.fluff === 'poodle') front.add(at(mesh(new THREE.IcosahedronGeometry(s.girth * 1.35, 1), main), 0, s.girth * 0.2, half * 0.6));
 
@@ -153,23 +151,44 @@ export function dogMesh(look: Look): DogRig {
 }
 
 /**
- * The collar goes round the neck: the gap between the chest and the head, ringed along the line
- * from one to the other (mostly upright, leaning forward), with a brass tag hanging at the front.
+ * The collar: a flat strap where the neck meets the chest, square to the line from chest to head,
+ * sized to sit just proud of the chest there (so it hugs, never a floating ring), with a brass tag
+ * hanging at the throat.
  */
 function addCollar(front: THREE.Group, s: BreedShape, half: number, collar: string): void {
   const g = s.girth;
-  const [cy, cz] = [-g * 0.25, half + g * 0.2];
-  const [hy, hz] = [g * 0.9, half + g * 0.75];
-  const t = 0.55;
-  const [y, z] = [cy + (hy - cy) * t, cz + (hz - cz) * t];
-  const tilt = Math.atan2(hy - cy, hz - cz);
-  const r = Math.max(0.13, g * 0.78);
-  const ring = mesh(new THREE.TorusGeometry(r, 0.042, 6, 18), collar);
-  ring.rotation.x = -tilt;
-  front.add(at(ring, 0, y, z));
-  const tagDisc = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.022, 12), '#e8b93a');
-  tagDisc.rotation.x = Math.PI / 2;
-  front.add(at(tagDisc, 0, y - r * Math.cos(tilt) * 0.9 - 0.04, z + r * Math.sin(tilt) * 0.9 + 0.02));
+  const chest = new THREE.Vector3(0, -g * 0.25, half + g * 0.2);
+  const axis = new THREE.Vector3(0, g * 0.9, half + g * 0.75).sub(chest).normalize();
+  const at0 = chest.clone().addScaledVector(axis, g * 0.85 * 0.45);
+  // What the strap goes round at that height: the chest, and a keeshond's bib (its ruff is left to
+  // swallow the sides, the way a collar sinks into a fluffy dog's fur).
+  const balls: [THREE.Vector3, number][] = [[chest, g * 0.85]];
+  if (s.fluff === 'ruff') balls.push([new THREE.Vector3(0, -g * 0.15, half + g * 0.45), g * 0.95]);
+  let radius = 0.1;
+  for (const [c, r] of balls) {
+    const d = c.clone().sub(at0);
+    const along = d.dot(axis);
+    if (Math.abs(along) >= r) continue;
+    const side = d.addScaledVector(axis, -along).length();
+    radius = Math.max(radius, side + Math.sqrt(r * r - along * along));
+  }
+  radius += 0.014;
+  const c = strap(radius, collar);
+  c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+  c.position.copy(at0);
+  front.add(c);
+  const down = new THREE.Vector3(0, -axis.z, axis.y).normalize();
+  const tag = mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.018, 12), '#e8b93a');
+  tag.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), down);
+  tag.position.copy(at0).addScaledVector(down, radius + 0.02).add(new THREE.Vector3(0, -0.03, 0));
+  front.add(tag);
+}
+
+/** A flat collar strap: an open band, both faces drawn, so it reads as leather, not a ring. */
+function strap(radius: number, color: string, width = 0.07): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, width, 20, 1, true), mat(color, { side: THREE.DoubleSide, roughness: 0.6 }));
+  m.castShadow = true;
+  return m;
 }
 
 function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string, maskC: string, eyeColor: string, collar: string): void {
@@ -221,34 +240,35 @@ function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string,
 }
 
 function addTail(tail: THREE.Group, s: BreedShape, main: string, accent: string): void {
+  // Every tail starts exactly at the group's origin (the root on the rump), so nothing floats off
+  // the dog when the group turns.
+  const bend = group('bend');
+  tail.add(bend);
   switch (s.tail) {
     case 'stub':
-      tail.add(mesh(new THREE.SphereGeometry(0.05, 6, 5), main));
+      bend.add(mesh(new THREE.SphereGeometry(0.06, 6, 5), main));
       break;
     case 'curl': {
-      // Curled up over the back (keeshond, husky, pug).
-      const t = mesh(new THREE.TorusGeometry(0.09, 0.045, 5, 10, Math.PI * 1.4), main);
-      t.rotation.y = Math.PI / 2;
-      t.position.set(0, 0.1, 0.02);
-      tail.add(t);
+      // Curled up over the back (keeshond, husky, pug): an arc that begins at the root.
+      const R = 0.09;
+      bend.rotation.y = Math.PI / 2;
+      bend.add(at(mesh(new THREE.TorusGeometry(R, 0.045, 5, 10, Math.PI * 1.4), main), -R, 0, 0));
+      bend.add(mesh(new THREE.SphereGeometry(0.05, 6, 5), main));
       break;
     }
     case 'pom': {
-      const stick = mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.22, 5), main);
-      stick.position.y = 0.1;
-      stick.rotation.x = -0.4;
-      tail.add(stick, at(mesh(new THREE.IcosahedronGeometry(0.08, 1), main), 0, 0.21, -0.08));
+      bend.rotation.x = -0.4;
+      bend.add(at(mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.22, 5), main), 0, 0.11, 0));
+      bend.add(at(mesh(new THREE.IcosahedronGeometry(0.08, 1), main), 0, 0.23, 0));
       break;
     }
     default: {
       // Hanging plume (collie, golden) or straight (malinois); tipped in the accent colour.
       const len = s.tail === 'straight' ? 0.34 : 0.4;
-      const body = mesh(new THREE.CapsuleGeometry(s.tail === 'straight' ? 0.03 : 0.055, len, 3, 6), main);
-      body.position.set(0, -len / 2 + 0.05, -0.06);
-      body.rotation.x = 0.35;
-      const tip = mesh(new THREE.SphereGeometry(s.tail === 'straight' ? 0.035 : 0.06, 6, 5), s.tail === 'straight' ? main : accent);
-      tip.position.set(0, -len + 0.02, -0.16);
-      tail.add(body, tip);
+      const r = s.tail === 'straight' ? 0.03 : 0.055;
+      bend.rotation.x = 0.35;
+      bend.add(at(mesh(new THREE.CapsuleGeometry(r, len, 3, 6), main), 0, -len / 2, 0));
+      bend.add(at(mesh(new THREE.SphereGeometry(s.tail === 'straight' ? 0.035 : 0.06, 6, 5), s.tail === 'straight' ? main : accent), 0, -len - r * 0.3, 0));
     }
   }
 }

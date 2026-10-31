@@ -8,7 +8,7 @@ import { BREEDS, BREED_NAMES, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } f
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
 /** Extra lobby lines from whichever online layer is running (friends on the page, or an online room). */
-export interface LobbyExtra { html(pub?: PublicView, me?: PrivateView): string; key(): string; forceBots?: boolean; join?(v: string): void; leave?(): void; retry?(): void; share?(): void }
+export interface LobbyExtra { html(pub?: PublicView, me?: PrivateView): string; key(): string; forceBots?: boolean; join?(v: string): void; leave?(): void; retry?(): void; share?(): void; joinCode?(code: string): void }
 import { sfx } from './sfx';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -36,6 +36,9 @@ export class Panels {
       if (!el) return;
       sfx.click();
       this.act(el.dataset.act!, el.dataset.v ?? '');
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.target as HTMLElement).id === 'code-input') this.act('joincode', '');
     });
     document.addEventListener('input', (e) => {
       const el = e.target as HTMLInputElement;
@@ -71,6 +74,7 @@ export class Panels {
     if (act === 'leave') this.party?.leave?.();
     if (act === 'retry') this.party?.retry?.();
     if (act === 'share') this.party?.share?.();
+    if (act === 'joincode') this.party?.joinCode?.((document.getElementById('code-input') as HTMLInputElement | null)?.value ?? '');
     if (act === 'fold') [this.collapsed, this.keys.lobby] = [!this.collapsed, ''];
     if (act === 'endField') {
       this.send({ t: 'endField' });
@@ -93,7 +97,7 @@ export class Panels {
     const lk = pub.phase === 'lobby' ? JSON.stringify([this.look, pub.dogs.map((d) => [d.look, d.connected, d.bot]), pub.hostId === me.you, this.pick, this.bots, this.collapsed, this.party?.key()]) : 'off';
     if (lk !== this.keys.lobby) {
       this.keys.lobby = lk;
-      const typing = document.activeElement?.id === 'name-input';
+      const typing = ['name-input', 'code-input'].includes(document.activeElement?.id ?? '');
       if (!typing) lobby.innerHTML = pub.phase === 'lobby' ? (this.collapsed ? '<button class="chip on unfold" data-act="fold">Your dog &amp; start</button>' : this.lobbyHtml(pub, me)) : '';
       lobby.style.display = pub.phase === 'lobby' ? '' : 'none';
       lobby.classList.toggle('folded', this.collapsed);

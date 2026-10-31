@@ -8,6 +8,7 @@ import { publicView } from '../server/view';
 import type { ClientMsg, Look, PrivateEvent, PrivateView, PublicView, ServerMsg } from '../shared/protocol';
 import { decodeView, encodeView, type WireView } from '../shared/wire';
 import type { LocalNet } from './local';
+import type { Offer } from './brokers';
 import type { NetLike } from './net';
 
 const env = import.meta.env as Record<string, string | undefined>;
@@ -41,7 +42,7 @@ export class P2PHost {
   readonly guests = new Map<string, Guest>();
   private timer: number;
 
-  constructor(private room: string, private me: string, private local: LocalNet, private onGuests: () => void) {
+  constructor(private local: LocalNet, private reply: (to: string, msg: Offer) => Promise<boolean>, private onGuests: () => void) {
     local.remote = (conn, raw) => {
       const g = this.guests.get(conn);
       if (g?.ctl?.readyState === 'open' && raw.startsWith('{"t":"event"')) g.ctl.send(raw);
@@ -74,7 +75,7 @@ export class P2PHost {
     await pc.setRemoteDescription({ type: 'offer', sdp });
     await pc.setLocalDescription(await pc.createAnswer());
     await gathered(pc);
-    await signal({ op: 'send', room: this.room, me: this.me, to: from, msg: { t: 'answer', sdp: pc.localDescription?.sdp } });
+    await this.reply(from, { t: 'answer', sdp: pc.localDescription?.sdp ?? '' });
   }
 
   private drop(id: string): void {
@@ -125,7 +126,9 @@ export class P2PNet implements NetLike {
   private lastAt = 0;
   private closed = false;
 
-  constructor(private room: string, private id: string, private hostId: string, private token: string, private look: () => Look) {
+  private answer: ((sdp: string) => void) | null = null;
+
+  constructor(private offerTo: (msg: Offer) => Promise<boolean>, private token: string, private look: () => Look) {
     this.ctl.onopen = () => this.send({ t: 'hello', token: this.token, look: this.look() });
     this.ctl.onmessage = (e) => {
       const m = JSON.parse(String(e.data)) as ServerMsg;
@@ -153,22 +156,24 @@ export class P2PNet implements NetLike {
     this.pc.onconnectionstatechange = () => (this.pc.connectionState === 'failed' || this.pc.connectionState === 'closed') && lost();
   }
 
+  /** The host's answer arrived (through matchmaking). */
+  answered(sdp: string): void {
+    this.answer?.(sdp);
+  }
+
   /** Offer, then wait for the host's answer and the first snapshot. Resolves false if it never comes. */
   async connect(timeoutMs = 15000): Promise<boolean> {
     const until = performance.now() + timeoutMs;
     await this.pc.setLocalDescription(await this.pc.createOffer());
     await gathered(this.pc);
-    const sent = await signal({ op: 'send', room: this.room, me: this.id, to: this.hostId, msg: { t: 'offer', sdp: this.pc.localDescription?.sdp } });
-    if (!sent) return false;
-    while (performance.now() < until && !this.closed) {
-      const r = await signal({ op: 'poll', room: this.room, me: this.id });
-      const answer = ((r?.msgs as { from: string; msg: { t: string; sdp: string } }[]) ?? []).find((m) => m.from === this.hostId && m.msg?.t === 'answer');
-      if (answer) {
-        await this.pc.setRemoteDescription({ type: 'answer', sdp: answer.msg.sdp });
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 600));
-    }
+    const got = new Promise<string | null>((done) => {
+      this.answer = done;
+      setTimeout(() => done(null), Math.max(0, until - performance.now()));
+    });
+    if (!(await this.offerTo({ t: 'offer', sdp: this.pc.localDescription?.sdp ?? '' }))) return false;
+    const sdp = await got;
+    if (!sdp || this.closed) return false;
+    await this.pc.setRemoteDescription({ type: 'answer', sdp });
     while (performance.now() < until && !this.closed && !this.me) await new Promise((r) => setTimeout(r, 100));
     return !!this.me;
   }
