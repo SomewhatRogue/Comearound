@@ -18,7 +18,7 @@
   color-scheme: light;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #a9cbe0; font-family: var(--font); color: var(--ink); -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; background: #a9cbe0; font-family: var(--font); color: var(--ink); -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 #game, #game canvas, .labels { position: fixed; inset: 0; }
 #game canvas { touch-action: none; }
 .labels { pointer-events: none; }
@@ -84,7 +84,7 @@ input { -webkit-user-select: text; user-select: text; }
 #intro .team0 b { color: var(--t0); } #intro .team1 b { color: var(--t1); }
 
 /* Lobby side panel */
-.side { z-index: 15; position: fixed; top: 60px; right: calc(14px + var(--safe-r)); width: 340px; max-height: calc(100% - 80px); overflow: auto; background: var(--paper); border-radius: var(--radius); padding: 16px 18px; box-shadow: 0 4px 0 #0002; -webkit-user-select: auto; user-select: auto; }
+.side { touch-action: pan-y; z-index: 15; position: fixed; top: 60px; right: calc(14px + var(--safe-r)); width: 340px; max-height: calc(100% - 80px); overflow: auto; background: var(--paper); border-radius: var(--radius); padding: 16px 18px; box-shadow: 0 4px 0 #0002; -webkit-user-select: auto; user-select: auto; }
 .side h2 { margin: 0 0 2px; font-size: 26px; }
 .side label { display: grid; gap: 4px; margin-top: 12px; font-weight: 600; font-size: 13px; }
 .side input { font: inherit; font-size: 16px; padding: 7px 10px; border: 2px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); }
@@ -127,7 +127,7 @@ body:has(#modal:not(.hidden):not(.glance)) #touch { display: none; }
 /* Modals */
 #modal { z-index: 30; position: fixed; inset: 0; display: grid; place-items: center; background: #1f2a1a77; padding: 16px; }
 #modal.glance { background: #1f2a1a44; pointer-events: none; }
-.sheet { background: var(--paper); border-radius: 18px; padding: 20px 24px; width: min(680px, 100%); max-height: calc(100% - 24px); overflow: auto; box-shadow: 0 8px 0 #0003; position: relative; animation: rise 0.35s cubic-bezier(.3,1.5,.5,1); pointer-events: auto; }
+.sheet { touch-action: pan-y; background: var(--paper); border-radius: 18px; padding: 20px 24px; width: min(680px, 100%); max-height: calc(100% - 24px); overflow: auto; box-shadow: 0 8px 0 #0003; position: relative; animation: rise 0.35s cubic-bezier(.3,1.5,.5,1); pointer-events: auto; }
 .sheet h2 { margin: 0 0 6px; font-size: 28px; }
 .sheet h3 { margin: 14px 0 6px; font-size: 16px; }
 .sheet h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); }

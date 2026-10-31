@@ -86,72 +86,87 @@ export class Input {
     const knob = pad.querySelector<HTMLElement>('.knob')!;
     const R = 56;
     const zone = pad.querySelector<HTMLElement>('.stick-zone')!;
-    zone.addEventListener('pointerdown', (e) => {
+    // Touch events, not pointer events, drive the stick: in phone web views (the Claude app among
+    // them) the page around the game can claim a drag as a scroll and cancel the pointer. Calling
+    // preventDefault on non-passive touch listeners keeps the drag ours. Pointer events stay for a
+    // mouse or pen (testing on a laptop with ?touch).
+    const begin = (id: number, x: number, y: number) => {
       if (this.stick.id >= 0) return;
-      zone.setPointerCapture(e.pointerId);
-      Object.assign(this.stick, { id: e.pointerId, ox: e.clientX, oz: e.clientY, x: 0, z: 0, full: false });
-      base.style.left = `${e.clientX}px`;
-      base.style.top = `${e.clientY}px`;
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      Object.assign(this.stick, { id, ox: x, oz: y, x: 0, z: 0, full: false });
+      base.style.left = `${x}px`;
+      base.style.top = `${y}px`;
       base.classList.add('on');
       knob.style.transform = 'translate(-50%, -50%)';
       this.update();
-    });
-    zone.addEventListener('pointermove', (e) => {
-      if (e.pointerId !== this.stick.id) return;
-      let x = e.clientX - this.stick.ox;
-      let z = e.clientY - this.stick.oz;
+    };
+    const move = (id: number, cx: number, cy: number) => {
+      if (id !== this.stick.id) return;
+      let x = cx - this.stick.ox;
+      let z = cy - this.stick.oz;
       const l = Math.hypot(x, z);
       if (l > R) [x, z] = [(x / l) * R, (z / l) * R];
       knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${z}px))`;
       const m = Math.min(1, l / R);
-      // A small dead zone, then a straight response; pushed to the edge means sprint.
+      // A small dead zone, then a straight response; pushed past the edge means sprint.
       const k = m < 0.15 ? 0 : m;
       [this.stick.x, this.stick.z] = l > 0 ? [(x / Math.min(l, R)) * k, (z / Math.min(l, R)) * k] : [0, 0];
       this.stick.full = l > R * 1.25;
       this.update();
-    });
-    const end = (e: PointerEvent) => {
-      if (e.pointerId !== this.stick.id) return;
+    };
+    const end = (id: number) => {
+      if (id !== this.stick.id) return;
       this.stick.id = -1;
       base.classList.remove('on');
       this.update();
     };
-    zone.addEventListener('pointerup', end);
-    zone.addEventListener('pointercancel', end);
-    zone.addEventListener('lostpointercapture', end);
-
-    const btn = (sel: string) => pad.querySelector<HTMLElement>(sel)!;
-    btn('.bark').addEventListener('pointerdown', (e) => {
+    const opts = { passive: false } as const;
+    zone.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      this.onBark();
+      const t = e.changedTouches[0];
+      if (t) begin(t.identifier + 1000, t.clientX, t.clientY);
+    }, opts);
+    zone.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of Array.from(e.changedTouches)) move(t.identifier + 1000, t.clientX, t.clientY);
+    }, opts);
+    for (const ev of ['touchend', 'touchcancel'] as const) {
+      zone.addEventListener(ev, (e) => {
+        for (const t of Array.from(e.changedTouches)) end(t.identifier + 1000);
+      });
+    }
+    zone.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') return;
+      zone.setPointerCapture(e.pointerId);
+      begin(e.pointerId, e.clientX, e.clientY);
     });
-    const sprint = btn('.sprint');
-    sprint.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      sprint.setPointerCapture(e.pointerId);
+    zone.addEventListener('pointermove', (e) => e.pointerType !== 'touch' && move(e.pointerId, e.clientX, e.clientY));
+    for (const ev of ['pointerup', 'pointercancel'] as const) zone.addEventListener(ev, (e) => e.pointerType !== 'touch' && end(e.pointerId));
+
+    // Buttons: react on touchstart (no 300 ms wait, no scroll stealing), with pointer for a mouse.
+    const btn = (sel: string) => pad.querySelector<HTMLElement>(sel)!;
+    const press = (el: HTMLElement, down: () => void, up?: () => void) => {
+      el.addEventListener('touchstart', (e) => (e.preventDefault(), down()), opts);
+      if (up) for (const ev of ['touchend', 'touchcancel'] as const) el.addEventListener(ev, (e) => (e.preventDefault(), up()), opts);
+      el.addEventListener('pointerdown', (e) => e.pointerType !== 'touch' && (e.preventDefault(), down()));
+      if (up) for (const ev of ['pointerup', 'pointerleave'] as const) el.addEventListener(ev, (e) => e.pointerType !== 'touch' && up());
+    };
+    press(btn('.bark'), () => this.onBark());
+    press(btn('.sprint'), () => {
       this.touchSprint = true;
       this.touchCrouch = false;
       btn('.down').classList.remove('on');
       this.update();
-    });
-    for (const ev of ['pointerup', 'pointercancel'] as const) sprint.addEventListener(ev, () => ((this.touchSprint = false), this.update()));
-    btn('.down').addEventListener('pointerdown', (e) => {
-      e.preventDefault();
+    }, () => ((this.touchSprint = false), this.update()));
+    press(btn('.down'), () => {
       this.touchCrouch = !this.touchCrouch;
       btn('.down').classList.toggle('on', this.touchCrouch);
       this.update();
     });
-    // Sideways and full screen, where the browser allows it (it often won't; that's fine).
-    const goBig = () => {
-      const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
-      try {
-        void (el.requestFullscreen?.() ?? el.webkitRequestFullscreen?.())?.catch?.(() => {});
-        void (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape').catch(() => {});
-      } catch {
-        /* not allowed here */
-      }
-    };
-    addEventListener('pointerdown', goBig, { once: true });
+    // The page itself never scrolls or zooms under a thumb.
+    document.addEventListener('touchmove', (e) => {
+      if (!(e.target as HTMLElement).closest?.('.side, .sheet')) e.preventDefault();
+    }, opts);
   }
 
   /** Show touch buttons as ready or not (bark cooldown) without the HUD knowing about touch. */
