@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TRIALS, VERSUS, inPen } from '../src/shared/field';
+import { COURSES, TRIALS, VERSUS, inPen, inWater } from '../src/shared/field';
 import { GOAT } from '../src/shared/tuning';
 import { makeBrain } from '../src/server/bots';
 import { isPenned } from '../src/server/flock';
@@ -265,5 +265,109 @@ describe('joining', () => {
     expect(d.look.coat).toBe('black-white');
     expect(d.look.eyes).toBe('brown');
     expect(d.look.name).toBe('bRexb');
+  });
+});
+
+/** A room on a given course field, everyone parked out of the way. */
+function onField(course: 'tricky' | 'wild', idx: number, seed = 7) {
+  const h = harness(1, seed);
+  h.say(0, { t: 'start', mode: 'trials', fillBots: false, course });
+  if (idx > 0) {
+    h.room.fieldIdx = idx - 1;
+    (h.room as any).phase = 'fieldEnd';
+    h.room.timeLeft = 0;
+  }
+  h.toPlaying();
+  for (const d of h.room.dogs.values()) d.bot = null;
+  return h;
+}
+
+describe('hazards, wind and weather', () => {
+  it('sheep cannot cross a stream except at a bridge; dogs wade it, slowly', () => {
+    const h = onField('tricky', 0);
+    const f = h.room.field;
+    expect(f.id).toBe('brook');
+    const s = h.room.sheep[0];
+    // West bank, running east hard at open water (between the bridges).
+    Object.assign(s, { x: -6, z: 1, vx: 30, vz: 0 });
+    h.run(0.6);
+    expect(s.x).toBeLessThan(-3);
+    const d = h.dog(0);
+    Object.assign(d, { x: -7, z: 1 });
+    h.say(0, { t: 'input', dx: 1, dz: 0, sprint: false, crouch: false });
+    h.run(3);
+    expect(d.x).toBeGreaterThan(0);
+  });
+
+  it('sheep that wander out through a broken fence are lost, and cost points', () => {
+    const h = onField('tricky', 1);
+    const f = h.room.field;
+    expect(f.gaps?.length).toBeGreaterThan(0);
+    const gap = f.gaps![0];
+    const s = h.room.sheep[0];
+    Object.assign(s, { x: gap.at, z: -f.d / 2 + 1, vx: 0, vz: -3, fear: 1, startle: 1 });
+    for (let t = 0; t < 3 && !s.lost; t += 0.05) {
+      s.vz = Math.min(s.vz, -3);
+      h.room.tick(0.05);
+    }
+    expect(s.lost).toBe(true);
+    (h.room as any).timeLeft = 0;
+    h.run(0.1);
+    const sc = h.room.fieldScores[0][0];
+    expect(sc.lost).toBe(1);
+    expect(sc.lostPenalty).toBeGreaterThan(0);
+  });
+
+  it('wind carries your scent: sheep downwind of you drift away, sheep upwind do not', () => {
+    const drift = (upwind: boolean) => {
+      const h = onField('tricky', 2);
+      h.room.wind = { x: 1, z: 0, s: 0.8 };
+      (h.room.field as any).wind = { dir: 0, strength: 0.8 };
+      const d = h.dog(0);
+      const s = h.room.sheep[0];
+      for (const o of h.room.sheep) if (o !== s) Object.assign(o, { x: -20, z: -15 });
+      for (const g of h.room.goats) Object.assign(g, { x: 20, z: -15, bleatIn: 99, planT: 99 });
+      Object.assign(s, { x: 0, z: 12, vx: 0, vz: 0, fear: 0 });
+      Object.assign(d, { x: upwind ? -8 : 8, z: 12 });
+      const x0 = s.x;
+      for (let t = 0; t < 2; t += 0.05) {
+        h.room.wind = { x: 1, z: 0, s: 0.8 };
+        h.room.tick(0.05);
+      }
+      return s.x - x0;
+    };
+    // (A lone sheep also drifts back toward the others, so compare the two.)
+    expect(drift(true)).toBeGreaterThan(drift(false) + 1.5);
+  });
+
+  it('lightning panics every sheep and makes dogs cower', () => {
+    const h = onField('wild', 2);
+    expect(h.room.weather.kind).toBe('storm');
+    h.room.weather.nextFlash = 0;
+    h.run(0.1);
+    expect(h.room.weather.flashes).toBe(1);
+    expect(h.room.sheep.every((s) => s.fear > 0.8 || s.lost)).toBe(true);
+    expect(h.dog(0).cower).toBeGreaterThan(0);
+  });
+
+  it('sorting: black sheep only count in the black pen', () => {
+    const h = onField('wild', 0);
+    const f = h.room.field;
+    expect(f.sort).toBe(true);
+    const white = f.pens.find((p) => p.team === 0)!;
+    const s = h.room.sheep.find((o) => o.team === 1)!;
+    Object.assign(s, { x: white.x, z: white.z });
+    expect(isPenned(f, s)).toBe(false);
+    const black = f.pens.find((p) => p.team === 1)!;
+    Object.assign(s, { x: black.x, z: black.z });
+    expect(isPenned(f, s)).toBe(true);
+  });
+
+  it('every course field is playable: starts, flocks and goats are on dry open ground', () => {
+    for (const c of Object.values(COURSES)) {
+      for (const f of c.fields) {
+        for (const p of [...f.starts, ...f.flocks, ...f.goats]) expect(inWater(f, p.x, p.z), `${f.id} ${p.x},${p.z}`).toBe(false);
+      }
+    }
   });
 });

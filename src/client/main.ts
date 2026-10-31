@@ -17,6 +17,9 @@ import { Panels } from './panels';
 import { FieldView, followCamera, glLost, glRestored, makeStage } from './scene';
 import { sfx } from './sfx';
 import { SoundDirector } from './sounds';
+import { WeatherView } from './weatherview';
+import { Music } from './music';
+import { Minimap } from './minimap';
 import '@fontsource/fredoka/400.css';
 import '@fontsource/fredoka/600.css';
 import '@fontsource/fredoka/700.css';
@@ -64,11 +67,14 @@ const lowfx = params.has('lowfx');
 const stage = makeStage(document.getElementById('game')!, lowfx, isTouch);
 const fieldView = new FieldView(stage, lowfx);
 const entities = new Entities(stage);
+const weather = new WeatherView(stage, lowfx);
+const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement);
 const hud = new Hud();
 const input = new Input();
 const net: NetLike = solo ? new LocalNet(() => look) : new Net(room, token, () => look);
 const panels = new Panels((m) => net.send(m), look, (l) => { look = l; store.set('tac-dog', JSON.stringify(l)); }, room, solo);
 const sounds = new SoundDirector();
+const music = new Music();
 
 if (!isTouch) document.getElementById('controls')!.hidden = false;
 const muteBtn = document.getElementById('mute')!;
@@ -80,14 +86,29 @@ input.onMute = () => {
 };
 muteBtn.addEventListener('click', () => input.onMute());
 // Browsers only allow sound after the player interacts.
-for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => sfx.unlock(), { capture: true });
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => (sfx.unlock(), music.start()), { capture: true });
+const musicBtn = document.getElementById('music')!;
+const showMusic = () => (musicBtn.textContent = music.on ? 'Music on' : 'Music off');
+showMusic();
+musicBtn.addEventListener('click', () => {
+  music.setOn(!music.on);
+  showMusic();
+});
+// The menu's sound and music buttons (on phones the top bar hides them).
+document.addEventListener('toggle-audio', (e) => {
+  if ((e as CustomEvent).detail === 'music') musicBtn.click();
+  else input.onMute();
+});
 
 input.onBark = () => net.send({ t: 'bark' });
 input.onEscape = () => (panels.menuOpen = !panels.menuOpen);
 document.getElementById('menu-btn')!.addEventListener('click', () => (panels.menuOpen = !panels.menuOpen));
 
 net.onEvent = (ev) => {
-  if (ev.kind === 'naughty') hud.naughty(ev.words);
+  if (ev.kind === 'naughty') {
+    hud.naughty(ev.words);
+    music.duck(4);
+  }
   if (ev.kind === 'toast') hud.toast(ev.text);
   if (ev.kind === 'pop') hud.pop(ev.amount, ev.label, entities.pos.get(net.me?.you ?? ''), stage.camera);
 };
@@ -172,6 +193,9 @@ function frame(now: number) {
     // In the lobby the panel sits on the right, so look a little right of your dog.
     const shift = pub.phase === 'lobby' && stage.camera.aspect > 1.2 ? (close ? 2.2 : 6) : 0;
     if (!noLoop) followCamera(stage, focus.x + shift, focus.z, dt, close);
+    weather.update(pub, focus, dt);
+    music.setRain(pub.phase !== 'lobby' && pub.weather.kind !== 'clear');
+    minimap.draw(pub, field, me.id, now);
     hud.update(pub, net.me);
     input.setBarkReady(net.me.barkReady);
     panels.render(pub, net.me);
@@ -217,6 +241,7 @@ if (net instanceof LocalNet) {
   w.__pause = (on = true) => ((net as LocalNet).paused = on);
 }
 w.__debug_naughty = (words?: string) => hud.naughty(words);
+w.__music = music;
 w.__game_actions__ = { send: (m: Parameters<NetLike['send']>[0]) => net.send(m), predicted: () => ({ ...predicted }) };
 
 /** Art review: every breed in a row, in a pose, with the camera close. `__lineup('crouch')`. */

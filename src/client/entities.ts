@@ -6,6 +6,7 @@
  */
 import * as THREE from 'three';
 import type { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { fieldById } from '../shared/field';
 import type { DogPub, PublicView } from '../shared/protocol';
 import { DOG, GOAT, SHEEP } from '../shared/tuning';
 import { GoatView } from './goatview';
@@ -28,6 +29,8 @@ const POSES: Record<string, Pose> = {
   crouch: { y: 0.6, front: 0.2, back: 0.04, head: -0.08, legFold: 0.6, frontLegs: 0, backLegs: 0, tail: -0.5 },
   // Lying down in the grass, paws out front, head up and watching.
   down: { y: 0.3, front: -0.12, back: 0, head: -0.25, legFold: 0.55, frontLegs: -1.45, backLegs: -1.1, tail: -0.9 },
+  // Lightning: belly low, head tucked, tail between the legs.
+  cower: { y: 0.45, front: 0.1, back: 0.15, head: 0.5, legFold: 0.5, frontLegs: 0.3, backLegs: -0.4, tail: -1.3 },
   // Frozen by the goat's stare: sitting, guilty.
   frozen: { y: 0.85, front: -0.35, back: -0.75, head: 0.15, legFold: 0.8, frontLegs: 0.2, backLegs: -1.2, tail: -1.1 },
 };
@@ -37,7 +40,7 @@ interface SheepView { rig: SheepRig; facing: number; phase: number; lastX: numbe
 
 export class Entities {
   private dogs = new Map<string, DogView>();
-  private sheep = new Map<number, SheepView>();
+  private sheep = new Map<string, SheepView>();
   private goats = new Map<string, GoatView>();
   private rings: { m: THREE.Mesh; t: number; max: number }[] = [];
   // Points along -y in its own plane, which becomes +z (the dog's forward) once laid flat.
@@ -107,7 +110,7 @@ export class Entities {
       this.pos.set(d.id, root.position);
 
       // Pose: ease toward the posture's shape.
-      const want = POSES[d.frozen ? 'frozen' : d.down ? 'down' : d.posture];
+      const want = POSES[d.frozen ? 'frozen' : d.cower ? 'cower' : d.down ? 'down' : d.posture];
       const pk = 1 - Math.exp(-dt * 8);
       for (const f of Object.keys(want) as (keyof Pose)[]) v.pose[f] += (want[f] - v.pose[f]) * pk;
       const p = v.pose;
@@ -129,7 +132,9 @@ export class Entities {
         leg.scale.y = p.legFold;
       });
       r.tail.rotation.x = p.tail;
-      r.tail.rotation.y = Math.sin(time * (moving ? 9 : 4)) * (d.frozen ? 0.05 : 0.35);
+      r.tail.rotation.y = Math.sin(time * (moving ? 9 : 4)) * (d.frozen || d.cower ? 0.05 : 0.35);
+      // Cowering after lightning: a shiver.
+      r.rig.position.x = d.cower ? Math.sin(time * 45) * 0.025 : 0;
       for (const e of r.ears) e.rotation.x = d.frozen ? -0.6 : d.posture === 'sprint' ? -0.35 : 0;
 
       // Teaching aids: the eye cone (crouched) and the calm ring (lying down).
@@ -180,16 +185,19 @@ export class Entities {
   }
 
   private syncSheep(pub: PublicView, dt: number, k: number, time: number): void {
-    const seen = new Set<number>();
+    const seen = new Set<string>();
+    // Sorting fields: team 1 sheep are black sheep. Ids restart every field, so key by field too.
+    const sort = !!fieldById(pub.fieldId).sort;
     for (const s of pub.sheep) {
-      seen.add(s.id);
-      let v = this.sheep.get(s.id);
+      const key = `${pub.fieldId}:${pub.fieldIdx}:${s.id}`;
+      seen.add(key);
+      let v = this.sheep.get(key);
       if (!v) {
-        const rig = sheepMesh();
+        const rig = sheepMesh(sort && s.team === 1);
         rig.root.position.set(s.x, 0, s.z);
         this.stage.scene.add(rig.root);
         v = { rig, facing: s.rot, phase: Math.random() * 6, lastX: s.x, lastZ: s.z, speed: 0, penned: s.penned, hop: 0, jitter: Math.random() * 10 };
-        this.sheep.set(s.id, v);
+        this.sheep.set(key, v);
       }
       const root = v.rig.root;
       root.visible = !s.lost;
@@ -213,7 +221,7 @@ export class Entities {
       v.rig.body.position.x = shiver;
       const graze = v.speed < 0.3 && s.fear < 0.2 ? 0.6 + Math.sin(time * 0.7 + v.jitter) * 0.15 : 0;
       v.rig.head.rotation.x += ((running ? -0.25 : graze) - v.rig.head.rotation.x) * Math.min(1, dt * 4);
-      v.rig.mark.visible = s.team !== null && pub.mode === 'versus';
+      v.rig.mark.visible = s.team !== null && pub.mode === 'versus' && !sort;
       if (s.team !== null) v.rig.mark.material = markMat(s.team);
     }
     for (const [id, v] of this.sheep) {

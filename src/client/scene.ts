@@ -10,6 +10,7 @@ import { gateOf, penWalls, type FieldDef } from '../shared/field';
 import { at, hayMesh, mat, mesh, pondMesh, rockMesh, treeMesh } from './models';
 import { buildHazards } from './hazardsview';
 import { Scenery } from './scenery';
+import { animateProps, windmillMesh } from './props';
 
 export const TEAM_COLORS = ['#3d7dd8', '#e8762c'] as const;
 export const TEAM_NAMES = ['Blue', 'Orange'] as const;
@@ -24,6 +25,7 @@ export interface Stage {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   sun: THREE.DirectionalLight;
+  hemi: THREE.HemisphereLight;
   resize(): void;
 }
 
@@ -58,7 +60,8 @@ export function makeStage(host: HTMLElement, lowfx = false, phone = false): Stag
   scene.fog = new THREE.Fog(sky, 45, 95);
   const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 200);
 
-  scene.add(new THREE.HemisphereLight('#fff1d2', '#557a3c', 1.7));
+  const hemi = new THREE.HemisphereLight('#fff1d2', '#557a3c', 1.7);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight('#ffe6bf', 2.3);
   sun.position.set(-14, 26, 10);
   sun.castShadow = true;
@@ -78,7 +81,7 @@ export function makeStage(host: HTMLElement, lowfx = false, phone = false): Stag
   };
   window.addEventListener('resize', resize);
   resize();
-  return { renderer, labels, scene, camera, sun, resize };
+  return { renderer, labels, scene, camera, sun, hemi, resize };
 }
 
 /** The current field's ground, fences, pens and props. Rebuilt when the field changes. */
@@ -109,6 +112,7 @@ export class FieldView {
   /** Clouds and butterflies. */
   update(time: number, dt: number, wind: { x: number; z: number; s: number }): void {
     this.scenery?.update(time, dt, wind);
+    if (this.group && this.scenery) animateProps(this.group, time, dt, wind.s, this.scenery.ducks);
   }
 }
 
@@ -179,10 +183,12 @@ function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
     // Open outward: the leaf points out of the pen, angled slightly toward the side.
     leaf.rotation.y = -Math.atan2(gt.oz + sz * 0.5, gt.ox + sx * 0.5);
     g.add(leaf);
-    const sign = label(p.team === null ? 'PEN' : `${TEAM_NAMES[p.team]} pen`, `pen-label${p.team === null ? '' : ` team${p.team}`}`);
+    // Sorting fields: a white pen and a black pen. Versus: team pens.
+    const name = p.team === null ? 'PEN' : f.sort ? `${p.team ? 'Black' : 'White'} sheep` : `${TEAM_NAMES[p.team]} pen`;
+    const sign = label(name, `pen-label${p.team === null ? '' : f.sort ? ` wool${p.team}` : ` team${p.team}`}`);
     sign.position.set(gt.x + gt.ox * 1.2, 0.3, gt.z + gt.oz * 1.2);
     g.add(sign);
-    if (p.team !== null) {
+    if (p.team !== null && !f.sort) {
       const flag = new THREE.Group();
       flag.add(at(mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4, 5), '#6b4a30'), 0, 1.2, 0));
       flag.add(at(mesh(new THREE.BoxGeometry(0.03, 0.5, 0.8), TEAM_COLORS[p.team]), 0, 2.1, 0.4));
@@ -194,7 +200,7 @@ function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
   for (const o of f.obstacles) {
     if (o.kind === 'bramble') continue;
     const seed = o.x * 1.7 + o.z;
-    const obj = o.kind === 'tree' ? treeMesh(o.r, seed) : o.kind === 'rock' ? rockMesh(o.r) : o.kind === 'hay' ? hayMesh(o.r) : pondMesh(o.r, seed);
+    const obj = o.kind === 'tree' ? treeMesh(o.r, seed) : o.kind === 'rock' ? rockMesh(o.r) : o.kind === 'hay' ? hayMesh(o.r) : o.kind === 'windmill' ? windmillMesh(o.r / 1.7) : pondMesh(o.r, seed);
     obj.position.x += o.x;
     obj.position.z += o.z;
     g.add(obj);

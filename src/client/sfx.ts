@@ -93,6 +93,12 @@ function noise(o: { dur: number; f0: number; f1?: number; gain?: number; at?: nu
 
 const semi = (base: number, n: number) => base * 2 ** (n / 12);
 
+/** For the music: the shared audio context and the master output (so Sound off mutes it too). */
+export function audioOut(): { ctx: AudioContext; out: AudioNode } | null {
+  const a = ac();
+  return a && master ? { ctx: a, out: master } : null;
+}
+
 export const sfx = {
   /** Call from any click or key press so the browser lets sound start. */
   unlock() {
@@ -223,6 +229,38 @@ export const sfx = {
   whistle() {
     voice({ f0: 1500, f1: 2300, dur: 0.25, gain: 0.08 });
     voice({ f0: 2300, f1: 1700, dur: 0.35, gain: 0.08, at: 0.28 });
+  },
+  /** Thunder: a crack, then a long low rumble. `delay` is the gap after the flash. */
+  thunder(volume = 1, delay = 0.3) {
+    noise({ dur: 0.35, f0: 2400, f1: 600, gain: 0.18 * volume, at: delay, q: 0.6 });
+    noise({ dur: 2.8, f0: 160, f1: 60, gain: 0.32 * volume, at: delay + 0.05, q: 0.5 });
+    noise({ dur: 2.2, f0: 90, f1: 45, gain: 0.25 * volume, at: delay + 0.5, q: 0.7 });
+  },
+  /** Rain: a looping hiss of filtered noise. Returns controls (level 0..1, stop). */
+  rainLoop(): { stop: () => void; setLevel: (v: number) => void } {
+    const a = ac();
+    if (!a || !master) return { stop: () => {}, setLevel: () => {} };
+    const buf = a.createBuffer(1, a.sampleRate * 2, a.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = a.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const f = a.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 2600;
+    f.Q.value = 0.4;
+    const g = a.createGain();
+    g.gain.value = 0;
+    src.connect(f).connect(g).connect(master);
+    src.start();
+    return {
+      stop: () => {
+        g.gain.setTargetAtTime(0, a.currentTime, 0.4);
+        setTimeout(() => src.stop(), 1500);
+      },
+      setLevel: (v: number) => g.gain.setTargetAtTime(0.07 * v, a.currentTime, 0.3),
+    };
   },
   thud() {
     voice({ f0: 120, f1: 70, dur: 0.22, gain: 0.16 });

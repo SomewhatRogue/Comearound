@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { gateOf, inMud, inWater, type FieldDef } from '../shared/field';
 import { Rng } from '../shared/rng';
 import { at, mat, mesh, treeMesh } from './models';
+import { beehivesMesh, cartMesh, duckMesh, farmhouseMesh, scarecrowMesh, wellMesh, windmillMesh } from './props';
 
 interface Theme {
   grass: [string, string, string];
@@ -74,6 +75,8 @@ export class Scenery {
   readonly group = new THREE.Group();
   private butterflies: { inst: THREE.InstancedMesh; homes: { x: number; z: number; r: number; ph: number; sp: number }[] } | null = null;
   private clouds: THREE.Object3D[] = [];
+  /** Ducks paddling round ponds (animated by animateProps). */
+  readonly ducks: { obj: THREE.Object3D; x: number; z: number; r: number; ph: number; sp: number }[] = [];
   private streaks: { inst: THREE.InstancedMesh; mat: THREE.MeshBasicMaterial; pts: { x: number; z: number; y: number; ph: number }[] } | null = null;
   private m = new THREE.Matrix4();
 
@@ -90,6 +93,15 @@ export class Scenery {
     if (theme.extras === 'bunting') this.bunting();
     this.butterflySwarm(rng, patches);
     this.windStreaks(rng);
+    // Ducks on every pond.
+    for (const o of f.obstacles) {
+      if (o.kind !== 'pond') continue;
+      for (let i = 0; i < 3; i++) {
+        const obj = duckMesh();
+        this.group.add(obj);
+        this.ducks.push({ obj, x: o.x, z: o.z, r: o.r * rng.range(0.35, 0.75), ph: rng.range(0, 6.28), sp: rng.range(0.12, 0.25) * (i % 2 ? 1 : -1) });
+      }
+    }
   }
 
   /** Faint white streaks blowing across the field when the wind is up. */
@@ -203,6 +215,25 @@ export class Scenery {
     barn.position.set(-hw - 9, 0, -hd - 7);
     barn.rotation.y = 0.5;
     g.add(barn);
+
+    // Farm things on the hills: a windmill or two, the farmhouse, a scarecrow, a well, beehives, a hay cart.
+    const height = (x: number, z: number) => {
+      const out = Math.max(Math.abs(x) - hw, Math.abs(z) - hd, 0);
+      const rise = Math.min(1, Math.max(0, (out - 3) / 25));
+      return rise * rise * (2 + 6 * n(x * 0.5, z * 0.5)) - 0.1;
+    };
+    const place = (o: THREE.Object3D, x: number, z: number, rot = 0) => {
+      o.position.set(x, height(x, z), z);
+      o.rotation.y = rot;
+      g.add(o);
+    };
+    place(windmillMesh(1.3), hw + 16, -hd - 10, -0.6);
+    if (f.w > 45) place(windmillMesh(1.1), -hw - 20, hd + 14, 2.4);
+    place(farmhouseMesh(), -hw - 15, -hd - 4, 0.9);
+    place(scarecrowMesh(), hw + 6, hd + 5, -0.3);
+    place(wellMesh(), -hw - 5, -hd - 9, 0);
+    place(beehivesMesh(), hw + 7, -hd - 3, -0.4);
+    place(cartMesh(), -hw - 6, hd + 6, 0.5);
 
     // Trees scattered on the hills.
     for (let i = 0; i < (this.lowfx ? 10 : 22); i++) {

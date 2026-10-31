@@ -27,15 +27,16 @@ export class Hud {
     $('clock').classList.toggle('alarm', playing && pub.timeLeft <= 15);
 
     // Sheep counts: one for co-op, one per team in versus.
-    const teams: (0 | 1 | null)[] = pub.mode === 'versus' && run ? [0, 1] : [null];
+    const sort = !!field.sort && run;
+    const teams: (0 | 1 | null)[] = (pub.mode === 'versus' || sort) && run ? [0, 1] : [null];
     const counts = teams.map((t) => {
       const mine = pub.sheep.filter((s) => t === null || s.team === t);
-      return { t, n: mine.filter((s) => s.penned).length, of: mine.length };
+      return { t, n: mine.filter((s) => s.penned).length, of: mine.filter((s) => !s.lost).length };
     });
     const ck = JSON.stringify(counts);
     if (ck !== this.countKey) {
       this.countKey = ck;
-      $('pens').innerHTML = counts.map((c) => `<div class="pen-count ${c.t === null ? '' : `team${c.t}`}"><span class="sheep-ico"></span><b>${c.n}</b>/${c.of}${c.t === null ? '' : ` <i>${TEAM_NAMES[c.t]}</i>`}</div>`).join('');
+      $('pens').innerHTML = counts.map((c) => `<div class="pen-count ${c.t === null ? '' : sort ? `wool${c.t}` : `team${c.t}`}"><span class="sheep-ico"></span><b>${c.n}</b>/${c.of}${c.t === null ? '' : ` <i>${sort ? (c.t ? 'Black' : 'White') : TEAM_NAMES[c.t]}</i>`}</div>`).join('');
     }
 
     // Wind: an arrow the way it blows (north is up on screen), bolder when it's strong.
@@ -55,7 +56,7 @@ export class Hud {
     $('stamina-fill').style.width = `${(me.stamina / DOG.staminaMax) * 100}%`;
     $('stamina').classList.toggle('low', me.stamina < 25);
     $('bark-key').classList.toggle('cool', !me.barkReady);
-    $('posture').textContent = !self ? '' : self.frozen ? 'Frozen by the goat!' : self.down ? 'Lying down: sheep settle' : self.posture === 'crouch' ? 'Crouched: giving the eye' : self.posture === 'sprint' ? 'Sprinting' : '';
+    $('posture').textContent = !self ? '' : self.frozen ? 'Frozen by the goat!' : self.cower ? 'Eek! Lightning!' : self.down ? 'Lying down: sheep settle' : self.posture === 'crouch' ? 'Crouched: giving the eye' : self.posture === 'sprint' ? 'Sprinting' : '';
 
     // The intro card: field name, a tip, and the team you're on.
     const ik = pub.phase === 'intro' ? `${pub.fieldId}|${pub.fieldIdx}` : '';

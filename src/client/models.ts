@@ -243,12 +243,13 @@ const WOOL = '#f3eee2';
 const FACE = '#3b302b';
 
 /** A sheep: a cloud of wool, a dark face with ears out sideways, four stick legs. */
-export function sheepMesh(): SheepRig {
+/** A sheep. Black sheep (sorting fields) get dark wool. */
+export function sheepMesh(black = false): SheepRig {
   const root = group('sheep');
   const body = group('body');
   body.position.y = 0.42;
   root.add(body);
-  const wool = mat(WOOL);
+  const wool = mat(black ? '#3d3634' : WOOL);
   for (const [x, y, z, r] of [[0, 0.08, 0, 0.34], [0.14, 0.1, 0.18, 0.24], [-0.14, 0.1, 0.18, 0.24], [0.14, 0.1, -0.18, 0.24], [-0.14, 0.1, -0.18, 0.24], [0, 0.22, 0, 0.26]] as const) {
     body.add(at(mesh(new THREE.IcosahedronGeometry(r, 1), wool), x, y, z));
   }

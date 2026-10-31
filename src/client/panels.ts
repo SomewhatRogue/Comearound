@@ -59,6 +59,7 @@ export class Panels {
     if (act === 'again') this.startPick(v as CourseId | 'versus');
     if (act === 'copy') void navigator.clipboard?.writeText(location.href).catch(() => {});
     if (act === 'close') this.menuOpen = false;
+    if (act === 'toggle') document.dispatchEvent(new CustomEvent('toggle-audio', { detail: v }));
     if (act === 'fold') [this.collapsed, this.keys.lobby] = [!this.collapsed, ''];
     if (act === 'endField') {
       this.send({ t: 'endField' });
@@ -221,6 +222,6 @@ function menuHtml(pub: PublicView, me: PrivateView): string {
     <li><b>The goat</b> wanders, bleats and scatters sheep. It only gives way to a dog giving it the eye. Pen it for a bonus.</li>
     <li><b>Versus:</b> blue sheep go in the blue pen, orange in the orange pen. Pen yours, or herd the goat over to their side and let it bleat.</li>
     <li><b>Keys:</b> WASD or arrows move, Shift sprints, Space crouches, E barks, M mutes, Esc for this menu.</li>
-  </ol>${hostTools}</div>`;
+  </ol><div class="row"><button class="chip" data-act="toggle" data-v="sound">Sound on / off</button><button class="chip" data-act="toggle" data-v="music">Music on / off</button></div>${hostTools}</div>`;
 }
 
