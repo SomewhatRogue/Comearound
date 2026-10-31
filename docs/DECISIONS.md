@@ -25,6 +25,10 @@ nobody could reach.
   timing waits in the browser test now wait for the host's own view to catch up before reading
   it (the room has the friend a tick before the drawn view does). Full suite green four times in
   a row.
+- **Verified live** on comearound-lyart.vercel.app from a Vercel Sandbox (`scripts/live-phone.cjs`):
+  the host's page script fully paused and its socket dead (a phone in Messages) while the friend
+  opens the link; the friend waits, and joins within half a second of the host coming back, both
+  after 12 s away and after 45 s away (long enough for the room's host claim to lapse).
 
 ## 2026-10-31 (afternoon, later): online rooms through a Vercel relay, per Vercel's docs (Claude Opus 5.5)
 
