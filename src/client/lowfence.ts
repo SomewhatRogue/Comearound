@@ -4,7 +4,7 @@
  * them (`jumpAt` says where a dog is in its jump, from the same field data the rules use).
  */
 import * as THREE from 'three';
-import { jumpableHalf, type FieldDef, type LowFence } from '../shared/field';
+import { isJumpable, jumpableHalf, type FieldDef, type LowFence } from '../shared/field';
 import { Rng } from '../shared/rng';
 import { logMesh, stoneWallMesh } from './jumpables';
 import { mat } from './models';
@@ -14,7 +14,8 @@ const OLD = '#b3a07c';
 
 export function lowFences(f: FieldDef, heightAt: (x: number, z: number) => number): THREE.Group {
   const g = new THREE.Group();
-  for (const l of f.lowFences ?? []) g.add(l.kind === 'log' ? logMesh(l, heightAt) : l.kind === 'stones' ? stoneWallMesh(l, heightAt) : one(l, heightAt));
+  // Agility gear is drawn by agility.ts.
+  for (const l of f.lowFences ?? []) if (!l.kind || l.kind === 'fence' || l.kind === 'log' || l.kind === 'stones') g.add(l.kind === 'log' ? logMesh(l, heightAt) : l.kind === 'stones' ? stoneWallMesh(l, heightAt) : one(l, heightAt));
   return g;
 }
 
@@ -75,6 +76,7 @@ export function jumpAt(f: FieldDef, x: number, z: number, facing: number, scale 
   const fx = Math.sin(facing);
   const fz = Math.cos(facing);
   for (const l of f.lowFences ?? []) {
+    if (!isJumpable(l)) continue;
     const [ax, az] = l.a;
     const ex = l.b[0] - ax;
     const ez = l.b[1] - az;

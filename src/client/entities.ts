@@ -6,6 +6,7 @@
  */
 import * as THREE from 'three';
 import type { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { AG, onTable } from '../shared/agility';
 import { fieldById } from '../shared/field';
 import type { DogPub, PublicView } from '../shared/protocol';
 import { DOG, GOAT, SHEEP } from '../shared/tuning';
@@ -53,7 +54,7 @@ const POSES: Record<string, Pose> = {
   land: { y: 0.76, front: 0.16, back: -0.04, head: -0.1, legFold: 0.76, frontLegs: -0.2, backLegs: 0.25, tail: 0.55 },
 };
 
-interface DogView { jump: Jump['phase']; jumpScale: number; rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number; chicken: boolean; flap: number; mud: MudCoat }
+interface DogView { jump: Jump['phase']; jumpScale: number; rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number; chicken: boolean; flap: number; mud: MudCoat; lift: number }
 interface SheepView { rig: SheepRig; facing: number; phase: number; lastX: number; lastZ: number; speed: number; penned: boolean; hop: number; jitter: number }
 
 export class Entities {
@@ -80,7 +81,7 @@ export class Entities {
   pitchOf: (look: DogPub['look']) => number = () => 1;
 
   /** The field being drawn (for the lie of the land and its low fences). */
-  private field = fieldById('meadow');
+  private field = fieldById('practice');
 
   sync(pub: PublicView, you: string, predicted: { x: number; z: number; rot: number } | null, dt: number, time: number): void {
     this.field = fieldById(pub.fieldId);
@@ -140,6 +141,10 @@ export class Entities {
       root.position.z += (tz - root.position.z) * (mine ? 1 : k);
       // Standing on the lie of the land.
       root.position.y = heightAt(this.field, root.position.x, root.position.z);
+      // Up on an agility table: a quick hop up (and down off it).
+      const table = this.field.agility?.some((q) => onTable(q, root.position.x, root.position.z)) ? AG.tableH : 0;
+      v.lift += (table - v.lift) * Math.min(1, dt * 14);
+      root.position.y += v.lift + Math.sin(Math.min(1, Math.abs(table - v.lift) / AG.tableH) * Math.PI) * 0.18;
       const moved = Math.hypot(root.position.x - v.lastX, root.position.z - v.lastZ) / Math.max(dt, 1e-3);
       v.speed += (moved - v.speed) * Math.min(1, dt * 10);
       [v.lastX, v.lastZ] = [root.position.x, root.position.z];
@@ -261,7 +266,7 @@ export class Entities {
     calm.position.y = 0.05;
     rig.root.add(calm);
     this.stage.scene.add(rig.root);
-    const v: DogView = { jump: 'none', jumpScale: 1, rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look), chicken: d.look.breed === 'chicken', flap: 0, mud: mudCoat(rig, d.look.breed === 'chicken') };
+    const v: DogView = { jump: 'none', jumpScale: 1, rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look), chicken: d.look.breed === 'chicken', flap: 0, mud: mudCoat(rig, d.look.breed === 'chicken'), lift: 0 };
     this.dogs.set(d.id, v);
     return v;
   }

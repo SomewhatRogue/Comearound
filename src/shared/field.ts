@@ -5,6 +5,7 @@
  * A pen is a fenced box with a gate gap on one side. Sheep inside the pen's interior are penned.
  * The levels themselves live in levels.ts.
  */
+import type { AgilityPiece } from './agility';
 
 export interface Box { x: number; z: number; w: number; d: number }
 export interface Pen extends Box {
@@ -23,11 +24,21 @@ export interface Obstacle { kind: 'tree' | 'rock' | 'pond' | 'hay' | 'bramble' |
 export interface Stream { pts: [number, number][]; w: number; bridges: { x: number; z: number; w: number }[] }
 /** Something low lying across the field that sheep and goats have to go round and dogs jump:
  * a low (or half broken) fence, a fallen log, or a low dry-stone wall. */
-export interface LowFence { a: [number, number]; b: [number, number]; broken?: boolean; kind?: 'fence' | 'log' | 'stones' }
+/**
+ * A low line across the field. Jumpables (`fence`, `log`, `stones`, and agility `hurdle` and `tire`):
+ * sheep go round, dogs jump. `edge` (a tunnel's side) is solid to everyone and never jumped;
+ * `skirt` (round an agility table) keeps sheep out but dogs walk through it.
+ */
+export interface LowFence { a: [number, number]; b: [number, number]; broken?: boolean; kind?: 'fence' | 'log' | 'stones' | 'hurdle' | 'tire' | 'edge' | 'skirt' }
 
 /** How thick a jumpable is, either side of its line (a log is round, a stone wall is wide). */
 export function jumpableHalf(l: LowFence): number {
-  return l.kind === 'log' ? 0.26 : l.kind === 'stones' ? 0.32 : 0.1;
+  return l.kind === 'log' ? 0.26 : l.kind === 'stones' ? 0.32 : l.kind === 'edge' || l.kind === 'skirt' ? 0.05 : 0.1;
+}
+
+/** Can a dog jump this one? (Tunnel sides and table skirts aren't jumped.) */
+export function isJumpable(l: LowFence): boolean {
+  return l.kind !== 'edge' && l.kind !== 'skirt';
 }
 /** A broken bit of the outer fence: sheep that wander out through it are lost. */
 export interface FenceGap { side: 'n' | 's' | 'e' | 'w'; at: number; w: number }
@@ -51,6 +62,8 @@ export interface FieldDef {
   gaps?: FenceGap[];
   /** Low fences dogs can hop over (sheep and goats can't). */
   lowFences?: LowFence[];
+  /** An agility course, just for fun (its hurdles, tyre, tunnel and table are in `lowFences` too). */
+  agility?: AgilityPiece[];
   wind?: Wind;
   /** Rain makes sheep jumpy; a storm adds lightning that panics them and makes dogs cower. */
   weather?: 'rain' | 'storm';
@@ -154,7 +167,7 @@ export function gapFor(f: FieldDef, x: number, z: number): FenceGap | null {
 /** How close (x, z) is to the nearest low fence (Infinity if the field has none). */
 export function nearLowFence(f: FieldDef, x: number, z: number): number {
   let best = Infinity;
-  for (const l of f.lowFences ?? []) best = Math.min(best, distToSeg(x, z, { ax: l.a[0], az: l.a[1], bx: l.b[0], bz: l.b[1] }) - jumpableHalf(l) + 0.1);
+  for (const l of f.lowFences ?? []) if (isJumpable(l)) best = Math.min(best, distToSeg(x, z, { ax: l.a[0], az: l.a[1], bx: l.b[0], bz: l.b[1] }) - jumpableHalf(l) + 0.1);
   return best;
 }
 
@@ -192,4 +205,4 @@ export function crossesWater(f: FieldDef, p: { x: number; z: number }, q: { x: n
   return false;
 }
 
-export { COURSES, TRIALS, VERSUS, VERSUS_FIELDS, fieldById, type CourseId } from './levels';
+export { COURSES, PRACTICE, TRIALS, VERSUS, VERSUS_FIELDS, fieldById, type CourseId } from './levels';

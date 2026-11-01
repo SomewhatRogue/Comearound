@@ -2,6 +2,32 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (night, last): an agility course, and piano from the next room (Claude Opus 5.5)
+
+- **Agility, just for fun** (`shared/agility.ts`, pieces are field data like everything else):
+  hurdles, a tyre, a tunnel, weave poles and a pause table, numbered in order. The lobby is now its
+  own field, `PRACTICE` (The Meadow with its flock, the log and stone wall swapped for a full
+  seven-piece course along the top); Big Sky Pasture has a five-piece loop in its south-east
+  corner. The pieces become low fences for the rules: hurdles and the tyre are jumpables (sheep go
+  round, dogs get the real jump), the tunnel's sides (`edge`) stop everyone so you go in one end
+  and out the other, and the table's `skirt` keeps sheep off while dogs hop up (drawn standing on
+  it). Weave poles are too thin to matter.
+- **Running a round** (`shared/agilityrun.ts`, pure and tested): over a hurdle or through the tyre
+  either way, end to end through the tunnel, all six weave poles in order from either end on
+  alternating sides, a moment on the table (or lie down on it). Taking piece 1 starts the clock; each
+  next piece chimes up the scale; the last gives your time, with your best on this browser. Your
+  own dog on your own screen: nothing sent to the room, no points. Numbered flags over each piece,
+  the next one bouncing (everywhere in the lobby; within 16 m on Big Sky).
+- The first layout hugged the north fence and the wall-ease test caught sheep trapped in the 1.9 m
+  behind the tunnel; the course now sits 3.4 m in. Bots never go near the Big Sky corner (Wild bench
+  identical with and without it).
+- **Piano from the next room** (`client/musicroom.ts`): four new tracks (Upstairs at the Farmhouse,
+  Kettle On, Through the Wall, Muddy Boots by the Door), taking turns with the others. A felt
+  piano (soft stretched partials, hammer thump, pedalled decays, slightly off-grid timing) rolling
+  chords or slow arpeggios with a sparse melody, heard through a wall (low-pass at 1150 Hz with a
+  little warmth) into a small room's echo; a kick and brush thump through the floor on two of
+  them. Levelled by rendering offline: 1 to 2 dB under the other tracks.
+
 ## 2026-10-31 (night, latest): bark voices, Clean dogs, and a chicken (Claude Opus 5.5)
 
 - **The bark follows the build:** each breed has a base pitch (`BARK_PITCH`), and a chonkier dog

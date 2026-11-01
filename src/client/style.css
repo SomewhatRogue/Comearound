@@ -308,3 +308,10 @@ button.audio.is-off .off { display: inline; }
   body.touch #dogbar { bottom: calc(6px + var(--safe-b)); }
   body.touch .side { top: 38px; max-height: calc(100% - 46px); }
 }
+
+/* Agility course: numbered flags over each piece; the next one bounces, done ones go quiet. */
+.ag-num { width: 22px; height: 22px; border-radius: 50%; background: #fffdf6; color: var(--ink); border: 2px solid var(--ink); font-weight: 800; font-size: 12px; display: grid; place-items: center; pointer-events: none; opacity: 0.8; }
+.ag-num.next { background: #ffd23f; opacity: 1; scale: 1.25; animation: ag-bob 0.9s ease-in-out infinite; }
+.ag-num.done { background: #8fd18a; opacity: 0.55; }
+@keyframes ag-bob { 50% { translate: 0 -5px; } }
+.agility { font-weight: 800; font-size: 26px; color: #ffd23f; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; animation: woof 0.8s ease-out forwards; }

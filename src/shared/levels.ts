@@ -2,6 +2,7 @@
  * The levels. Gentle trials teach the moves; Tricky trials add hazards: streams you can only cross
  * at a bridge, mud, brambles, a broken fence where sheep get out, wind, and more goats.
  */
+import { course } from './agility';
 import type { FieldDef } from './field';
 
 /** The Gentle course: learn the moves, meet the goat, then a big windy field. */
@@ -60,6 +61,15 @@ export const VERSUS: FieldDef = {
   wind: { dir: -Math.PI / 2, strength: 0.25 },
   starts: [{ x: -16, z: -9, team: 0 }, { x: -16, z: 9, team: 0 }, { x: -17, z: 0, team: 0 }, { x: 16, z: 9, team: 1 }, { x: 16, z: -9, team: 1 }, { x: 17, z: 0, team: 1 }],
 };
+
+/** A little agility loop in the south-east corner of Big Sky Pasture. */
+const BIGSKY_AGILITY = course([
+  { kind: 'hurdle', x: 22, z: -19, dir: 0 },
+  { kind: 'tunnel', x: 26.5, z: -19.5, dir: 0 },
+  { kind: 'weave', x: 31.5, z: -18, dir: -Math.PI / 2 },
+  { kind: 'tire', x: 27, z: -15.5, dir: Math.PI },
+  { kind: 'hurdle', x: 22.5, z: -15, dir: Math.PI },
+]);
 
 /** Tricky course: hazards and more goats. */
 export const TRICKY: FieldDef[] = [
@@ -146,7 +156,9 @@ export const WILD: FieldDef[] = [
     flocks: [{ x: -26, z: 6, n: 8, team: null }, { x: 26, z: 4, n: 8, team: null }, { x: 0, z: 18, n: 8, team: null }],
     goats: [{ x: -12, z: 14 }, { x: 18, z: 8 }],
     // Old field walls, low and tumbledown: the flocks walk the long way round, you take the short cut.
-    lowFences: [{ a: [16, 24], b: [16, 14] }, { a: [16, 14], b: [19, 9], broken: true }, { a: [-20, 24], b: [-20, 17], broken: true }, { a: [-36, -8], b: [-28, -8] }, { a: [30, -14], b: [33, -12], kind: 'log' }, { a: [-12, -17], b: [-8, -18], kind: 'stones' }],
+    lowFences: [{ a: [16, 24], b: [16, 14] }, { a: [16, 14], b: [19, 9], broken: true }, { a: [-20, 24], b: [-20, 17], broken: true }, { a: [-36, -8], b: [-28, -8] }, { a: [30, -14], b: [33, -12], kind: 'log' }, { a: [-12, -17], b: [-8, -18], kind: 'stones' }, ...BIGSKY_AGILITY.lowFences],
+    // Someone's left their agility kit out in the corner: a little loop, just for fun.
+    agility: BIGSKY_AGILITY.agility,
     starts: [{ x: -2, z: -21, team: 0 }, { x: 2, z: -21, team: 0 }, { x: 0, z: -22, team: 0 }],
     wind: { dir: Math.PI * 0.75, strength: 0.5, gusty: true },
   },
@@ -244,6 +256,26 @@ export const COURSES: Record<CourseId, { name: string; blurb: string; fields: Fi
   challenge: { name: 'Challenge', blurb: 'Exact numbers: so many sheep in each pen, and not one more', fields: CHALLENGE },
 };
 
+/**
+ * The lobby: The Meadow with its flock out, and a full agility course along the top (instead of
+ * the log and the stone wall), for running about while you wait.
+ */
+const PRACTICE_AGILITY = course([
+  { kind: 'hurdle', x: -14, z: -8.5, dir: 0 },
+  { kind: 'hurdle', x: -10.5, z: -10.5, dir: 0 },
+  { kind: 'tunnel', x: -3.4, z: -11, dir: 0 },
+  { kind: 'weave', x: 2.6, z: -11, dir: 0 },
+  { kind: 'tire', x: 8, z: -10.5, dir: 0 },
+  { kind: 'hurdle', x: 11.5, z: -9, dir: 0.3 },
+  { kind: 'table', x: 15, z: -9.5, dir: 0 },
+]);
+export const PRACTICE: FieldDef = {
+  ...TRIALS[0],
+  id: 'practice',
+  lowFences: [TRIALS[0].lowFences![0], ...PRACTICE_AGILITY.lowFences],
+  agility: PRACTICE_AGILITY.agility,
+};
+
 export function fieldById(id: string): FieldDef {
-  return [...TRIALS, ...TRICKY, ...WILD, ...CHALLENGE, VERSUS, RIVERSIDE].find((f) => f.id === id) ?? TRIALS[0];
+  return [PRACTICE, ...TRIALS, ...TRICKY, ...WILD, ...CHALLENGE, VERSUS, RIVERSIDE].find((f) => f.id === id) ?? TRIALS[0];
 }

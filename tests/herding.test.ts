@@ -598,3 +598,100 @@ describe('looks', () => {
     expect(barkPitch({ ...base, build: 2, voice: 2 })).toBeGreaterThan(barkPitch({ ...base, build: -2 }));
   });
 });
+
+describe('agility', () => {
+  const pt = (p: { x: number; z: number; dir: number }, along: number, lat: number) => {
+    const [ux, uz] = [Math.cos(p.dir), Math.sin(p.dir)];
+    return { x: p.x + ux * along - uz * lat, z: p.z + uz * along + ux * lat };
+  };
+
+  it('the lobby has a whole course, clear of trees, rocks and the pen, inside the field', async () => {
+    const { PRACTICE } = await import('../src/shared/field');
+    const pieces = PRACTICE.agility!;
+    expect(pieces.map((p) => p.kind)).toEqual(['hurdle', 'hurdle', 'tunnel', 'weave', 'tire', 'hurdle', 'table']);
+    for (const p of pieces) {
+      expect(Math.abs(p.x)).toBeLessThan(PRACTICE.w / 2 - 3);
+      expect(Math.abs(p.z)).toBeLessThan(PRACTICE.d / 2 - 3);
+      for (const o of PRACTICE.obstacles) expect(Math.hypot(p.x - o.x, p.z - o.z)).toBeGreaterThan(o.r + 2);
+      for (const pen of PRACTICE.pens) expect(Math.abs(p.x - pen.x) > pen.w / 2 + 2 || Math.abs(p.z - pen.z) > pen.d / 2 + 2).toBe(true);
+    }
+  });
+
+  it('a dog runs the tunnel end to end but cannot get in through its side; sheep stay off the table, dogs hop up', async () => {
+    const { collide } = await import('../src/server/physics');
+    const { PRACTICE } = await import('../src/shared/field');
+    const tunnel = PRACTICE.agility!.find((p) => p.kind === 'tunnel')!;
+    // Through it lengthwise, a step at a time.
+    let d = pt(tunnel, -2.6, 0);
+    for (let i = 0; i <= 52; i++) {
+      const to = pt(tunnel, -2.6 + i * 0.1, 0);
+      [d.x, d.z] = collide(PRACTICE, to.x, to.z, 0.45, { from: d, water: false, hop: true });
+    }
+    expect(Math.hypot(d.x - pt(tunnel, 2.6, 0).x, d.z - pt(tunnel, 2.6, 0).z)).toBeLessThan(0.05);
+    // From the side: stopped at the wall.
+    const side = pt(tunnel, 0, 1.4);
+    const [sx, sz] = collide(PRACTICE, tunnel.x, tunnel.z, 0.45, { from: side, water: false, hop: true });
+    expect(Math.hypot(sx - tunnel.x, sz - tunnel.z)).toBeGreaterThan(1);
+    const table = PRACTICE.agility!.find((p) => p.kind === 'table')!;
+    const near = pt(table, -1.4, 0);
+    const [hx, hz] = collide(PRACTICE, table.x, table.z, 0.5, { from: near });
+    expect(Math.hypot(hx - table.x, hz - table.z)).toBeGreaterThan(0.6);
+    const [dx, dz] = collide(PRACTICE, table.x, table.z, 0.45, { from: near, water: false, hop: true });
+    expect(Math.hypot(dx - table.x, dz - table.z)).toBeLessThan(0.01);
+  });
+
+  it('running the course in order finishes a round with a time; skipping the weave does not', async () => {
+    const { PRACTICE } = await import('../src/shared/field');
+    const { AgilityRun } = await import('../src/shared/agilityrun');
+    const runCourse = (weave: boolean) => {
+      const run = new AgilityRun(PRACTICE.agility!);
+      let now = 0;
+      const took: number[] = [];
+      let finished: number | undefined;
+      const go = (x: number, z: number, dt = 0.05) => {
+        now += dt * 1000;
+        const r = run.step(x, z, false, dt, now);
+        if (r.took) took.push(r.took);
+        if (r.finished !== undefined) finished = r.finished;
+      };
+      for (const p of PRACTICE.agility!) {
+        if (p.kind === 'table') {
+          for (let a = -2; a <= 0; a += 0.1) { const q = pt(p, a, 0); go(q.x, q.z); }
+          for (let t = 0; t < 30; t++) { const q = pt(p, 0, 0); go(q.x, q.z); }
+          continue;
+        }
+        if (p.kind === 'weave' && !weave) {
+          // Straight past, outside the poles.
+          for (let a = -3; a <= 3; a += 0.1) { const q = pt(p, a, 1.6); go(q.x, q.z); }
+          continue;
+        }
+        for (let a = -3; a <= 3; a += 0.1) {
+          // In and out between the poles: a different side of each.
+          const lat = p.kind === 'weave' ? 0.35 * Math.sin(((a + 0.4) / 0.8) * Math.PI) : 0;
+          const q = pt(p, a, lat);
+          go(q.x, q.z);
+        }
+      }
+      return { took, finished };
+    };
+    const clean = runCourse(true);
+    expect(clean.took).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(clean.finished).toBeGreaterThan(5);
+    const skipped = runCourse(false);
+    expect(skipped.took).toEqual([1, 2, 3]);
+    expect(skipped.finished).toBeUndefined();
+  });
+
+  it('weaving the wrong way (same side of two poles) breaks the weave', async () => {
+    const { PRACTICE } = await import('../src/shared/field');
+    const { AgilityRun } = await import('../src/shared/agilityrun');
+    const weave = PRACTICE.agility!.find((p) => p.kind === 'weave')!;
+    const run = new AgilityRun([{ ...weave, n: 1 }]);
+    let took = false;
+    for (let a = -3, now = 0; a <= 3; a += 0.1, now += 50) {
+      const q = pt(weave, a, 0.35);
+      if (run.step(q.x, q.z, false, 0.05, now).took) took = true;
+    }
+    expect(took).toBe(false);
+  });
+});

@@ -228,6 +228,13 @@ export const sfx = {
       noise({ dur: 0.08, f0: 700 * pitch, f1: 300 * pitch, gain: 0.08 * volume, at, q: 1.5 });
     }
   },
+  /** An agility piece taken: a bright two-note ping rising up the scale; the last one a little run. */
+  agility(step: number, of: number) {
+    const n = [0, 2, 4, 7, 9, 12, 14, 16][Math.min(step, 7)];
+    voice({ f0: semi(660, n), dur: 0.18, type: 'triangle', gain: 0.1 });
+    voice({ f0: semi(1320, n), dur: 0.12, gain: 0.03 });
+    if (step === of - 1) for (const [i, k] of [12, 16, 19, 24].entries()) voice({ f0: semi(660, k), dur: 0.3, type: 'triangle', gain: 0.09, at: 0.12 + i * 0.09 });
+  },
   /** A chicken's bark: buk-buk-BAWK, the last note rising and squawking. */
   bawk(pitch = 1, volume = 1) {
     for (const at of [0, 0.11]) voice({ f0: 520 * pitch, f1: 430 * pitch, dur: 0.07, type: 'square', gain: 0.06 * volume, lp: 1800 * pitch, at });

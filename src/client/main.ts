@@ -150,6 +150,12 @@ entities.onBark = (d, at) => {
   sounds.woof(d, Math.hypot(at.x - predicted.x, at.z - predicted.z));
   hud.floatText(d.look.breed === 'chicken' ? 'BAWK!' : 'WOOF!', at, stage.camera, 'woof');
 };
+// The agility course: a rising chime per piece, your time at the end.
+fieldView.agilityEvents.onStep = (step, of) => sfx.agility(step, of);
+fieldView.agilityEvents.onFinish = (sec, best, at) => {
+  hud.floatText(`${sec.toFixed(1)} s!`, at, stage.camera, 'agility');
+  hud.toast(best === null ? `Clear round! ${sec.toFixed(1)} s. Run it again to beat it.` : sec < best ? `New best round! ${sec.toFixed(1)} s (was ${best.toFixed(1)})` : `Clear round! ${sec.toFixed(1)} s (best ${best.toFixed(1)})`);
+};
 entities.onBleat = (at) => sounds.bleat(Math.hypot(at.x - predicted.x, at.z - predicted.z));
 
 const predicted = { x: 0, z: 0, rot: 0 };
@@ -225,6 +231,7 @@ function frame(now: number) {
     const field = fieldById(pub.fieldId);
     fieldView.show(field, pub.mode);
     fieldView.update(now / 1000, dt, pub, me.spectator ? null : predicted);
+    if (!me.spectator) fieldView.agility?.update(predicted.x, predicted.z, me.down, dt, now, pub.phase === 'lobby');
     // Predict our own run; ease back toward the server so we never drift far from the truth.
     if (!havePrediction) [predicted.x, predicted.z, predicted.rot, havePrediction] = [me.x, me.z, me.rot, true];
     const len = Math.hypot(input.dx, input.dz);

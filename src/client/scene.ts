@@ -13,6 +13,7 @@ import { buildHazards } from './hazardsview';
 import { Scenery } from './scenery';
 import { heightAt } from './terrain';
 import { lowFences } from './lowfence';
+import { AgilityCourse, type AgilityEvents } from './agility';
 import { Wildlife } from './wildlife';
 import { animateProps, windmillMesh } from './props';
 
@@ -93,6 +94,9 @@ export class FieldView {
   private group: THREE.Group | null = null;
   private scenery: Scenery | null = null;
   private wildlife: Wildlife | null = null;
+  /** The field's agility course, if it has one (main.ts runs it with your dog). */
+  agility: AgilityCourse | null = null;
+  agilityEvents: AgilityEvents = { onStep: () => {}, onFinish: () => {} };
   id = '';
 
   constructor(private stage: Stage, private lowfx: boolean) {}
@@ -113,6 +117,8 @@ export class FieldView {
     this.group.add(this.scenery.group);
     this.wildlife = new Wildlife(f, this.lowfx);
     this.group.add(this.wildlife.group);
+    this.agility = f.agility?.length ? new AgilityCourse(f, (x, z) => heightAt(f, x, z), this.agilityEvents) : null;
+    if (this.agility) this.group.add(this.agility.group);
     this.stage.scene.add(this.group);
   }
 

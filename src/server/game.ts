@@ -5,7 +5,7 @@
  * Join and rejoin are one path: a client says hello with its token, gets its seat back if it had
  * one, and the next snapshot (full state, every tick) brings it up to date.
  */
-import { TRIALS } from '../shared/field';
+import { PRACTICE, TRIALS } from '../shared/field';
 import { BREEDS, COLLARS, DEFAULT_COAT, DOG_BREEDS, EYES, coatsFor, type Breed } from '../shared/looks';
 import type { ClientMsg, Look, PrivateEvent, ServerMsg } from '../shared/protocol';
 import { Rng } from '../shared/rng';
@@ -43,7 +43,7 @@ export class GameRoom implements Room {
   holdFor: [number, number] = [0, 0];
   doneAt: [number | null, number | null] = [null, null];
   hostId: string | null = null;
-  field = TRIALS[0];
+  field = PRACTICE;
   fieldIdx = 0;
   fieldCount = TRIALS.length;
   dogs = new Map<string, Dog>();
@@ -174,7 +174,7 @@ export class GameRoom implements Room {
       else Object.assign(d, { spectator: false, frozen: 0, auto: null, practising: false });
     }
     this.goats = [];
-    this.field = TRIALS[0];
+    this.field = PRACTICE;
     this.wind = { x: 1, z: 0, s: 0 };
     this.weather = { kind: 'clear', flashes: this.weather.flashes, nextFlash: 99, fx: 0, fz: 0 };
     this.phase = 'lobby';

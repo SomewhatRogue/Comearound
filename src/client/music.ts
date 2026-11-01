@@ -3,19 +3,28 @@
  * loop with a soft electric piano, a round bass, lazy brushed drums with a swing, a wandering
  * music-box melody through a dreamy echo, and vinyl crackle underneath. A gentle wobble on
  * everything, like an old tape. Rain fields get the rainy track; otherwise tracks take turns.
+ *
+ * And piano in the next room (`room` tracks, in musicroom.ts): a felt piano rolling slow chords
+ * with a little melody on top, heard muffled through a wall into a small room, a kick thumping
+ * faintly through the floor at most.
  */
+import { RoomPiano, type RoomStyle } from './musicroom';
 import { audioOut } from './sfx';
 
 type Q = 'maj7' | 'maj9' | 'm7' | 'm9' | '7' | '6' | 'sus' | 'add9';
 const QUAL: Record<Q, number[]> = { maj7: [0, 4, 7, 11], maj9: [0, 4, 7, 11, 14], m7: [0, 3, 7, 10], m9: [0, 3, 7, 10, 14], '7': [0, 4, 7, 10], '6': [0, 4, 7, 9], sus: [0, 5, 7, 10], add9: [0, 4, 7, 14] };
 
-interface Track { name: string; bpm: number; root: number; minor?: boolean; prog: [number, Q][]; drums: 0 | 1; seed: number; mel: number; rain?: boolean }
+interface Track { name: string; bpm: number; root: number; minor?: boolean; prog: [number, Q][]; drums: 0 | 1; seed: number; mel: number; rain?: boolean; room?: RoomStyle }
 
 export const TRACKS: Track[] = [
   { name: 'Clover Field', bpm: 74, root: 53, prog: [[0, 'maj9'], [4, 'm7'], [9, 'm9'], [5, 'maj7']], drums: 0, seed: 11, mel: 0.55 },
+  { name: 'Upstairs at the Farmhouse', bpm: 64, root: 48, prog: [[0, 'maj9'], [9, 'm9'], [5, 'maj7'], [7, 'sus']], drums: 0, seed: 101, mel: 0.5, room: { arp: [0, 1, 2, 3, 2, 1, 2, 3], thump: false } },
   { name: 'Morning Dew', bpm: 80, root: 50, prog: [[0, 'maj7'], [9, 'm7'], [2, 'm9'], [7, '6']], drums: 0, seed: 23, mel: 0.6 },
+  { name: 'Kettle On', bpm: 70, root: 51, prog: [[5, 'maj7'], [4, 'm7'], [2, 'm9'], [0, 'maj9']], drums: 0, seed: 113, mel: 0.55, room: { arp: null, thump: true } },
   { name: 'Woolly Nap', bpm: 66, root: 46, prog: [[0, 'maj9'], [9, 'm9'], [5, 'maj7'], [7, 'sus']], drums: 1, seed: 37, mel: 0.4 },
+  { name: 'Through the Wall', bpm: 58, root: 50, minor: true, prog: [[0, 'm9'], [8, 'maj7'], [3, 'maj7'], [10, '6']], drums: 0, seed: 127, mel: 0.45, room: { arp: [0, 2, 1, 3, 0, 2, 1, 3], thump: false } },
   { name: 'Lambs in the Lane', bpm: 84, root: 55, prog: [[0, 'maj7'], [2, 'm7'], [4, 'm7'], [5, 'maj9']], drums: 0, seed: 41, mel: 0.65 },
+  { name: 'Muddy Boots by the Door', bpm: 68, root: 53, prog: [[0, 'add9'], [7, '6'], [9, 'm7'], [5, 'maj9']], drums: 0, seed: 131, mel: 0.6, room: { arp: [0, 3, 1, 2, 0, 3, 1, 2], thump: true } },
   { name: 'Golden Hour', bpm: 76, root: 52, prog: [[5, 'maj7'], [4, 'm7'], [2, 'm9'], [0, 'add9']], drums: 1, seed: 53, mel: 0.5 },
   { name: 'Rain on the Barn', bpm: 70, root: 45, minor: true, prog: [[0, 'm9'], [8, 'maj7'], [5, 'm7'], [7, 'm7']], drums: 1, seed: 67, mel: 0.45, rain: true },
 ];
@@ -51,6 +60,7 @@ export class Music {
   private rand = mulberry(1);
   private mel = 76;
   private rainy = false;
+  private room: RoomPiano | null = null;
   on = (() => {
     try {
       return localStorage.getItem('tac-music') !== '0';
@@ -103,6 +113,7 @@ export class Music {
     const d = this.noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.vinyl();
+    this.room = new RoomPiano(c, this.bus, this.noiseBuf);
     this.pick(this.rainy);
     this.next = c.currentTime + 0.1;
     this.bus.gain.setTargetAtTime(0.55, c.currentTime, 1.5);
@@ -182,6 +193,11 @@ export class Music {
     const [deg, q] = t.prog[this.bar % t.prog.length];
     const chordRoot = t.root + deg;
     const r = this.rand;
+    if (t.room && this.room) {
+      const scale = t.minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+      this.mel = this.room.step(s, this.bar, time, sd, chordRoot, QUAL[q], t.root, scale, t.mel, this.mel, t.room, r);
+      return;
+    }
     // Chords: a soft strum on beat one, and sometimes a lazy re-hit.
     if (s === 0 || (s === 10 && r() < 0.45)) {
       const tones = QUAL[q].map((iv) => {
