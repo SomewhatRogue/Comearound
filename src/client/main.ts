@@ -2,7 +2,7 @@
  * Client entry: joins the room in the URL (or makes one), predicts your own dog's movement,
  * draws the field, and exposes text state for tests (window.__GAME_STATE__, render_game_to_text).
  */
-import { fieldById, inMud, inWater } from '../shared/field';
+import { fieldById, inMud, inWater, nearLowFence } from '../shared/field';
 import { BREEDS, COLLARS, DEFAULT_COAT } from '../shared/looks';
 import type { DogPub, Look, PublicView } from '../shared/protocol';
 import { DOG, HAZARD } from '../shared/tuning';
@@ -230,7 +230,7 @@ function frame(now: number) {
     syncPractise(pub, me, now);
     const canMove = !me.spectator && !me.frozen && (pub.phase === 'playing' || (pub.phase === 'lobby' && panels.collapsed));
     if (canMove && len > 0.1) {
-      const ground = inMud(field, predicted.x, predicted.z) ? HAZARD.mudSlow : inWater(field, predicted.x, predicted.z) ? HAZARD.wadeSlow : 1;
+      const ground = (inMud(field, predicted.x, predicted.z) ? HAZARD.mudSlow : inWater(field, predicted.x, predicted.z) ? HAZARD.wadeSlow : 1) * (nearLowFence(field, predicted.x, predicted.z) < DOG.hopWithin ? DOG.hopSlow : 1);
       const speed = (input.crouch ? DOG.crouch : input.sprint && net.me.stamina > 1 ? DOG.sprint : DOG.walk) * ground;
       const k = Math.min(1, len);
       const from = { x: predicted.x, z: predicted.z };

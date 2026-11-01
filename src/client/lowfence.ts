@@ -1,10 +1,10 @@
 /**
  * Low fences: knee-high, weathered posts and a single rail, the remains of old field boundaries.
- * The tumbledown ones have leaning posts and a rail fallen at one end. Sheep go round; dogs hop
- * them (`hopOver` lifts a dog as it crosses, from the same field data the rules use).
+ * The tumbledown ones have leaning posts and a rail fallen at one end. Sheep go round; dogs jump
+ * them (`jumpAt` says where a dog is in its jump, from the same field data the rules use).
  */
 import * as THREE from 'three';
-import { nearLowFence, type FieldDef, type LowFence } from '../shared/field';
+import type { FieldDef, LowFence } from '../shared/field';
 import { Rng } from '../shared/rng';
 import { mat } from './models';
 
@@ -57,9 +57,38 @@ function one(l: LowFence, heightAt: (x: number, z: number) => number): THREE.Gro
   return g;
 }
 
-/** How high a dog is lifted as it crosses a low fence: a little arc over the rail. */
-export function hopOver(f: FieldDef, x: number, z: number): number {
-  const d = nearLowFence(f, x, z);
-  if (d > 0.75) return 0;
-  return Math.sin((1 - d / 0.75) * Math.PI * 0.5) * 0.5;
+/** Where a dog is in a jump over a low fence: gathering, in the air, landing, or not jumping. */
+export interface Jump { phase: 'none' | 'gather' | 'leap' | 'land'; t: number }
+
+/** The jump's stretches, in metres either side of the rail (the leap spans the rail itself). */
+export const JUMP = { gather: 1.45, leap: 0.85, land: 1.4 };
+
+/**
+ * From where a dog is and which way it faces: before the rail it gathers, over it it leaps, after
+ * it lands. Driven by position (which the room decides), so every player sees the same jump.
+ */
+export function jumpAt(f: FieldDef, x: number, z: number, facing: number): Jump {
+  let best: Jump = { phase: 'none', t: 0 };
+  let bestD = Infinity;
+  const fx = Math.sin(facing);
+  const fz = Math.cos(facing);
+  for (const l of f.lowFences ?? []) {
+    const [ax, az] = l.a;
+    const ex = l.b[0] - ax;
+    const ez = l.b[1] - az;
+    const len = Math.hypot(ex, ez) || 1;
+    const along = ((x - ax) * ex + (z - az) * ez) / (len * len);
+    if (along < -0.05 || along > 1.05) continue;
+    // Signed distance across the line, and whether we're heading toward it or away.
+    const [nx, nz] = [-ez / len, ex / len];
+    const side = (x - ax) * nx + (z - az) * nz;
+    const toward = (fx * nx + fz * nz) * side < 0;
+    const s = toward ? -Math.abs(side) : Math.abs(side);
+    if (Math.abs(side) >= bestD || s < -JUMP.gather || s > JUMP.land) continue;
+    bestD = Math.abs(side);
+    if (s < -JUMP.leap) best = { phase: 'gather', t: (s + JUMP.gather) / (JUMP.gather - JUMP.leap) };
+    else if (s < JUMP.leap) best = { phase: 'leap', t: (s + JUMP.leap) / (2 * JUMP.leap) };
+    else best = { phase: 'land', t: (s - JUMP.leap) / (JUMP.land - JUMP.leap) };
+  }
+  return best;
 }

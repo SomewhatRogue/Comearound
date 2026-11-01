@@ -10,12 +10,15 @@ import { fieldById } from '../shared/field';
 import type { DogPub, PublicView } from '../shared/protocol';
 import { DOG, GOAT, SHEEP } from '../shared/tuning';
 import { GoatView } from './goatview';
-import { hopOver } from './lowfence';
+import { jumpAt, type Jump } from './lowfence';
 import { heightAt } from './terrain';
 import { Hearts, newIdle, patSound, tickIdle, type Idle } from './lobbypack';
 import { sfx } from './sfx';
 import { dogMesh, sheepMesh, type DogRig, type SheepRig } from './models';
 import { TEAM_COLORS, label, type Stage } from './scene';
+
+/** How high a dog's leap over a low fence goes (the rail tops out around 0.6 m). */
+const JUMP_HEIGHT = 0.72;
 
 const lerpAngle = (a: number, b: number, k: number) => {
   let d = b - a;
@@ -41,9 +44,15 @@ const POSES: Record<string, Pose> = {
   sit: { y: 0.85, front: -0.35, back: -0.75, head: -0.15, legFold: 0.8, frontLegs: 0.2, backLegs: -1.2, tail: -0.3 },
   // A play bow: elbows down, rear up, tail high. Let's play!
   bow: { y: 0.85, front: 0.4, back: -0.2, head: -0.35, legFold: 0.9, frontLegs: -1.2, backLegs: 0, tail: 0.9 },
+  // Jumping a low fence. The gather: down on the haunches, weight back, eyes on the rail.
+  gather: { y: 0.7, front: 0.2, back: -0.14, head: -0.14, legFold: 0.7, frontLegs: 0.18, backLegs: -0.35, tail: 0.15 },
+  // In the air: stretched out, head up, tail streaming (legs are set through the leap).
+  leap: { y: 1, front: -0.06, back: 0.06, head: 0.1, legFold: 0.88, frontLegs: -1.1, backLegs: 0.8, tail: 0.35 },
+  // Touching down: front legs taking the weight, a little squash.
+  land: { y: 0.76, front: 0.16, back: -0.04, head: -0.1, legFold: 0.76, frontLegs: -0.2, backLegs: 0.25, tail: 0.55 },
 };
 
-interface DogView { rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number }
+interface DogView { jump: Jump['phase']; rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number }
 interface SheepView { rig: SheepRig; facing: number; phase: number; lastX: number; lastZ: number; speed: number; penned: boolean; hop: number; jitter: number }
 
 export class Entities {
@@ -128,14 +137,23 @@ export class Entities {
       if (root.position.lengthSq() === 0) root.position.set(tx, 0, tz);
       root.position.x += (tx - root.position.x) * (mine ? 1 : k);
       root.position.z += (tz - root.position.z) * (mine ? 1 : k);
-      // Standing on the lie of the land, and hopping any low fence you cross.
-      root.position.y = heightAt(this.field, root.position.x, root.position.z) + hopOver(this.field, root.position.x, root.position.z);
+      // Standing on the lie of the land.
+      root.position.y = heightAt(this.field, root.position.x, root.position.z);
       const moved = Math.hypot(root.position.x - v.lastX, root.position.z - v.lastZ) / Math.max(dt, 1e-3);
       v.speed += (moved - v.speed) * Math.min(1, dt * 10);
       [v.lastX, v.lastZ] = [root.position.x, root.position.z];
       v.facing = lerpAngle(v.facing, mine ? predicted.rot : d.rot, 1 - Math.exp(-dt * 12));
       root.rotation.y = v.facing;
       this.pos.set(d.id, root.position);
+      // Jumping a low fence: gather, leap (a real arc over the rail), land.
+      const jump = d.frozen ? { phase: 'none' as const, t: 0 } : jumpAt(this.field, root.position.x, root.position.z, v.facing);
+      if (jump.phase === 'leap') root.position.y += JUMP_HEIGHT * Math.sin(jump.t * Math.PI);
+      if (jump.phase === 'leap' && v.jump === 'gather' && d.id === you) sfx.whoosh();
+      if (jump.phase === 'land' && v.jump === 'leap') {
+        this.ring(root.position.x, root.position.z, 1.1, '#cdb88a');
+        if (d.id === you) sfx.thud();
+      }
+      v.jump = jump.phase;
 
       // Waiting in the lobby's row: get up to something now and then.
       const waiting = d.lineup && v.speed < 0.3;
@@ -155,13 +173,14 @@ export class Entities {
       idle.poof = Math.max(0, idle.poof - dt);
       const lobbyPose = waiting && !idle.happy ? ({ sit: 'sit', lie: 'down', bow: 'bow', stand: null } as const)[idle.act] : null;
 
-      // Pose: ease toward the posture's shape.
-      const want = POSES[d.frozen ? 'frozen' : d.cower ? 'cower' : d.down ? 'down' : lobbyPose ?? d.posture];
-      const pk = 1 - Math.exp(-dt * 8);
+      // Pose: ease toward the posture's shape (snappily, mid-jump).
+      const jumpPose = jump.phase === 'none' || (jump.phase === 'land' && jump.t > 0.55) ? null : jump.phase;
+      const want = POSES[d.frozen ? 'frozen' : jumpPose ?? (d.cower ? 'cower' : d.down ? 'down' : lobbyPose ?? d.posture)];
+      const pk = 1 - Math.exp(-dt * (jumpPose ? 18 : 8));
       for (const f of Object.keys(want) as (keyof Pose)[]) v.pose[f] += (want[f] - v.pose[f]) * pk;
       const p = v.pose;
       const r = v.rig;
-      const moving = v.speed > 0.4 && !d.frozen;
+      const moving = v.speed > 0.4 && !d.frozen && jump.phase !== 'leap';
       v.phase += dt * (moving ? Math.min(v.speed, 9) * (d.posture === 'sprint' ? 2.1 : 2.6) : 0);
       const gallop = d.posture === 'sprint' && moving;
       const amp = moving ? Math.min(0.75, 0.25 + v.speed * 0.08) * (d.posture === 'crouch' ? 0.6 : 1) : 0;
@@ -181,13 +200,18 @@ export class Entities {
         // Walk: diagonal pairs. Gallop: front pair together, back pair together, out of phase.
         const ph = gallop ? (isFront ? 0 : Math.PI * 0.8) + (i % 2) * 0.35 : (i === 0 || i === 3 ? 0 : Math.PI);
         leg.rotation.x = (isFront ? p.frontLegs : p.backLegs) + Math.sin(v.phase + ph) * amp;
+        // In the air: front legs reach forward then down for the landing, back legs push off then trail.
+        if (jump.phase === 'leap') leg.rotation.x = isFront ? -1.2 + 0.8 * jump.t : 0.55 + 0.45 * jump.t;
         leg.scale.y = p.legFold;
       });
+      // The body's pitch: nose dips in the gather, up on the way up, down on the way over, level on landing.
+      const pitch = jump.phase === 'gather' ? -0.1 * jump.t : jump.phase === 'leap' ? 0.42 * Math.cos(jump.t * Math.PI) : jump.phase === 'land' ? -0.16 * Math.max(0, 1 - jump.t * 2) : 0;
+      r.rig.rotation.x += (pitch - r.rig.rotation.x) * (1 - Math.exp(-dt * 22));
       r.tail.rotation.x = p.tail;
       r.tail.rotation.y = Math.sin(time * (moving ? 9 : happy ? 15 : lobbyPose === 'bow' ? 11 : 4)) * (d.frozen || d.cower ? 0.05 : happy ? 0.6 : 0.35);
       // Cowering after lightning: a shiver.
       r.rig.position.x = d.cower ? Math.sin(time * 45) * 0.025 : 0;
-      for (const e of r.ears) e.rotation.x = d.frozen ? -0.6 : d.posture === 'sprint' ? -0.35 : 0;
+      for (const e of r.ears) e.rotation.x = d.frozen ? -0.6 : jump.phase === 'leap' || d.posture === 'sprint' ? -0.4 : 0;
 
       // Teaching aids: the eye cone (crouched) and the calm ring (lying down).
       const isYou = d.id === you;
@@ -224,7 +248,7 @@ export class Entities {
     calm.position.y = 0.05;
     rig.root.add(calm);
     this.stage.scene.add(rig.root);
-    const v: DogView = { rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look.breed) };
+    const v: DogView = { jump: 'none', rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look.breed) };
     this.dogs.set(d.id, v);
     return v;
   }

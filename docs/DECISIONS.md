@@ -2,6 +2,19 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (night, last): a real jump over low fences (Claude Opus 5.5)
+
+Kyle: make the fence jump more dynamic and clearly a jump: a gather, a leap, a landing.
+
+- **Three parts, from where the dog is and which way it faces** (`jumpAt` in `client/lowfence.ts`,
+  so every player sees the same jump): the gather (1.45 to 0.85 m out: down on the haunches,
+  weight back, nose dipping); the leap (0.85 m either side of the rail: a 0.72 m arc, nose up on
+  the way up and down on the way over, front legs reaching then reaching for the ground, back legs
+  pushing off then trailing, ears back, tail streaming); the landing (front legs taking the
+  weight, a squash, a puff of dust). A whoosh on takeoff and a soft thud on landing for your own dog.
+- **Dogs slow to 62% within 1.1 m of a low fence** (room and prediction alike, `DOG.hopSlow`), so
+  the jump takes about half a second at a walk instead of a fifth: long enough to read.
+
 ## 2026-10-31 (night, latest): ambient beauty, calm play, hops, chonk (Claude Opus 5.5)
 
 Kyle's list: jump low or half-broken fences; reward slow, calm play (hard eye, little movement);

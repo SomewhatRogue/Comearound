@@ -18,6 +18,10 @@ export const DOG = {
   eyePush: 1.7,
   /** A dog lying down calms sheep around it. */
   calmRadius: 6,
+  /** Going over a low fence (within this many metres of it) a dog moves at this share of its speed,
+   * long enough for the gather, leap and landing to read as a jump. */
+  hopWithin: 1.1,
+  hopSlow: 0.62,
 };
 
 export const SHEEP = {

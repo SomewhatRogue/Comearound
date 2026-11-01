@@ -2,7 +2,7 @@
  * Dogs: movement by posture (walk, sprint with stamina, crouch to stalk), lying down when crouched
  * and still, and barking. What dogs do TO sheep lives in flock.ts.
  */
-import { inMud, inWater } from '../shared/field';
+import { inMud, inWater, nearLowFence } from '../shared/field';
 import { DOG, HAZARD, WEATHER } from '../shared/tuning';
 import { collide, separate } from './physics';
 import type { Dog, Room } from './state';
@@ -26,7 +26,8 @@ export function moveDog(room: Room, d: Dog, dt: number): void {
     const ground = inMud(room.field, d.x, d.z) ? HAZARD.mudSlow : inWater(room.field, d.x, d.z) ? HAZARD.wadeSlow : 1;
     // Lightning: you cower, slow and low, for a moment.
     const scared = d.cower > 0 ? WEATHER.cowerSlow : 1;
-    const speed = (d.posture === 'sprint' ? DOG.sprint : d.posture === 'crouch' ? DOG.crouch : DOG.walk) * ground * scared;
+    const hop = nearLowFence(room.field, d.x, d.z) < DOG.hopWithin ? DOG.hopSlow : 1;
+    const speed = (d.posture === 'sprint' ? DOG.sprint : d.posture === 'crouch' ? DOG.crouch : DOG.walk) * ground * scared * hop;
     const k = Math.min(1, len);
     d.x += (d.dx / len) * speed * k * dt;
     d.z += (d.dz / len) * speed * k * dt;
