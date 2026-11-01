@@ -22,6 +22,8 @@ export const DOG = {
    * long enough for the gather, leap and landing to read as a jump. */
   hopWithin: 1.1,
   hopSlow: 0.62,
+  /** ...but a sprinting dog keeps most of its speed (and its leap goes longer, client side). */
+  hopSlowSprint: 0.9,
 };
 
 export const SHEEP = {

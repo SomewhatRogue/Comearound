@@ -26,7 +26,7 @@ export function moveDog(room: Room, d: Dog, dt: number): void {
     const ground = inMud(room.field, d.x, d.z) ? HAZARD.mudSlow : inWater(room.field, d.x, d.z) ? HAZARD.wadeSlow : 1;
     // Lightning: you cower, slow and low, for a moment.
     const scared = d.cower > 0 ? WEATHER.cowerSlow : 1;
-    const hop = nearLowFence(room.field, d.x, d.z) < DOG.hopWithin ? DOG.hopSlow : 1;
+    const hop = nearLowFence(room.field, d.x, d.z) < DOG.hopWithin * (d.posture === 'sprint' ? 1.5 : 1) ? (d.posture === 'sprint' ? DOG.hopSlowSprint : DOG.hopSlow) : 1;
     const speed = (d.posture === 'sprint' ? DOG.sprint : d.posture === 'crouch' ? DOG.crouch : DOG.walk) * ground * scared * hop;
     const k = Math.min(1, len);
     d.x += (d.dx / len) * speed * k * dt;

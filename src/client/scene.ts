@@ -199,12 +199,17 @@ function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
     const leaf = new THREE.Group();
     for (const y of [0.35, 0.7]) leaf.add(at(mesh(new THREE.BoxGeometry(p.gateW * 0.9, 0.08, 0.06), '#f0dcae'), (p.gateW * 0.9) / 2, y, 0));
     leaf.add(at(mesh(new THREE.BoxGeometry(0.08, 0.5, 0.06), '#f0dcae'), p.gateW * 0.88, 0.52, 0));
-    leaf.position.set(hinge.x, 0, hinge.z);
-    // Open outward: the leaf points out of the pen, angled slightly toward the side.
-    leaf.rotation.y = -Math.atan2(gt.oz + sz * 0.5, gt.ox + sx * 0.5);
-    // Challenge pens: the gate swings shut across the gap when the count is right.
+    // Swung right open, flat against the outside of the pen fence (nothing collides with it, so it
+    // stays out of the way rather than sticking out into the field).
+    leaf.position.set(hinge.x + gt.ox * 0.09, 0, hinge.z + gt.oz * 0.09);
+    const open = -Math.atan2(sz, sx);
+    leaf.rotation.y = open;
+    // Challenge pens: the gate swings shut across the gap when the count is right, swinging out
+    // through the field side (never through the fence).
+    const mid = (d: number) => Math.cos(open + d / 2) * gt.ox - Math.sin(open + d / 2) * gt.oz;
+    const shut = open + (mid(Math.PI) > mid(-Math.PI) ? Math.PI : -Math.PI);
     leaf.name = 'gate';
-    leaf.userData = { pen: f.pens.indexOf(p), open: leaf.rotation.y, shut: -Math.atan2(-sz, -sx) };
+    leaf.userData = { pen: f.pens.indexOf(p), open, shut };
     g.add(leaf);
     // Sorting fields: a white pen and a black pen. Versus: team pens.
     const name = p.quota !== undefined ? `0 / ${p.quota}` : p.team === null ? 'PEN' : f.sort ? `${p.team ? 'Black' : 'White'} sheep` : `${TEAM_NAMES[p.team]} pen`;

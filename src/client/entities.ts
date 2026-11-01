@@ -52,7 +52,7 @@ const POSES: Record<string, Pose> = {
   land: { y: 0.76, front: 0.16, back: -0.04, head: -0.1, legFold: 0.76, frontLegs: -0.2, backLegs: 0.25, tail: 0.55 },
 };
 
-interface DogView { jump: Jump['phase']; rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number }
+interface DogView { jump: Jump['phase']; jumpScale: number; rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number }
 interface SheepView { rig: SheepRig; facing: number; phase: number; lastX: number; lastZ: number; speed: number; penned: boolean; hop: number; jitter: number }
 
 export class Entities {
@@ -146,8 +146,10 @@ export class Entities {
       root.rotation.y = v.facing;
       this.pos.set(d.id, root.position);
       // Jumping a low fence: gather, leap (a real arc over the rail), land.
-      const jump = d.frozen ? { phase: 'none' as const, t: 0 } : jumpAt(this.field, root.position.x, root.position.z, v.facing);
-      if (jump.phase === 'leap') root.position.y += JUMP_HEIGHT * Math.sin(jump.t * Math.PI);
+      // A sprinting dog's leap goes half as long again (kept for the whole jump once it starts).
+      if (v.jump === 'none') v.jumpScale = d.posture === 'sprint' ? 1.5 : 1;
+      const jump = d.frozen ? { phase: 'none' as const, t: 0 } : jumpAt(this.field, root.position.x, root.position.z, v.facing, v.jumpScale);
+      if (jump.phase === 'leap') root.position.y += JUMP_HEIGHT * (v.jumpScale > 1 ? 1.08 : 1) * Math.sin(jump.t * Math.PI);
       if (jump.phase === 'leap' && v.jump === 'gather' && d.id === you) sfx.whoosh();
       if (jump.phase === 'land' && v.jump === 'leap') {
         this.ring(root.position.x, root.position.z, 1.1, '#cdb88a');
@@ -248,7 +250,7 @@ export class Entities {
     calm.position.y = 0.05;
     rig.root.add(calm);
     this.stage.scene.add(rig.root);
-    const v: DogView = { jump: 'none', rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look.breed) };
+    const v: DogView = { jump: 'none', jumpScale: 1, rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look.breed) };
     this.dogs.set(d.id, v);
     return v;
   }
@@ -298,7 +300,9 @@ export class Entities {
       const shiver = s.fear > 0.5 ? Math.sin(time * 40 + v.jitter) * 0.02 * s.fear : 0;
       v.rig.body.position.y = 0.42 + (running ? Math.abs(Math.sin(v.phase)) * 0.07 : 0) + Math.sin(v.hop * Math.PI) * 0.35;
       v.rig.body.position.x = shiver;
-      const graze = v.speed < 0.3 && s.fear < 0.2 ? 0.6 + Math.sin(time * 0.7 + v.jitter) * 0.15 : 0;
+      // Grazing: head down in the grass, nibbling (a little chewing nod), looking up now and then.
+      const lookUp = Math.sin(time * 0.31 + v.jitter * 2) > 0.85;
+      const graze = v.speed < 0.3 && s.fear < 0.2 && !lookUp ? 0.62 + Math.sin(time * 0.7 + v.jitter) * 0.12 + Math.max(0, Math.sin(time * 6.5 + v.jitter)) * 0.09 : 0;
       v.rig.head.rotation.x += ((running ? -0.25 : graze) - v.rig.head.rotation.x) * Math.min(1, dt * 4);
       v.rig.mark.visible = s.team !== null && pub.mode === 'versus' && !sort;
       if (s.team !== null) v.rig.mark.material = markMat(s.team);

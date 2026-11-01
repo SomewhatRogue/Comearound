@@ -4,8 +4,9 @@
  * them (`jumpAt` says where a dog is in its jump, from the same field data the rules use).
  */
 import * as THREE from 'three';
-import type { FieldDef, LowFence } from '../shared/field';
+import { jumpableHalf, type FieldDef, type LowFence } from '../shared/field';
 import { Rng } from '../shared/rng';
+import { logMesh, stoneWallMesh } from './jumpables';
 import { mat } from './models';
 
 const WOOD = '#9c8461';
@@ -13,7 +14,7 @@ const OLD = '#b3a07c';
 
 export function lowFences(f: FieldDef, heightAt: (x: number, z: number) => number): THREE.Group {
   const g = new THREE.Group();
-  for (const l of f.lowFences ?? []) g.add(one(l, heightAt));
+  for (const l of f.lowFences ?? []) g.add(l.kind === 'log' ? logMesh(l, heightAt) : l.kind === 'stones' ? stoneWallMesh(l, heightAt) : one(l, heightAt));
   return g;
 }
 
@@ -67,7 +68,8 @@ export const JUMP = { gather: 1.45, leap: 0.85, land: 1.4 };
  * From where a dog is and which way it faces: before the rail it gathers, over it it leaps, after
  * it lands. Driven by position (which the room decides), so every player sees the same jump.
  */
-export function jumpAt(f: FieldDef, x: number, z: number, facing: number): Jump {
+export function jumpAt(f: FieldDef, x: number, z: number, facing: number, scale = 1): Jump {
+  const J = { gather: JUMP.gather * scale, leap: JUMP.leap * scale, land: JUMP.land * scale };
   let best: Jump = { phase: 'none', t: 0 };
   let bestD = Infinity;
   const fx = Math.sin(facing);
@@ -81,14 +83,16 @@ export function jumpAt(f: FieldDef, x: number, z: number, facing: number): Jump 
     if (along < -0.05 || along > 1.05) continue;
     // Signed distance across the line, and whether we're heading toward it or away.
     const [nx, nz] = [-ez / len, ex / len];
-    const side = (x - ax) * nx + (z - az) * nz;
+    // Measured from the jumpable's face (a log or a stone wall is wider than a fence rail).
+    const raw = (x - ax) * nx + (z - az) * nz;
+    const side = Math.sign(raw) * Math.max(0, Math.abs(raw) - jumpableHalf(l) + 0.1);
     const toward = (fx * nx + fz * nz) * side < 0;
     const s = toward ? -Math.abs(side) : Math.abs(side);
-    if (Math.abs(side) >= bestD || s < -JUMP.gather || s > JUMP.land) continue;
+    if (Math.abs(side) >= bestD || s < -J.gather || s > J.land) continue;
     bestD = Math.abs(side);
-    if (s < -JUMP.leap) best = { phase: 'gather', t: (s + JUMP.gather) / (JUMP.gather - JUMP.leap) };
-    else if (s < JUMP.leap) best = { phase: 'leap', t: (s + JUMP.leap) / (2 * JUMP.leap) };
-    else best = { phase: 'land', t: (s - JUMP.leap) / (JUMP.land - JUMP.leap) };
+    if (s < -J.leap) best = { phase: 'gather', t: (s + J.gather) / (J.gather - J.leap) };
+    else if (s < J.leap) best = { phase: 'leap', t: (s + J.leap) / (2 * J.leap) };
+    else best = { phase: 'land', t: (s - J.leap) / (J.land - J.leap) };
   }
   return best;
 }

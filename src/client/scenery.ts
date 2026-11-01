@@ -10,7 +10,7 @@ import { Rng } from '../shared/rng';
 import { at, mat, mesh, treeMesh } from './models';
 import { beehivesMesh, cartMesh, farmhouseMesh, scarecrowMesh, wellMesh, windmillMesh } from './props';
 import { heightAt } from './terrain';
-import { groundMaterial, setGround, swaying, windUniforms } from './windshader';
+import { advanceAir, groundMaterial, setGround, swaying, windUniforms } from './windshader';
 
 export { windUniforms };
 
@@ -424,8 +424,7 @@ export class Scenery {
 
   update(time: number, dt: number, wind: { x: number; z: number; s: number }): void {
     windUniforms.uTime.value = time;
-    windUniforms.uWind.value += (wind.s - windUniforms.uWind.value) * Math.min(1, dt * 2);
-    windUniforms.uWindDir.value.lerp(new THREE.Vector2(wind.x, wind.z), Math.min(1, dt * 2)).normalize();
+    advanceAir(dt, wind);
     const st = this.streaks;
     if (st) {
       st.mat.opacity = Math.max(0, (windUniforms.uWind.value - 0.15) * 0.55);

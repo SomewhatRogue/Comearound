@@ -2,7 +2,7 @@
  * Shared collision helpers: field fence, pen fences (with their gate gaps), obstacles.
  * Everything is a circle pushed out of walls and other circles. Cheap, stable, good enough.
  */
-import { gapFor, penWalls, waterSegments, type FieldDef, type Pen } from '../shared/field';
+import { gapFor, jumpableHalf, penWalls, waterSegments, type FieldDef, type Pen } from '../shared/field';
 
 type Wall = { ax: number; az: number; bx: number; bz: number };
 const wallCache = new WeakMap<FieldDef, Wall[]>();
@@ -100,7 +100,7 @@ export function collide(f: FieldDef, x: number, z: number, r: number, opts: Coll
     if (d < min && d > 1e-6) [x, z] = [o.x + (dx / d) * min, o.z + (dz / d) * min];
   }
   for (const w of walls(f, !!opts.gateShut)) [x, z] = pushOff(w, 0, x, z, r, opts.from);
-  if (!opts.hop) for (const l of f.lowFences ?? []) [x, z] = pushOff({ ax: l.a[0], az: l.a[1], bx: l.b[0], bz: l.b[1] }, 0.1, x, z, r, opts.from);
+  if (!opts.hop) for (const l of f.lowFences ?? []) [x, z] = pushOff({ ax: l.a[0], az: l.a[1], bx: l.b[0], bz: l.b[1] }, jumpableHalf(l), x, z, r, opts.from);
   if (!opts.gateShut) for (const p of opts.closed ?? []) for (const w of gateLine(p)) [x, z] = pushOff(w, 0, x, z, r, opts.from);
   return [x, z];
 }

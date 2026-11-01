@@ -6,13 +6,39 @@
  */
 import * as THREE from 'three';
 
-/** Shared by every swaying material: the clock and the wind. */
-export const windUniforms = { uTime: { value: 0 }, uWind: { value: 0 }, uWindDir: { value: new THREE.Vector2(1, 0) } };
+/**
+ * Shared by every swaying material: the clock, the wind, and how far the gusts and the clouds have
+ * travelled. The travel is added up a frame at a time (`advanceAir`), never worked out as clock times
+ * speed, so when a gusty wind changes strength or direction the pattern only changes speed: it
+ * never jumps (that jump was the strobing).
+ */
+export const windUniforms = {
+  uTime: { value: 0 },
+  uWind: { value: 0 },
+  uWindDir: { value: new THREE.Vector2(1, 0) },
+  uGust: { value: 0 },
+  uCloud: { value: new THREE.Vector2(0, 0) },
+};
+
+/** Move the gusts and the clouds on by this frame's worth of (gently smoothed) wind. */
+export function advanceAir(dt: number, wind: { x: number; z: number; s: number }): void {
+  const u = windUniforms;
+  // The look of the wind follows the real wind slowly, so gusts swell and fade rather than flicker.
+  u.uWind.value += (wind.s - u.uWind.value) * Math.min(1, dt * 0.6);
+  const len = Math.hypot(wind.x, wind.z) || 1;
+  u.uWindDir.value.lerp(new THREE.Vector2(wind.x / len, wind.z / len), Math.min(1, dt * 0.4)).normalize();
+  u.uGust.value += dt * (1.6 + u.uWind.value * 1.6);
+  const cloudSpeed = 0.9 + u.uWind.value * 1.4;
+  u.uCloud.value.x += (u.uWindDir.value.x * cloudSpeed + 0.25) * dt;
+  u.uCloud.value.y += u.uWindDir.value.y * cloudSpeed * dt;
+}
 
 const GLSL = `
 uniform float uTime;
 uniform float uWind;
 uniform vec2 uWindDir;
+uniform float uGust;
+uniform vec2 uCloud;
 float cbHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float cbNoise(vec2 p) {
   vec2 i = floor(p);
@@ -26,14 +52,13 @@ float cbGust(vec2 xz) {
   vec2 n = vec2(-d.y, d.x);
   float along = dot(xz, d);
   float across = dot(xz, n);
-  float wob = cbNoise(vec2(across * 0.06, uTime * 0.05)) * 6.0;
-  float s = sin((along - uTime * (2.4 + uWind * 3.0)) * 0.3 + wob);
-  return pow(max(s, 0.0), 6.0) * (0.45 + 0.55 * cbNoise(vec2(across * 0.09, along * 0.03 - uTime * 0.1)));
+  float wob = cbNoise(vec2(across * 0.05, uTime * 0.02)) * 5.0;
+  float s = sin((along - uGust) * 0.26 + wob);
+  return pow(max(s, 0.0), 4.0) * (0.4 + 0.6 * cbNoise(vec2(across * 0.08, (along - uGust) * 0.03)));
 }
 // Cloud shadows: big soft shapes drifting with the wind.
 float cbCloud(vec2 xz) {
-  vec2 drift = normalize(uWindDir) * uTime * (1.2 + uWind * 2.5) + vec2(uTime * 0.35, 0.0);
-  vec2 p = (xz - drift) * 0.032;
+  vec2 p = (xz - uCloud) * 0.032;
   float c = cbNoise(p) * 0.65 + cbNoise(p * 2.1 + 3.7) * 0.35;
   return smoothstep(0.56, 0.74, c);
 }
@@ -55,10 +80,10 @@ export function swaying(color: string, extra: Partial<THREE.MeshStandardMaterial
       #endif
       float h = max(mvPosition.y - aGround, 0.0);
       float breeze = max(uWind, 0.12);
-      float wave = sin(uTime * 2.2 - dot(mvPosition.xz, uWindDir) * 0.5 + mvPosition.x * 0.13) * 0.5 + 0.5;
-      float flutter = sin(uTime * 7.0 + mvPosition.x * 3.1 + mvPosition.z * 2.3) * 0.12;
+      float wave = sin(uTime * 1.4 - dot(mvPosition.xz, uWindDir) * 0.35 + mvPosition.x * 0.11) * 0.5 + 0.5;
+      float flutter = sin(uTime * 5.0 + mvPosition.x * 3.1 + mvPosition.z * 2.3) * 0.08;
       float gust = cbGust(mvPosition.xz);
-      mvPosition.xz += uWindDir * (uWind * (0.3 + wave * 1.1) + flutter * (0.25 + uWind) + gust * (0.9 + breeze * 1.6)) * h * 0.75;
+      mvPosition.xz += uWindDir * (uWind * (0.35 + wave * 0.7) + flutter * (0.25 + uWind * 0.6) + gust * (0.7 + breeze * 1.0)) * h * 0.75;
       mvPosition.y -= gust * h * h * 0.5;
       vCbXZ = mvPosition.xz;
       vGust = gust * min(h * 5.0, 1.0);
@@ -66,7 +91,7 @@ export function swaying(color: string, extra: Partial<THREE.MeshStandardMaterial
       gl_Position = projectionMatrix * mvPosition;`);
     sh.fragmentShader = `${GLSL}\nvarying vec2 vCbXZ;\nvarying float vGust;\n` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       diffuseColor.rgb *= 1.0 - 0.2 * cbCloud(vCbXZ);
-      diffuseColor.rgb += vec3(0.11, 0.11, 0.06) * vGust;`);
+      diffuseColor.rgb += vec3(0.07, 0.07, 0.04) * vGust;`);
   };
   return m;
 }
@@ -80,7 +105,7 @@ export function groundMaterial(extra: Partial<THREE.MeshStandardMaterialParamete
       vCbXZ = (modelMatrix * vec4(transformed, 1.0)).xz;`);
     sh.fragmentShader = `${GLSL}\nvarying vec2 vCbXZ;\n` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       diffuseColor.rgb *= 1.0 - 0.24 * cbCloud(vCbXZ);
-      diffuseColor.rgb += vec3(0.08, 0.09, 0.03) * cbGust(vCbXZ);`);
+      diffuseColor.rgb += vec3(0.045, 0.05, 0.02) * cbGust(vCbXZ);`);
   };
   return m;
 }
@@ -103,12 +128,9 @@ function noise(x: number, y: number): number {
   return a + (b - a) * fy;
 }
 export function cloudAt(x: number, z: number): number {
-  const t = windUniforms.uTime.value;
-  const w = windUniforms.uWind.value;
-  const d = windUniforms.uWindDir.value;
-  const len = Math.hypot(d.x, d.y) || 1;
-  const px = (x - ((d.x / len) * t * (1.2 + w * 2.5) + t * 0.35)) * 0.032;
-  const pz = (z - (d.y / len) * t * (1.2 + w * 2.5)) * 0.032;
+  const o = windUniforms.uCloud.value;
+  const px = (x - o.x) * 0.032;
+  const pz = (z - o.y) * 0.032;
   const c = noise(px, pz) * 0.65 + noise(px * 2.1 + 3.7, pz * 2.1 + 3.7) * 0.35;
   const s = Math.max(0, Math.min(1, (c - 0.56) / 0.18));
   return s * s * (3 - 2 * s);

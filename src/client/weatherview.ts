@@ -60,7 +60,9 @@ export class WeatherView {
     }
     this.flashes = pub.weather.flashes;
     this.flashT = Math.max(0, this.flashT - dt);
-    const flash = this.flashT > 0 ? Math.max(0, Math.sin((this.flashT / 0.6) * Math.PI * 3)) * 4 : 0;
+    // Lightning: one bright flash fading out, with a softer flicker after it (not a strobe).
+    const ft = 1 - this.flashT / 0.6;
+    const flash = this.flashT > 0 ? (ft < 0.25 ? 2.4 * (1 - ft / 0.25) : 0) + (ft > 0.4 && ft < 0.6 ? 0.9 * Math.sin(((ft - 0.4) / 0.2) * Math.PI) : 0) : 0;
 
     const bg = this.stage.scene.background as THREE.Color;
     bg.copy(target.sky);
@@ -69,7 +71,7 @@ export class WeatherView {
     fog.near = lerp(CLEAR.fogNear, RAIN.fogNear, this.mix) * (1 - 0.2 * this.storm);
     fog.far = lerp(CLEAR.fogFar, RAIN.fogFar, this.mix) * (1 - 0.1 * this.storm);
     // A cloud passing over you dims the sun for a while (its shadow drifts over the ground too).
-    this.shade += (cloudAt(focus.x, focus.z) - this.shade) * Math.min(1, dt * 1.5);
+    this.shade += (cloudAt(focus.x, focus.z) - this.shade) * Math.min(1, dt * 0.35);
     this.stage.hemi.intensity = target.hemi * (1 - 0.08 * this.shade) + flash;
     this.stage.sun.intensity = target.sun * (1 - 0.3 * this.shade) + flash * 0.5;
     if (this.bolt) {

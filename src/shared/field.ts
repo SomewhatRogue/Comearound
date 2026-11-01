@@ -21,8 +21,14 @@ export interface Pen extends Box {
 export interface Obstacle { kind: 'tree' | 'rock' | 'pond' | 'hay' | 'bramble' | 'windmill'; x: number; z: number; r: number }
 /** A stream: a line of water sheep and goats won't cross except at a bridge. Dogs wade it, slowly. */
 export interface Stream { pts: [number, number][]; w: number; bridges: { x: number; z: number; w: number }[] }
-/** A low (or half broken) fence inside the field: sheep and goats have to go round, dogs hop it. */
-export interface LowFence { a: [number, number]; b: [number, number]; broken?: boolean }
+/** Something low lying across the field that sheep and goats have to go round and dogs jump:
+ * a low (or half broken) fence, a fallen log, or a low dry-stone wall. */
+export interface LowFence { a: [number, number]; b: [number, number]; broken?: boolean; kind?: 'fence' | 'log' | 'stones' }
+
+/** How thick a jumpable is, either side of its line (a log is round, a stone wall is wide). */
+export function jumpableHalf(l: LowFence): number {
+  return l.kind === 'log' ? 0.26 : l.kind === 'stones' ? 0.32 : 0.1;
+}
 /** A broken bit of the outer fence: sheep that wander out through it are lost. */
 export interface FenceGap { side: 'n' | 's' | 'e' | 'w'; at: number; w: number }
 export interface Circle { x: number; z: number; r: number }
@@ -148,7 +154,7 @@ export function gapFor(f: FieldDef, x: number, z: number): FenceGap | null {
 /** How close (x, z) is to the nearest low fence (Infinity if the field has none). */
 export function nearLowFence(f: FieldDef, x: number, z: number): number {
   let best = Infinity;
-  for (const l of f.lowFences ?? []) best = Math.min(best, distToSeg(x, z, { ax: l.a[0], az: l.a[1], bx: l.b[0], bz: l.b[1] }));
+  for (const l of f.lowFences ?? []) best = Math.min(best, distToSeg(x, z, { ax: l.a[0], az: l.a[1], bx: l.b[0], bz: l.b[1] }) - jumpableHalf(l) + 0.1);
   return best;
 }
 

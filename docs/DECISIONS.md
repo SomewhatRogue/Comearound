@@ -2,6 +2,27 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (night, later still): sprint leaps, logs and walls, a calm sky, chatty sheep (Claude Opus 5.5)
+
+- **Sprinting through a jump keeps its speed:** a sprinting dog slows only to 90% (walking: 62%) and
+  its leap stretches half as long again (gather, leap and landing all scale; the length is fixed
+  when the jump starts, so running out of stamina mid-air doesn't hiccup). Prediction matches.
+- **Logs and dry-stone walls to jump** (`LowFence.kind: 'log' | 'stones'`, drawn in
+  `client/jumpables.ts`): fallen logs with bark, cut ends, a branch stub and moss; low walls of
+  rough stones with coping on top. Thicker than a fence rail (`jumpableHalf`), measured from their
+  face for the jump. One to three in every field, in open ground. Bench unchanged within noise
+  (Bramble Lane over 12 seeds: 7.7 with, 6.3 without).
+- **The strobing on windy fields fixed.** Gusts and cloud shadows were placed at clock times wind
+  speed, so every change in a gusty wind jumped the whole pattern. They now travel by accumulated
+  distance (`advanceAir`): the wind changes their speed, never their position. The look of the
+  wind follows the real wind slowly; gusts are softer and slower; the sun eases in and out of a
+  cloud's shadow over a few seconds. Lightning is one bright flash and a softer flicker, not three.
+- **The open gate lies flat against the outside of the pen fence** (nothing collides with it); a
+  challenge pen's gate swings shut through the field side.
+- **Sheep chat:** every few seconds a calm sheep near you gives a contented baa at its own pitch
+  (now and then a high, young one), quieter further off. Grazing sheep nibble with a little chewing
+  nod and look up now and then. (Frightened sheep already gave a worried baa.)
+
 ## 2026-10-31 (night, last): a real jump over low fences (Claude Opus 5.5)
 
 Kyle: make the fence jump more dynamic and clearly a jump: a gather, a leap, a landing.

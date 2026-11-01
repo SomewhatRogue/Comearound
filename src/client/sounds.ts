@@ -16,6 +16,8 @@ export class SoundDirector {
   private baaCd = 0;
   private goatComing = false;
   private lost = 0;
+  /** Seconds until a contented sheep near you next says something. */
+  private chatter = 3;
 
   /** A dog barked at `at`; quieter the further it is from you. */
   woof(d: DogPub, dist: number): void {
@@ -55,6 +57,19 @@ export class SoundDirector {
       if (scared) {
         sfx.baa(0.8, 0.9 + (scared.id % 5) * 0.06);
         this.baaCd = 2.5 + (scared.id % 3);
+      }
+    }
+    // A calm flock chats: now and then a contented baa from a settled sheep near you, at its own
+    // pitch (the odd one high and young-sounding), quieter the further away it is.
+    this.chatter -= dt;
+    if (this.chatter <= 0) {
+      this.chatter = 2.5 + Math.random() * 5;
+      const calm = pub.sheep.filter((s) => !s.lost && s.fear < 0.2 && Math.hypot(s.x - self.x, s.z - self.z) < 16);
+      const s = calm[Math.floor(Math.random() * calm.length)];
+      if (s && (pub.phase === 'playing' || pub.phase === 'lobby')) {
+        const d = Math.hypot(s.x - self.x, s.z - self.z);
+        const lamb = s.id % 7 === 3;
+        sfx.baa(Math.max(0.25, 0.75 - d / 24), (lamb ? 1.45 : 0.92 + (s.id % 5) * 0.07) + (Math.random() - 0.5) * 0.06);
       }
     }
     // Uh oh: the goat has picked you.

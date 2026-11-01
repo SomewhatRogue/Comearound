@@ -229,9 +229,10 @@ function frame(now: number) {
     const len = Math.hypot(input.dx, input.dz);
     syncPractise(pub, me, now);
     const canMove = !me.spectator && !me.frozen && (pub.phase === 'playing' || (pub.phase === 'lobby' && panels.collapsed));
+    const sprinting = input.sprint && !input.crouch && net.me.stamina > 1;
     if (canMove && len > 0.1) {
-      const ground = (inMud(field, predicted.x, predicted.z) ? HAZARD.mudSlow : inWater(field, predicted.x, predicted.z) ? HAZARD.wadeSlow : 1) * (nearLowFence(field, predicted.x, predicted.z) < DOG.hopWithin ? DOG.hopSlow : 1);
-      const speed = (input.crouch ? DOG.crouch : input.sprint && net.me.stamina > 1 ? DOG.sprint : DOG.walk) * ground;
+      const ground = (inMud(field, predicted.x, predicted.z) ? HAZARD.mudSlow : inWater(field, predicted.x, predicted.z) ? HAZARD.wadeSlow : 1) * (nearLowFence(field, predicted.x, predicted.z) < DOG.hopWithin * (sprinting ? 1.5 : 1) ? (sprinting ? DOG.hopSlowSprint : DOG.hopSlow) : 1);
+      const speed = (input.crouch ? DOG.crouch : sprinting ? DOG.sprint : DOG.walk) * ground;
       const k = Math.min(1, len);
       const from = { x: predicted.x, z: predicted.z };
       predicted.x += (input.dx / len) * speed * k * dt;
