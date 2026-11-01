@@ -22,9 +22,12 @@ Newest first. Each entry says what was decided and why, signed with the model.
 - New online scenario R: mid-run the friend's page is frozen solid (debugger paused, socket left
   open), she opens the link in a fresh browser with the same name: back in her own seat in under
   8 s (before the fix: a second "Sam" watching from the side). Two unit tests cover the rules.
-- **Link preview:** Open Graph and Twitter tags with a 1200x630 card (`public/og.jpg`, 86 KB): a
-  collie in the meadow with the flock behind her and the title in the game's own lettering,
-  rendered from the game itself.
+- **Link preview:** Open Graph and Twitter tags with a 1200x630 card (`public/og.jpg`): a collie
+  in the meadow with the title in the game's own lettering, rendered from the game itself. Second
+  take (Kyle: the background read as "weird golf balls"): seen from behind with heads down, sheep
+  are woolly balls on sticks, so the flock now stands side on with heads up beside the meadow's
+  oak, and an orange butterfly flits by her ear. The image URL carries `?v=2` so chat apps that
+  cached the first one fetch the new one.
 
 ## 2026-10-31 (night, last): an agility course, and piano from the next room (Claude Opus 5.5)
 
