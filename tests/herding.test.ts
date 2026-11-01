@@ -198,8 +198,36 @@ describe('fields, scores and bots', () => {
     const s = h.room.fieldScores[0][0];
     expect(s.penned).toBe(s.total);
     expect(s.timeBonus).toBeGreaterThan(0);
-    expect(s.calmBonus).toBe(200);
+    // Nobody barked, sprinted or upset the flock: the whole calm-herding bonus.
+    expect(s.calmBonus).toBe(500);
     expect(s.score).toBe(s.penned * 100 + s.timeBonus + s.calmBonus + s.goatBonus);
+  });
+
+  it('calm herding pays: a settled flock and soft feet beat sprinting and barking', () => {
+    const play = (rough: boolean) => {
+      const h = harness(1);
+      h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+      h.toPlaying();
+      const d = h.dog(0);
+      d.bot = null;
+      const c = { x: h.room.sheep[0].x, z: h.room.sheep[0].z };
+      // Rough: sprint circles round the flock, barking. Calm: stalk in a crouch, slowly.
+      for (let t = 0; t < 12; t += 0.05) {
+        const a = t * 1.2;
+        Object.assign(d, { dx: Math.cos(a), dz: Math.sin(a), wantSprint: rough, wantCrouch: !rough });
+        if (rough && Math.round(t * 20) % 40 === 0) h.say(0, { t: 'bark' });
+        if (!rough) Object.assign(d, { x: c.x - 6 + Math.cos(a) * 0.5, z: c.z + Math.sin(a) * 0.5 });
+        h.room.tick(0.05);
+      }
+      const pen = h.room.field.pens[0];
+      h.room.sheep.forEach((s, i) => Object.assign(s, { x: pen.x + ((i % 3) - 1) * 1.2, z: pen.z + (Math.floor(i / 3) - 1) * 1.2, vx: 0, vz: 0 }));
+      h.run(3.5);
+      return h.room.fieldScores[0][0].calmBonus;
+    };
+    const calm = play(false);
+    const rough = play(true);
+    expect(calm).toBeGreaterThan(420);
+    expect(rough).toBeLessThan(calm - 150);
   });
 
   it('bots alone clear The Meadow most of the time (it is meant to be a challenge now)', () => {
@@ -483,5 +511,34 @@ describe('the lobby pack', () => {
     h.toPlaying();
     h.say(0, { t: 'pet', id: target });
     expect(h.dog(1).pets).toBe(2);
+  });
+});
+
+describe('low fences', () => {
+  it('sheep and goats can\'t cross a low fence; dogs hop it', async () => {
+    const { collide } = await import('../src/server/physics');
+    const f = TRIALS[0];
+    const fence = f.lowFences![0];
+    const x = fence.a[0];
+    const z = (fence.a[1] + fence.b[1]) / 2;
+    // Walking east across the fence line, from the west side.
+    const from = { x: x - 0.8, z };
+    const [sx] = collide(f, x + 0.6, z, 0.5, { from });
+    expect(sx).toBeLessThan(x);
+    const [dx] = collide(f, x + 0.6, z, 0.45, { from, water: false, hop: true });
+    expect(dx).toBeCloseTo(x + 0.6);
+  });
+});
+
+describe('sheep and walls', () => {
+  it('sheep left against the outer fence ease back off it after a few seconds', () => {
+    const h = harness(1, 3);
+    h.say(0, { t: 'practise', on: true });
+    Object.assign(h.dog(0), { x: 15, z: 12 });
+    h.room.sheep.forEach((s, i) => Object.assign(s, { x: -6 + i * 0.8, z: -14.4, vx: 0, vz: 0, fear: 0 }));
+    const off = () => h.room.sheep.reduce((n, s) => n + (15 + s.z), 0) / h.room.sheep.length;
+    const start = off();
+    h.run(8);
+    expect(off() - start).toBeGreaterThan(1.2);
   });
 });

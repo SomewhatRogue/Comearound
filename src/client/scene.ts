@@ -11,6 +11,9 @@ import type { PublicView } from '../shared/protocol';
 import { at, hayMesh, mat, mesh, pondMesh, rockMesh, treeMesh } from './models';
 import { buildHazards } from './hazardsview';
 import { Scenery } from './scenery';
+import { heightAt } from './terrain';
+import { lowFences } from './lowfence';
+import { Wildlife } from './wildlife';
 import { animateProps, windmillMesh } from './props';
 
 export const TEAM_COLORS = ['#3d7dd8', '#e8762c'] as const;
@@ -89,6 +92,7 @@ export function makeStage(host: HTMLElement, lowfx = false, phone = false): Stag
 export class FieldView {
   private group: THREE.Group | null = null;
   private scenery: Scenery | null = null;
+  private wildlife: Wildlife | null = null;
   id = '';
 
   constructor(private stage: Stage, private lowfx: boolean) {}
@@ -107,14 +111,17 @@ export class FieldView {
     this.group = buildField(f, this.lowfx);
     this.scenery = new Scenery(f, this.lowfx);
     this.group.add(this.scenery.group);
+    this.wildlife = new Wildlife(f, this.lowfx);
+    this.group.add(this.wildlife.group);
     this.stage.scene.add(this.group);
   }
 
-  /** Clouds and butterflies. */
-  update(time: number, dt: number, pub: PublicView): void {
+  /** Clouds, butterflies, ducks and birds. `you`: your dog, for how loud a startled duck is. */
+  update(time: number, dt: number, pub: PublicView, you: { x: number; z: number } | null = null): void {
     this.scenery?.update(time, dt, pub.wind);
+    this.wildlife?.update(pub, you, time, dt);
     if (!this.group || !this.scenery) return;
-    animateProps(this.group, time, dt, pub.wind.s, this.scenery.ducks);
+    animateProps(this.group, time, dt, pub.wind.s);
     // Challenge pens: live counts on the signs, and gates that swing shut when the count is right.
     for (const o of this.group.children) {
       const st = pub.pens[o.userData.pen as number];
@@ -223,8 +230,11 @@ function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
     const obj = o.kind === 'tree' ? treeMesh(o.r, seed) : o.kind === 'rock' ? rockMesh(o.r) : o.kind === 'hay' ? hayMesh(o.r) : o.kind === 'windmill' ? windmillMesh(o.r / 1.7) : pondMesh(o.r, seed);
     obj.position.x += o.x;
     obj.position.z += o.z;
+    // Brambles too sit on the lie of the land (ponds and windmills are on the level).
+    if (o.kind !== 'pond') obj.position.y += heightAt(f, o.x, o.z) - (o.kind === 'rock' || o.kind === 'tree' ? 0.04 : 0);
     g.add(obj);
   }
+  g.add(lowFences(f, (x, z) => heightAt(f, x, z)));
 
   return g;
 }

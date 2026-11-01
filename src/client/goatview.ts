@@ -6,7 +6,9 @@
 import * as THREE from 'three';
 import type { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { GoatPub, PublicView } from '../shared/protocol';
+import { fieldById } from '../shared/field';
 import { goatMesh } from './models';
+import { heightAt } from './terrain';
 import { label } from './scene';
 
 const lerpAngle = (a: number, b: number, k: number) => {
@@ -61,7 +63,7 @@ export class GoatView {
     const head = g.mood === 'bleat' ? -0.5 : g.mood === 'stare' ? 0.15 + Math.sin(time * 2) * 0.02 : g.mood === 'block' ? 0.55 + Math.sin(time * 3) * 0.05 : g.mood === 'charge' ? 0.7 : 0.25;
     this.rig.head.rotation.x += (head - this.rig.head.rotation.x) * Math.min(1, dt * 10);
     // A charging goat bounds.
-    root.position.y = g.mood === 'charge' ? Math.abs(Math.sin(this.phase)) * 0.18 : 0;
+    root.position.y = heightAt(fieldById(pub.fieldId), root.position.x, root.position.z) + (g.mood === 'charge' ? Math.abs(Math.sin(this.phase)) * 0.18 : 0);
     const el = this.tag.element;
     el.style.setProperty('--annoy', String(g.annoy));
     el.classList.toggle('hot', g.annoy > 0.6);

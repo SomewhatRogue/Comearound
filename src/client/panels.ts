@@ -4,7 +4,7 @@
  * use data-act attributes and one listener.
  */
 import { COURSES, fieldById, type CourseId } from '../shared/field';
-import { BREEDS, BREED_NAMES, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } from '../shared/looks';
+import { BREEDS, BREED_NAMES, BUILDS, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } from '../shared/looks';
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
 /** Extra lobby lines from whichever online layer is running (friends on the page, or an online room). */
@@ -72,6 +72,7 @@ export class Panels {
     if (act === 'coat') this.setLook({ ...this.look, coat: v });
     if (act === 'eyes') this.setLook({ ...this.look, eyes: v });
     if (act === 'collar') this.setLook({ ...this.look, collar: v });
+    if (act === 'build') this.setLook({ ...this.look, build: Number(v) || 0 });
     if (act === 'mode') [this.pick, this.keys.lobby] = [v as CourseId | 'versus', ''];
     if (act === 'bots') [this.bots, this.keys.lobby] = [!this.bots, ''];
     if (act === 'start') this.startPick(this.pick);
@@ -148,6 +149,7 @@ export class Panels {
     const breeds = BREEDS.map((b) => `<button class="chip ${b === this.look.breed ? 'on' : ''}" data-act="breed" data-v="${b}">${BREED_NAMES[b]}</button>`).join('');
     const coats = COATS.map((c) => `<button class="swatch coat ${c.id === this.look.coat ? 'on' : ''}" style="--a:${c.main};--b:${c.accent};--c:${c.mask}" data-act="coat" data-v="${c.id}" title="${c.name}" aria-label="${c.name}"></button>`).join('');
     const eyes = EYES.map((e) => `<button class="chip eye-chip ${e.id === this.look.eyes ? 'on' : ''}" data-act="eyes" data-v="${e.id}"><i style="background:${e.color}"></i>${e.name}</button>`).join('');
+    const builds = BUILDS.map((b) => `<button class="chip ${b.v === (this.look.build ?? 0) ? 'on' : ''}" data-act="build" data-v="${b.v}">${b.name}</button>`).join('');
     const collars = COLLARS.map((c) => `<button class="swatch ${c === this.look.collar ? 'on' : ''}" style="background:${c}" data-act="collar" data-v="${c}" aria-label="collar ${c}"></button>`).join('');
     const pack = pub.dogs.filter((d) => !d.bot).map((d) => `<li><i style="background:${d.look.collar}"></i>${esc(d.look.name)} <span class="quiet">${BREED_NAMES[d.look.breed]}</span>${d.id === pub.hostId ? ' <em>host</em>' : ''}${d.connected ? '' : ' <span class="quiet">(away)</span>'}</li>`).join('');
     const modes = ([
@@ -173,6 +175,7 @@ export class Panels {
       <label>Your dog's name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>${touchTip}
       <div class="label">Breed</div><div class="row wrap">${breeds}</div>
       <div class="label">Coat</div><div class="swatches">${coats}</div>
+      <div class="label">Build</div><div class="row wrap">${builds}</div>
       <div class="label">Eyes</div><div class="row wrap">${eyes}</div>
       <div class="label">Collar</div><div class="swatches">${collars}</div>
       <div class="label">How to herd</div><ul class="how-mini">
@@ -227,7 +230,7 @@ function fieldCard(pub: PublicView, me: PrivateView): string {
     const rows = [
       [`Sheep penned`, `${s.penned}/${s.total}`, s.penned * 100],
       ['Time left', s.timeBonus ? '' : 'pen them all to earn it', s.timeBonus],
-      ['Calm herding', 'fewer barks', s.calmBonus],
+      ['Calm herding', 'settled flock, soft feet, few barks', s.calmBonus],
       ...(s.goatBonus ? [[s.goatBonus > 250 ? 'Goats!' : 'The goat!', 'penned', s.goatBonus] as const] : []),
       ...(s.lost ? [['Lost sheep', `${s.lost} out the broken fence`, -s.lostPenalty] as const] : []),
     ];
@@ -253,6 +256,8 @@ function menuHtml(pub: PublicView, me: PrivateView): string {
     <li><b>Crouch</b> (<b>Space</b>, or <b>DOWN</b> on a phone) to stalk. Face the sheep and you give them <b>the eye</b> (the pale cone): they drift away calmly, without panicking.</li>
     <li><b>Lie down</b>: crouch and hold still. Sheep near you settle (the green ring). Good for holding a flock or a gate.</li>
     <li><b>Bark</b> (<b>E</b>) sends sheep running fast. It has a cooldown, costs calm-herding points, and <b>the goat hates it</b>: bark near it too often and it walks over, stares you down and you freeze. <i>NAUGHTY.</i></li>
+    <li><b>Calm herding pays.</b> A settled flock, soft feet (little sprinting, plenty of stalking and the eye) and few barks earn up to 500 points a field, as much as racing the clock.</li>
+    <li><b>Low fences:</b> the sheep have to go round, but a dog just hops over. Handy for getting behind a flock.</li>
     <li><b>The goat</b> wanders, bleats and scatters sheep. It only gives way to a dog giving it the eye. Pen it for a bonus.</li>
     <li><b>Versus:</b> blue sheep go in the blue pen, orange in the orange pen. Pen yours, or herd the goat over to their side and let it bleat.</li>
     <li><b>Keys:</b> WASD or arrows move, Shift sprints, Space crouches, E barks, M mutes, Esc for this menu.</li>

@@ -102,7 +102,11 @@ export interface DogRig {
  * head), the head pivots at the neck, each leg at its shoulder or hip.
  */
 export function dogMesh(look: Look): DogRig {
-  const s = SHAPES[look.breed] ?? SHAPES.collie;
+  // Build, lean to chonk: a rounder (or slighter) body on a little shorter (or longer) legs.
+  const b = Math.max(-2, Math.min(2, look.build ?? 0));
+  const base = SHAPES[look.breed] ?? SHAPES.collie;
+  const s: BreedShape = { ...base, girth: base.girth * (1 + 0.15 * b), leg: base.leg * (1 - 0.05 * b), body: base.body * (1 + 0.03 * b) };
+  const legThick = 1 + 0.2 * b;
   const coat = COATS.find((c) => c.id === look.coat) ?? COATS[0];
   const eye = EYES.find((e) => e.id === look.eyes) ?? EYES[0];
   const [main, accent, maskC] = [coat.main, coat.accent, coat.mask];
@@ -147,7 +151,7 @@ export function dogMesh(look: Look): DogRig {
     const leg = group('leg');
     leg.position.set(side * s.girth * 0.55, -s.girth * 0.3, z);
     const L = s.leg + s.girth * 0.3;
-    leg.add(at(mesh(new THREE.CapsuleGeometry(0.055 * s.scale + 0.01, L - 0.08, 3, 6), main), 0, -L / 2, 0));
+    leg.add(at(mesh(new THREE.CapsuleGeometry((0.055 * s.scale + 0.01) * legThick, L - 0.08, 3, 6), main), 0, -L / 2, 0));
     leg.add(at(mesh(new THREE.SphereGeometry(0.07, 6, 5), accent), 0, -L + 0.02, 0.03));
     if (s.fluff === 'poodle') leg.add(at(mesh(new THREE.IcosahedronGeometry(0.1, 1), main), 0, -L + 0.1, 0));
     parent.add(leg);

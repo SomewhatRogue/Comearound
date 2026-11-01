@@ -223,7 +223,7 @@ function frame(now: number) {
   if (pub && me && net.me) {
     const field = fieldById(pub.fieldId);
     fieldView.show(field, pub.mode);
-    fieldView.update(now / 1000, dt, pub);
+    fieldView.update(now / 1000, dt, pub, me.spectator ? null : predicted);
     // Predict our own run; ease back toward the server so we never drift far from the truth.
     if (!havePrediction) [predicted.x, predicted.z, predicted.rot, havePrediction] = [me.x, me.z, me.rot, true];
     const len = Math.hypot(input.dx, input.dz);
@@ -236,7 +236,7 @@ function frame(now: number) {
       const from = { x: predicted.x, z: predicted.z };
       predicted.x += (input.dx / len) * speed * k * dt;
       predicted.z += (input.dz / len) * speed * k * dt;
-      [predicted.x, predicted.z] = collide(field, predicted.x, predicted.z, DOG.radius, { from, gateShut: pub.mode === 'versus' && pub.phase !== 'lobby', water: false });
+      [predicted.x, predicted.z] = collide(field, predicted.x, predicted.z, DOG.radius, { from, gateShut: pub.mode === 'versus' && pub.phase !== 'lobby', water: false, hop: true });
       predicted.rot = Math.atan2(input.dx, input.dz);
       idleFor = 0;
     } else idleFor += dt;
@@ -349,6 +349,14 @@ w.__debug_naughty = (words?: string) => hud.naughty(words);
 w.__music = music;
 w.__stage = stage;
 w.__game_actions__ = { send: (m: Parameters<NetLike['send']>[0]) => net.send(m), predicted: () => ({ ...predicted }) };
+/** Screenshots: put the camera anywhere (it stops following your dog). `__camera()` gives it back. */
+w.__camera = (...v: number[]) => {
+  noLoop = v.length > 0;
+  if (!noLoop) return;
+  stage.camera.clearViewOffset();
+  stage.camera.position.set(v[0], v[1], v[2]);
+  stage.camera.lookAt(v[3] ?? 0, v[4] ?? 0, v[5] ?? 0);
+};
 /** Tests: where a dog is on screen (to tap or click it). */
 w.__dogOnScreen = (id: string) => {
   const p = entities.pos.get(id);
@@ -358,11 +366,13 @@ w.__dogOnScreen = (id: string) => {
   return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
 };
 
-/** Art review: every breed in a row, in a pose, with the camera close. `__lineup('crouch')`. */
-w.__lineup = (pose = 'walk') => {
+/** Art review: every breed in a row, in a pose, with the camera close. `__lineup('crouch')`;
+ * `__lineup('walk', 'corgi')` shows that breed in every build, lean to chonk, instead. */
+w.__lineup = (pose = 'walk', builds?: string) => {
   noLoop = true;
-  BREEDS.forEach((b, i) => {
-    const rig = dogMesh({ name: b, breed: b, coat: DEFAULT_COAT[b], collar: '#e4572e', eyes: b === 'collie' ? 'blue' : 'brown' });
+  const row = builds ? [-2, -1, 0, 1, 2].map((v) => [builds, v] as const) : BREEDS.map((b) => [b, 0] as const);
+  row.forEach(([b, build], i) => {
+    const rig = dogMesh({ name: b, breed: b as Look['breed'], coat: DEFAULT_COAT[b as Look['breed']], collar: '#e4572e', eyes: b === 'collie' ? 'blue' : 'brown', build });
     rig.root.position.set(-5.6 + i * 1.6, 0, 30);
     rig.root.rotation.y = 0.5;
     if (pose === 'crouch') { rig.rig.position.y *= 0.6; rig.front.rotation.x = 0.2; rig.head.rotation.x = 0.38; rig.legs.forEach((l) => (l.scale.y = 0.6)); }

@@ -10,6 +10,8 @@ import { fieldById } from '../shared/field';
 import type { DogPub, PublicView } from '../shared/protocol';
 import { DOG, GOAT, SHEEP } from '../shared/tuning';
 import { GoatView } from './goatview';
+import { hopOver } from './lowfence';
+import { heightAt } from './terrain';
 import { Hearts, newIdle, patSound, tickIdle, type Idle } from './lobbypack';
 import { sfx } from './sfx';
 import { dogMesh, sheepMesh, type DogRig, type SheepRig } from './models';
@@ -67,7 +69,11 @@ export class Entities {
   sizeOf: (breed: string) => number = () => 1;
   pitchOf: (breed: string) => number = () => 1;
 
+  /** The field being drawn (for the lie of the land and its low fences). */
+  private field = fieldById('meadow');
+
   sync(pub: PublicView, you: string, predicted: { x: number; z: number; rot: number } | null, dt: number, time: number): void {
+    this.field = fieldById(pub.fieldId);
     const k = 1 - Math.exp(-dt * 14);
     this.syncDogs(pub, you, predicted, dt, k, time);
     this.syncSheep(pub, dt, k, time);
@@ -90,7 +96,7 @@ export class Entities {
   private ring(x: number, z: number, max: number, color: string): void {
     const m = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false }));
     m.rotation.x = -Math.PI / 2;
-    m.position.set(x, 0.06, z);
+    m.position.set(x, heightAt(this.field, x, z) + 0.06, z);
     this.stage.scene.add(m);
     this.rings.push({ m, t: 0, max });
   }
@@ -122,6 +128,8 @@ export class Entities {
       if (root.position.lengthSq() === 0) root.position.set(tx, 0, tz);
       root.position.x += (tx - root.position.x) * (mine ? 1 : k);
       root.position.z += (tz - root.position.z) * (mine ? 1 : k);
+      // Standing on the lie of the land, and hopping any low fence you cross.
+      root.position.y = heightAt(this.field, root.position.x, root.position.z) + hopOver(this.field, root.position.x, root.position.z);
       const moved = Math.hypot(root.position.x - v.lastX, root.position.z - v.lastZ) / Math.max(dt, 1e-3);
       v.speed += (moved - v.speed) * Math.min(1, dt * 10);
       [v.lastX, v.lastZ] = [root.position.x, root.position.z];
@@ -249,6 +257,7 @@ export class Entities {
       root.visible = !s.lost;
       root.position.x += (s.x - root.position.x) * k;
       root.position.z += (s.z - root.position.z) * k;
+      root.position.y = heightAt(this.field, root.position.x, root.position.z);
       const moved = Math.hypot(root.position.x - v.lastX, root.position.z - v.lastZ) / Math.max(dt, 1e-3);
       v.speed += (moved - v.speed) * Math.min(1, dt * 8);
       [v.lastX, v.lastZ] = [root.position.x, root.position.z];

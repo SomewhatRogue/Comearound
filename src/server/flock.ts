@@ -7,7 +7,7 @@
  * - a bark kicks every sheep in earshot away fast and makes them panic
  * Penned sheep are calmer, so a held pen stays held.
  */
-import { gateOf, inMud, inPen, outOfField, type FieldDef } from '../shared/field';
+import { distToSeg, gateOf, inMud, inPen, outOfField, type FieldDef } from '../shared/field';
 import { DOG, GOAT, HAZARD, SHEEP, WEATHER } from '../shared/tuning';
 import { hazardForces } from './hazards';
 import { isDown } from './dogs';
@@ -175,6 +175,19 @@ export function tickFlock(room: Room, dt: number): void {
       s.wanderT = room.rng.range(3, 7);
       const pen = penned ? room.field.pens.find((p) => inPen(p, s.x, s.z)) : null;
       [s.wx, s.wz] = pen ? [pen.x + room.rng.range(-pen.w / 3, pen.w / 3), pen.z + room.rng.range(-pen.d / 3, pen.d / 3)] : [s.x + room.rng.range(-2.5, 2.5), s.z + room.rng.range(-2.5, 2.5)];
+      // Grass by the outer fence is no better than anywhere: graze a little way in from it.
+      if (!pen) [s.wx, s.wz] = [clampIn(s.wx, room.field.w / 2 - 2.2), clampIn(s.wz, room.field.d / 2 - 2.2)];
+    }
+
+    // Off the walls: a sheep left up against a hard edge for a couple of seconds eases back out
+    // into the open, so a flock driven onto the fence can be got off it again. Not while a dog
+    // is driving it (push), and never out of a pen.
+    const wall = penned ? null : nearestWall(room.field, s.x, s.z);
+    s.wallT = wall && wall.d < 1.4 && push < 0.3 ? (s.wallT ?? 0) + dt : Math.max(0, (s.wallT ?? 0) - dt * 2);
+    if (wall && s.wallT > SHEEP.wallSettle) {
+      const k = Math.min(1, (s.wallT - SHEEP.wallSettle) / 2) * SHEEP.wallEase;
+      ax += wall.nx * k;
+      az += wall.nz * k;
     }
     // A fright keeps them running for a moment after the noise.
     s.startle = Math.max(0, s.startle - dt * 0.8);
@@ -224,4 +237,35 @@ export function tickFlock(room: Room, dt: number): void {
       if (room.phase === 'playing') for (const d of dogs) room.emit(d.id, { kind: 'toast', text: 'A sheep got out through the broken fence!' });
     }
   });
+}
+
+const clampIn = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+
+/** The nearest hard edge a sheep could be pressed against, and the way back out into the field. */
+function nearestWall(f: FieldDef, x: number, z: number): { d: number; nx: number; nz: number } | null {
+  const edges = [
+    { d: f.w / 2 - x, nx: -1, nz: 0 }, { d: f.w / 2 + x, nx: 1, nz: 0 },
+    { d: f.d / 2 - z, nx: 0, nz: -1 }, { d: f.d / 2 + z, nx: 0, nz: 1 },
+  ];
+  let best = edges.reduce((a, b) => (b.d < a.d ? b : a));
+  // The outside of a pen.
+  for (const p of f.pens) {
+    const ox = Math.abs(x - p.x) - p.w / 2;
+    const oz = Math.abs(z - p.z) - p.d / 2;
+    if (ox < 0 && oz < 0) continue;
+    const d = Math.hypot(Math.max(ox, 0), Math.max(oz, 0));
+    if (d < best.d) best = ox > oz ? { d, nx: Math.sign(x - p.x), nz: 0 } : { d, nx: 0, nz: Math.sign(z - p.z) };
+  }
+  // Low fences, either side.
+  for (const l of f.lowFences ?? []) {
+    const q = { ax: l.a[0], az: l.a[1], bx: l.b[0], bz: l.b[1] };
+    const d = distToSeg(x, z, q);
+    if (d >= best.d) continue;
+    const ex = q.bx - q.ax;
+    const ez = q.bz - q.az;
+    const len = Math.hypot(ex, ez) || 1;
+    const side = Math.sign(ex * (z - q.az) - ez * (x - q.ax)) || 1;
+    best = { d, nx: (-ez / len) * side, nz: (ex / len) * side };
+  }
+  return best.d < 3 ? best : null;
 }

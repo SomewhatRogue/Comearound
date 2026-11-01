@@ -120,19 +120,8 @@ export function cartMesh(): THREE.Group {
 }
 
 /** A duck. Ducks paddle round ponds (the scene moves them). */
-export function duckMesh(): THREE.Group {
-  const g = new THREE.Group();
-  g.add(at(mesh(new THREE.SphereGeometry(0.22, 8, 6), '#f7f3e6'), 0, 0.1, 0));
-  g.children[0].scale.set(1, 0.7, 1.4);
-  g.add(at(mesh(new THREE.SphereGeometry(0.12, 8, 6), '#3f7a4a'), 0, 0.28, 0.2));
-  const beak = mesh(new THREE.ConeGeometry(0.05, 0.14, 5), '#f2a33a');
-  beak.rotation.x = Math.PI / 2;
-  g.add(at(beak, 0, 0.26, 0.36));
-  return g;
-}
-
-/** Spin sails, puff smoke, paddle ducks. */
-export function animateProps(root: THREE.Object3D, time: number, dt: number, wind: number, ducks: { obj: THREE.Object3D; x: number; z: number; r: number; ph: number; sp: number }[]): void {
+/** Spin sails, puff smoke. */
+export function animateProps(root: THREE.Object3D, time: number, dt: number, wind: number): void {
   root.traverse((o) => {
     if (o.name === 'sails') o.rotation.z -= dt * (0.3 + wind * 2.2);
     if (o.name === 'smoke') {
@@ -144,11 +133,6 @@ export function animateProps(root: THREE.Object3D, time: number, dt: number, win
       }
     }
   });
-  for (const d of ducks) {
-    const a = time * d.sp + d.ph;
-    d.obj.position.set(d.x + Math.cos(a) * d.r, 0.04 + Math.sin(time * 3 + d.ph) * 0.02, d.z + Math.sin(a) * d.r);
-    d.obj.rotation.y = -a + (d.sp > 0 ? 0 : Math.PI);
-  }
 }
 
 export { mat };

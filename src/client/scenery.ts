@@ -8,7 +8,11 @@ import * as THREE from 'three';
 import { gateOf, inMud, inWater, type FieldDef } from '../shared/field';
 import { Rng } from '../shared/rng';
 import { at, mat, mesh, treeMesh } from './models';
-import { beehivesMesh, cartMesh, duckMesh, farmhouseMesh, scarecrowMesh, wellMesh, windmillMesh } from './props';
+import { beehivesMesh, cartMesh, farmhouseMesh, scarecrowMesh, wellMesh, windmillMesh } from './props';
+import { heightAt } from './terrain';
+import { groundMaterial, setGround, swaying, windUniforms } from './windshader';
+
+export { windUniforms };
 
 interface Theme {
   grass: [string, string, string];
@@ -38,29 +42,6 @@ const THEMES: Record<string, Theme> = {
   },
 };
 
-/** Shared by every swaying material: the clock and the wind. */
-export const windUniforms = { uTime: { value: 0 }, uWind: { value: 0 }, uWindDir: { value: new THREE.Vector2(1, 0) } };
-
-/** A material whose vertices sway in the wind, more the higher they are (grass tips, flower heads). */
-function swaying(color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}): THREE.MeshStandardMaterial {
-  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra });
-  m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, windUniforms);
-    sh.vertexShader = 'uniform float uTime;\nuniform float uWind;\nuniform vec2 uWindDir;\n' + sh.vertexShader.replace('#include <project_vertex>', `
-      vec4 mvPosition = vec4( transformed, 1.0 );
-      #ifdef USE_INSTANCING
-        mvPosition = instanceMatrix * mvPosition;
-      #endif
-      float h = max(mvPosition.y, 0.0);
-      float wave = sin(uTime * 2.2 - dot(mvPosition.xz, uWindDir) * 0.5 + mvPosition.x * 0.13) * 0.5 + 0.5;
-      float flutter = sin(uTime * 7.0 + mvPosition.x * 3.1 + mvPosition.z * 2.3) * 0.12;
-      mvPosition.xz += uWindDir * (uWind * (0.3 + wave * 1.1) + flutter * (0.25 + uWind)) * h * 0.75;
-      mvPosition = modelViewMatrix * mvPosition;
-      gl_Position = projectionMatrix * mvPosition;`);
-  };
-  return m;
-}
-
 /** Smooth, cheap noise: a few crossed sine waves with random phases. 0..1. */
 function noise2(rng: Rng): (x: number, z: number) => number {
   const w = Array.from({ length: 4 }, () => ({ a: rng.range(0, 6.28), fx: rng.range(0.05, 0.16), fz: rng.range(0.05, 0.16), p: rng.range(0, 6.28) }));
@@ -75,8 +56,6 @@ export class Scenery {
   readonly group = new THREE.Group();
   private butterflies: { inst: THREE.InstancedMesh; homes: { x: number; z: number; r: number; ph: number; sp: number }[] } | null = null;
   private clouds: THREE.Object3D[] = [];
-  /** Ducks paddling round ponds (animated by animateProps). */
-  readonly ducks: { obj: THREE.Object3D; x: number; z: number; r: number; ph: number; sp: number }[] = [];
   private streaks: { inst: THREE.InstancedMesh; mat: THREE.MeshBasicMaterial; pts: { x: number; z: number; y: number; ph: number }[] } | null = null;
   private m = new THREE.Matrix4();
 
@@ -93,15 +72,6 @@ export class Scenery {
     if (theme.extras === 'bunting') this.bunting();
     this.butterflySwarm(rng, patches);
     this.windStreaks(rng);
-    // Ducks on every pond.
-    for (const o of f.obstacles) {
-      if (o.kind !== 'pond') continue;
-      for (let i = 0; i < 3; i++) {
-        const obj = duckMesh();
-        this.group.add(obj);
-        this.ducks.push({ obj, x: o.x, z: o.z, r: o.r * rng.range(0.35, 0.75), ph: rng.range(0, 6.28), sp: rng.range(0.12, 0.25) * (i % 2 ? 1 : -1) });
-      }
-    }
   }
 
   /** Faint white streaks blowing across the field when the wind is up. */
@@ -138,8 +108,12 @@ export class Scenery {
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const z = pos.getZ(i);
+      const y = heightAt(f, x, z);
+      pos.setY(i, y);
       const v = n(x, z);
       tmp.copy(a).lerp(v > 0.5 ? b : c, Math.min(1, Math.abs(v - 0.5) * 3.2));
+      // The tops of the rises a touch sunnier, the hollows a touch lusher.
+      tmp.offsetHSL(0, 0, (y - 0.4) * 0.05);
       // A worn, sandier strip in front of each gate where the flock comes in.
       for (const p of f.pens) {
         const g = gateOf(p);
@@ -150,7 +124,8 @@ export class Scenery {
       cols.set([tmp.r, tmp.g, tmp.b], i * 3);
     }
     geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-    const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
+    geo.computeVertexNormals();
+    const ground = new THREE.Mesh(geo, groundMaterial({ vertexColors: true }));
     ground.receiveShadow = true;
     return ground;
   }
@@ -289,11 +264,13 @@ export class Scenery {
     const heartGeo = new THREE.IcosahedronGeometry(0.055, 0);
     const stemGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.22, 3);
     const stems = new THREE.InstancedMesh(stemGeo, swaying('#5d8a3e'), per);
+    const stemGround: number[] = [];
     let s = 0;
     for (const kind of theme.flowers) {
       const count = Math.round((per * kind.weight) / total);
       const petals = new THREE.InstancedMesh(petalGeo, swaying(kind.petal, { side: THREE.DoubleSide }), count);
       const hearts = new THREE.InstancedMesh(heartGeo, swaying(kind.heart), count);
+      const grounds: number[] = [];
       let k = 0;
       for (let i = 0; i < count * 3 && k < count; i++) {
         // 75% in patches, the rest scattered.
@@ -308,21 +285,27 @@ export class Scenery {
         if (this.blocked(x, z)) continue;
         const sc = rng.range(0.75, 1.25);
         const h = rng.range(0.16, 0.26);
+        const g0 = heightAt(this.f, x, z);
         const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(rng.range(-0.25, 0.25), rng.range(0, 6.28), rng.range(-0.25, 0.25)));
-        this.m.compose(new THREE.Vector3(x, h, z), tilt, new THREE.Vector3(sc, sc, sc));
+        this.m.compose(new THREE.Vector3(x, g0 + h, z), tilt, new THREE.Vector3(sc, sc, sc));
         petals.setMatrixAt(k, this.m);
-        this.m.compose(new THREE.Vector3(x, h + 0.02, z), tilt, new THREE.Vector3(sc, sc * 0.6, sc));
+        this.m.compose(new THREE.Vector3(x, g0 + h + 0.02, z), tilt, new THREE.Vector3(sc, sc * 0.6, sc));
         hearts.setMatrixAt(k, this.m);
+        grounds.push(g0);
         if (s < per) {
-          this.m.compose(new THREE.Vector3(x, h / 2, z), tilt, new THREE.Vector3(1, h / 0.22, 1));
+          this.m.compose(new THREE.Vector3(x, g0 + h / 2, z), tilt, new THREE.Vector3(1, h / 0.22, 1));
           stems.setMatrixAt(s++, this.m);
+          stemGround.push(g0);
         }
         k++;
       }
       petals.count = hearts.count = k;
+      setGround(petals, grounds);
+      setGround(hearts, grounds);
       this.group.add(petals, hearts);
     }
     stems.count = s;
+    setGround(stems, stemGround);
     this.group.add(stems);
   }
 
@@ -335,6 +318,7 @@ export class Scenery {
     const greens = [swaying('#6f9a48'), swaying('#7fa652'), swaying('#5f8a3e')];
     const insts = greens.map((g) => new THREE.InstancedMesh(blade, g, Math.ceil(count / 3)));
     const ks = [0, 0, 0];
+    const grounds: number[][] = [[], [], []];
     for (let i = 0; i < count * 2 && ks.reduce((a, b) => a + b, 0) < count; i++) {
       let x: number;
       let z: number;
@@ -356,11 +340,14 @@ export class Scenery {
       const which = Math.floor(rng.next() * 3);
       if (ks[which] >= insts[which].count) continue;
       const sc = rng.range(0.6, 1.4);
-      this.m.compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rng.range(-0.3, 0.3), rng.range(0, 6.28), rng.range(-0.3, 0.3))), new THREE.Vector3(sc, sc, sc));
+      const g0 = heightAt(f, x, z);
+      grounds[which].push(g0);
+      this.m.compose(new THREE.Vector3(x, g0, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rng.range(-0.3, 0.3), rng.range(0, 6.28), rng.range(-0.3, 0.3))), new THREE.Vector3(sc, sc, sc));
       insts[which].setMatrixAt(ks[which]++, this.m);
     }
     insts.forEach((inst, i) => {
       inst.count = ks[i];
+      setGround(inst, grounds[i]);
       this.group.add(inst);
     });
   }
@@ -374,7 +361,8 @@ export class Scenery {
       for (let i = 0; i < 6; i++) {
         const a = rng.range(0, 6.28);
         const r = t.r + rng.range(0.1, 1.2);
-        this.m.makeTranslation(t.x + Math.cos(a) * r, 0.08, t.z + Math.sin(a) * r);
+        const [ax, az] = [t.x + Math.cos(a) * r, t.z + Math.sin(a) * r];
+        this.m.makeTranslation(ax, heightAt(this.f, ax, az) + 0.08, az);
         inst.setMatrixAt(k++, this.m);
       }
     }
@@ -477,7 +465,7 @@ export class Scenery {
       const t = time * h.sp + h.ph;
       const x = h.x + Math.cos(t) * h.r + Math.sin(t * 2.3) * 0.6;
       const z = h.z + Math.sin(t * 1.3) * h.r;
-      const y = 0.7 + Math.sin(t * 3.1) * 0.25;
+      const y = heightAt(this.f, x, z) + 0.7 + Math.sin(t * 3.1) * 0.25;
       const heading = Math.atan2(-Math.sin(t) * h.r, Math.cos(t * 1.3) * h.r * 1.3);
       const flap = Math.sin(time * 14 + h.ph) * 0.7;
       for (const side of [-1, 1]) {

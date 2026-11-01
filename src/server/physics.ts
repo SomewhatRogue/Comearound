@@ -78,6 +78,8 @@ export interface CollideOpts {
   gateShut?: boolean;
   /** Pens whose gates are closed right now (challenge fields), for sheep and goats too. */
   closed?: Pen[];
+  /** Dogs hop low fences; sheep and goats can't. */
+  hop?: boolean;
 }
 
 /** Push a circle at (x, z) with radius r out of everything solid. Returns the corrected position. */
@@ -98,6 +100,7 @@ export function collide(f: FieldDef, x: number, z: number, r: number, opts: Coll
     if (d < min && d > 1e-6) [x, z] = [o.x + (dx / d) * min, o.z + (dz / d) * min];
   }
   for (const w of walls(f, !!opts.gateShut)) [x, z] = pushOff(w, 0, x, z, r, opts.from);
+  if (!opts.hop) for (const l of f.lowFences ?? []) [x, z] = pushOff({ ax: l.a[0], az: l.a[1], bx: l.b[0], bz: l.b[1] }, 0.1, x, z, r, opts.from);
   if (!opts.gateShut) for (const p of opts.closed ?? []) for (const w of gateLine(p)) [x, z] = pushOff(w, 0, x, z, r, opts.from);
   return [x, z];
 }

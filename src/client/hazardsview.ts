@@ -7,13 +7,19 @@ import { bridgeEnds, waterSegments, type FieldDef, type Stream } from '../shared
 import { Rng } from '../shared/rng';
 import { at, mat, mesh } from './models';
 import { label } from './scene';
+import { heightAt } from './terrain';
 
 export function buildHazards(f: FieldDef): THREE.Group {
   const g = new THREE.Group();
   const rng = new Rng(f.w * 31 + f.d);
   for (const s of f.streams ?? []) g.add(stream(s, rng));
   for (const m of f.mud ?? []) g.add(mud(m.x, m.z, m.r, rng));
-  for (const o of f.obstacles) if (o.kind === 'bramble') g.add(bramble(o.x, o.z, o.r, rng));
+  for (const o of f.obstacles) {
+    if (o.kind !== 'bramble') continue;
+    const b = bramble(o.x, o.z, o.r, rng);
+    b.position.y += heightAt(f, o.x, o.z);
+    g.add(b);
+  }
   for (const gap of f.gaps ?? []) {
     const [x, z] = gap.side === 'n' ? [gap.at, -f.d / 2] : gap.side === 's' ? [gap.at, f.d / 2] : gap.side === 'w' ? [-f.w / 2, gap.at] : [f.w / 2, gap.at];
     g.add(brokenFence(x, z, gap.side === 'n' || gap.side === 's', gap.w, rng));

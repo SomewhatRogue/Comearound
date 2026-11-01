@@ -40,6 +40,9 @@ export const SHEEP = {
   spookKick: 4,
   /** Penned sheep are calmer: flight distance scales down by this. */
   pennedCalm: 0.45,
+  /** Left against a wall this long (seconds), a sheep eases back into the field this hard. */
+  wallSettle: 2,
+  wallEase: 1.1,
 };
 
 export const GOAT = {
@@ -112,8 +115,11 @@ export const WEATHER = {
 export const SCORE = {
   perSheep: 100,
   perSecondLeft: 4,
-  /** Calm-herding bonus, scaled down by barks per sheep. */
-  calmBonus: 200,
+  /** Calm herding (calm.ts): up to this much for a settled flock, soft feet (little sprinting,
+   * plenty of stalking and the eye) and few barks; scaled by the share of sheep penned. */
+  calmParts: { flock: 220, feet: 160, quiet: 120 },
+  /** Average flock fear at which the calm-flock part reaches zero. */
+  calmFearScale: 0.3,
   goatPenned: 250,
   /** All sheep penned and held for this long ends the field early. */
   holdToFinish: 2.5,

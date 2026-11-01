@@ -2,6 +2,39 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (night, latest): ambient beauty, calm play, hops, chonk (Claude Opus 5.5)
+
+Kyle's list: jump low or half-broken fences; reward slow, calm play (hard eye, little movement);
+pond life that startles and resettles; clouds overhead that change the look; wind you can see
+moving through the grass; a little elevation; a lean-to-chonk dog option; and sheep that get
+stuck on walls.
+
+- **Low fences** (`FieldDef.lowFences`, some marked broken): knee-high, weathered, two rails, the
+  tumbledown ones leaning with rails dropped. Sheep and goats collide with them; dogs pass
+  (`collide(..., { hop: true })`) and hop visibly as they cross (`client/lowfence.ts`). In The
+  Meadow (so the lobby teaches it), Windy Hillside and Big Sky Pasture. Bot bench unchanged.
+- **Calm herding** (`server/calm.ts`) replaces the barks-only bonus: up to 500 a field (calm
+  flock 220 from average flock fear, soft feet 160 from little sprinting and time stalking,
+  quiet 120 from barks), scaled by the share penned. A calm field now pays as well as a fast one.
+  Measured: calm bots 400 to 500, a rough sprint-and-bark player 200 to 350.
+- **Sheep ease off walls:** left against the outer fence, a pen's outside or a low fence for 2 s
+  while no dog is driving them, sheep drift back into the open (about 1 m to 2.6 m over 8 s), and
+  graze a couple of metres in from the fence. Never out of a pen. Thunder Hill over 12 seeds: 14.7
+  with, 14.1 without (the 6-seed bench is noise there).
+- **Wildlife** (`client/wildlife.ts`): ducks on ponds and streams (paddling, dipping), little
+  flocks of birds hopping and pecking in the grass. A dog rushing them (fast and close) or a bark
+  nearby sends them flapping off; they circle and settle again, ducks on their water, birds on
+  another patch. A quack or a flutter if it's near you. Cosmetic, per browser.
+- **Wind and clouds** (`client/windshader.ts`): gust bands roll downwind through the grass and
+  flowers (tips bend and catch the light) and as a faint sheen over the ground, always a little
+  even on still fields; soft cloud shadows drift over the ground with the wind, and the sun dims
+  a little when one passes over your dog.
+- **Elevation** (`client/terrain.ts`): gentle swells up to about 1 m, flat by the outer fence,
+  round pens and gates, water and mud. Visual only: the rules play on the flat. Ground, flowers,
+  grass, props, dogs, sheep, goat and fences all sit on it; rises are a touch sunnier.
+- **Lean to chonk:** `Look.build` from -2 (lean) to 2 (chonk) in the dog options; rounder body,
+  thicker and slightly shorter legs. Sent on the wire (index 14).
+
 ## 2026-10-31 (late evening, later): the lobby pack (Claude Opus 5.5)
 
 Kyle: practising in the lobby is good, but he likes seeing the other dogs join; stop them moving

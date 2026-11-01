@@ -1,6 +1,7 @@
 /**
  * Server-side state. Everything here is authoritative and lives only on the server.
  */
+import type { CalmStats } from './calm';
 import type { CourseId, FieldDef, Pen } from '../shared/field';
 import type { FieldScore, LeaderRow, Look, Mode, Phase, Posture, PrivateEvent } from '../shared/protocol';
 import type { Rng } from '../shared/rng';
@@ -72,6 +73,8 @@ export interface Sheep {
   wanderT: number;
   /** Got out through a gap in the fence: gone for this field. */
   lost: boolean;
+  /** Seconds spent up against a wall (the outer fence, a pen's outside, a low fence) while left alone. */
+  wallT?: number;
 }
 
 export interface Goat {
@@ -128,6 +131,8 @@ export interface Room {
   weather: { kind: 'clear' | 'rain' | 'storm'; flashes: number; nextFlash: number; fx: number; fz: number };
   fieldScores: FieldScore[][];
   leaderboard: LeaderRow[];
+  /** Calm herding so far this field, per team (calm.ts). */
+  calm: [CalmStats, CalmStats];
   /** Barks and bleats this tick, for the flock to react to. */
   noises: { kind: 'bark' | 'bleat' | 'thunder'; x: number; z: number; by: string | null; power?: number }[];
   rng: Rng;

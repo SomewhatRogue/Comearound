@@ -3,7 +3,7 @@
  * (two teams, one field, own-colour sheep only count in your own pen).
  * Each field: a 3-second intro, play until every sheep is penned and held (or time runs out),
  * then a score card. Score = penned sheep + time left (only if you penned them all) + calm
- * herding (fewer barks per sheep) + the goat, if you managed to pen it.
+ * herding (a settled flock, soft feet, few barks: calm.ts) + the goat, if you managed to pen it.
  */
 import { COURSES, VERSUS_FIELDS, inPen } from '../shared/field';
 import type { FieldScore, Mode } from '../shared/protocol';
@@ -13,6 +13,7 @@ import { goatPenned, makeGoats } from './goat';
 import { startWind } from './wind';
 import { startWeather } from './weather';
 import { activeDogs, type Room } from './state';
+import { calmScore, freshCalm, sampleCalm } from './calm';
 
 /** The intro: long enough for the camera tour (pen, sheep, your dog). */
 export const INTRO_SEC = 6;
@@ -38,6 +39,7 @@ export function startField(room: Room): void {
   room.holdFor = [0, 0];
   room.closedPens = [];
   room.doneAt = [null, null];
+  room.calm = freshCalm();
   const counts = [0, 0];
   for (const d of activeDogs(room)) {
     const starts = room.field.starts.filter((s) => s.team === d.team);
@@ -90,6 +92,7 @@ export function tickRound(room: Room, dt: number): void {
   }
   if (room.phase !== 'playing') return;
   room.timeLeft -= dt;
+  sampleCalm(room, dt);
   updateGates(room);
   const teams: (0 | 1 | null)[] = room.mode === 'versus' ? [0, 1] : [null];
   for (const t of teams) {
@@ -113,8 +116,7 @@ export function scoreField(room: Room, team: 0 | 1 | null): FieldScore {
   // Time bonus: the time left when you finished, if they're all still in at the end.
   const doneAt = room.doneAt[team ?? 0];
   const timeBonus = all && doneAt !== null ? Math.round(doneAt * SCORE.perSecondLeft) : 0;
-  const calm = Math.max(0, 1 - barks / Math.max(1, total * 1.5));
-  const calmBonus = Math.round(SCORE.calmBonus * calm * (penned / Math.max(1, total)));
+  const calmBonus = calmScore(room, team, barks, penned, total).bonus;
   const goatBonus = room.goats.filter((g) => goatPenned(room, g, team)).length * SCORE.goatPenned;
   const lost = room.sheep.filter((s) => s.lost && (team === null || s.team === team)).length;
   const lostPenalty = lost * HAZARD.lostPenalty;

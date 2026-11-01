@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import type { PublicView } from '../shared/protocol';
 import type { Stage } from './scene';
 import { sfx } from './sfx';
+import { cloudAt } from './windshader';
 
 const CLEAR = { sky: new THREE.Color('#a9cbe0'), hemi: 1.7, sun: 2.3, fogNear: 45, fogFar: 95 };
 const RAIN = { sky: new THREE.Color('#8496a6'), hemi: 1.15, sun: 0.9, fogNear: 28, fogFar: 75 };
@@ -32,6 +33,8 @@ export class WeatherView {
     for (let i = 0; i < n; i++) this.drops.push({ x: Math.random() * 60 - 30, y: Math.random() * 11, z: Math.random() * 50 - 25, v: 14 + Math.random() * 5 });
     stage.scene.add(this.rain);
   }
+
+  private shade = 0;
 
   update(pub: PublicView, focus: { x: number; z: number }, dt: number): void {
     const kind = pub.phase === 'lobby' ? 'clear' : pub.weather.kind;
@@ -65,8 +68,10 @@ export class WeatherView {
     fog.color.copy(target.sky);
     fog.near = lerp(CLEAR.fogNear, RAIN.fogNear, this.mix) * (1 - 0.2 * this.storm);
     fog.far = lerp(CLEAR.fogFar, RAIN.fogFar, this.mix) * (1 - 0.1 * this.storm);
-    this.stage.hemi.intensity = target.hemi + flash;
-    this.stage.sun.intensity = target.sun + flash * 0.5;
+    // A cloud passing over you dims the sun for a while (its shadow drifts over the ground too).
+    this.shade += (cloudAt(focus.x, focus.z) - this.shade) * Math.min(1, dt * 1.5);
+    this.stage.hemi.intensity = target.hemi * (1 - 0.08 * this.shade) + flash;
+    this.stage.sun.intensity = target.sun * (1 - 0.3 * this.shade) + flash * 0.5;
     if (this.bolt) {
       (this.bolt.material as THREE.MeshBasicMaterial).opacity = Math.min(1, this.flashT * 3);
       if (this.flashT <= 0) {

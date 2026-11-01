@@ -12,6 +12,8 @@ export const TRIALS: FieldDef[] = [
     obstacles: [{ kind: 'tree', x: -6, z: -9, r: 1.2 }, { kind: 'tree', x: 2, z: 10, r: 1.2 }, { kind: 'rock', x: 4, z: -4, r: 0.9 }],
     flocks: [{ x: -8, z: 2, n: 8, team: null }],
     goats: [],
+    // An old bit of fence along the bottom: the sheep go round it, a dog just hops it.
+    lowFences: [{ a: [5.5, 15], b: [5.5, 9.5], broken: true }],
     starts: [{ x: -16, z: -3, team: 0 }, { x: -16, z: 3, team: 0 }, { x: -15, z: 0, team: 0 }],
   },
   {
@@ -35,6 +37,8 @@ export const TRIALS: FieldDef[] = [
     ],
     flocks: [{ x: 12, z: 8, n: 8, team: null }, { x: 14, z: -6, n: 8, team: null }],
     goats: [{ x: 6, z: 2 }],
+    // The remains of an old field boundary down the south-west: hop it to get round the flock.
+    lowFences: [{ a: [-9, 17], b: [-9, 11] }, { a: [-9, 11], b: [-12, 8], broken: true }, { a: [20, -17], b: [17, -12] }],
     wind: { dir: Math.PI, strength: 0.6, gusty: true },
     starts: [{ x: 20, z: 0, team: 0 }, { x: 20, z: 4, team: 0 }, { x: 20, z: -4, team: 0 }],
   },
@@ -135,6 +139,8 @@ export const WILD: FieldDef[] = [
     ],
     flocks: [{ x: -26, z: 6, n: 8, team: null }, { x: 26, z: 4, n: 8, team: null }, { x: 0, z: 18, n: 8, team: null }],
     goats: [{ x: -12, z: 14 }, { x: 18, z: 8 }],
+    // Old field walls, low and tumbledown: the flocks walk the long way round, you take the short cut.
+    lowFences: [{ a: [16, 24], b: [16, 14] }, { a: [16, 14], b: [19, 9], broken: true }, { a: [-20, 24], b: [-20, 17], broken: true }, { a: [-36, -8], b: [-28, -8] }],
     starts: [{ x: -2, z: -21, team: 0 }, { x: 2, z: -21, team: 0 }, { x: 0, z: -22, team: 0 }],
     wind: { dir: Math.PI * 0.75, strength: 0.5, gusty: true },
   },

@@ -36,4 +36,13 @@ export const EYES: { id: string; name: string; color: string }[] = [
 ];
 
 /** Collar colours double as a quick way to tell dogs apart from above. */
+/** Body build, lean to chonky: the Look's `build`, from -2 to 2. */
+export const BUILDS = [
+  { v: -2, name: 'Lean' },
+  { v: -1, name: 'Trim' },
+  { v: 0, name: 'Regular' },
+  { v: 1, name: 'Chunky' },
+  { v: 2, name: 'Chonk' },
+] as const;
+
 export const COLLARS = ['#e4572e', '#f3a712', '#29a19c', '#4f6d7a', '#8e5572', '#e88eb4', '#6a994e', '#7b2cbf', '#3d405b', '#bc6c25'];

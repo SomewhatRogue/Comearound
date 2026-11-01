@@ -9,7 +9,8 @@ export type Phase = 'lobby' | 'intro' | 'playing' | 'fieldEnd' | 'results';
 export type Mode = 'trials' | 'versus';
 export type Posture = 'walk' | 'sprint' | 'crouch';
 
-export interface Look { name: string; breed: Breed; coat: string; collar: string; eyes: string }
+/** `build`: -2 lean, -1 trim, 0 regular, 1 chunky, 2 chonk (missing means regular). */
+export interface Look { name: string; breed: Breed; coat: string; collar: string; eyes: string; build?: number }
 
 export type ClientMsg =
   | { t: 'hello'; token: string; look: Look }

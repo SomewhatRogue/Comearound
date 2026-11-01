@@ -17,6 +17,7 @@ import { tickGoats } from './goat';
 import { tickWind } from './wind';
 import { tickWeather } from './weather';
 import { ARRIVE, pet, setPractising, tickLobby } from './lobby';
+import { freshCalm } from './calm';
 import { endField, startRun, tickRound } from './round';
 import { activeDogs, type Dog, type Room } from './state';
 import { privateView, publicView } from './view';
@@ -53,6 +54,7 @@ export class GameRoom implements Room {
   closedPens: Room['closedPens'] = [];
   weather: Room['weather'] = { kind: 'clear', flashes: 0, nextFlash: 99, fx: 0, fz: 0 };
   fieldScores: Room['fieldScores'] = [];
+  calm: Room['calm'] = freshCalm();
   leaderboard: Room['leaderboard'] = [];
   noises: Room['noises'] = [];
   rng: Rng;
@@ -244,6 +246,7 @@ function cleanLook(l: Partial<Look> | undefined): Look {
     coat: COATS.some((c) => c.id === l?.coat) ? String(l!.coat) : DEFAULT_COAT[breed],
     collar: COLLARS.includes(String(l?.collar)) ? String(l!.collar) : COLLARS[0],
     eyes: EYES.some((e) => e.id === l?.eyes) ? String(l!.eyes) : 'brown',
+    build: Math.max(-2, Math.min(2, Math.round(Number(l?.build) || 0))),
   };
 }
 
