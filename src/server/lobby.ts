@@ -1,48 +1,60 @@
 /**
- * The lobby pack: while friends gather, every dog that isn't practising stands in a row at the
- * edge of the meadow, facing the camera (dressing up, waiting, being petted). Dogs walk to their
- * spot, so a friend who joins trots in, and a dog done practising trots back. The sheep pay the
- * row no attention. Practising (the lobby panel folded) sets a dog free to run at the flock.
+ * The hub: between games everyone runs free in the meadow (its flock, its pen, its agility
+ * course). A dog that joins appears at the gate and trots in a few steps before it's yours to
+ * steer, so friends arriving are easy to spot. The sheep pay no attention to a dog walking in.
  */
 import type { Dog, Room } from './state';
 
-/** The row: across the lower left of The Meadow, clear of the practice flock and far enough
- * from the bottom fence that the close-up camera behind it stays inside the field. */
-const ROW = { x: -16, z: 8.5, gap: 1.35 };
-/** Where a dog that has just joined appears, to trot in from. */
-export const ARRIVE = { x: -19.3, z: 12 };
+/** Where a dog that has just joined appears (by the gate on the west fence), and how far it trots in. */
+export const ARRIVE = { x: -26.5, z: 4 };
+const TROT_IN = 5;
 const PET_GAP = 0.45;
 
+/** Walking in from the gate (not yours to steer yet; the sheep ignore it). */
 export function inLineup(room: Room, d: Dog): boolean {
-  return room.phase === 'lobby' && !d.practising && !d.spectator;
+  return room.phase === 'lobby' && !!d.arrive && !d.spectator;
 }
 
-/** Walk each lineup dog to its spot (in join order), then stand facing the camera. */
-export function tickLobby(room: Room): void {
-  if (room.phase !== 'lobby') return;
+/** A dog that has just joined: at the gate, with a spot a few steps in (spread out, so friends don't stack up). */
+export function arriveAt(room: Room, d: Dog): void {
+  const n = [...room.dogs.values()].filter((q) => !q.bot).length;
+  [d.x, d.z] = [ARRIVE.x, ARRIVE.z];
+  d.arrive = { x: ARRIVE.x + TROT_IN + (n % 3), z: ARRIVE.z + ((n % 5) - 2) * 1.4 };
+}
+
+/** Back from a run: everyone in a loose bunch near the gate, free to run. */
+export function gatherInHub(room: Room): void {
   let i = 0;
   for (const d of room.dogs.values()) {
-    if (!inLineup(room, d)) continue;
-    const sx = ROW.x + i++ * ROW.gap;
-    const dx = sx - d.x;
-    const dz = ROW.z - d.z;
+    const a = i++ * 2.4;
+    [d.x, d.z, d.dx, d.dz] = [ARRIVE.x + 6 + Math.cos(a) * 2.2, ARRIVE.z + Math.sin(a) * 2.2, 0, 0];
+    d.arrive = undefined;
+  }
+}
+
+/** Walk dogs that are arriving to their spot; then they're free. */
+export function tickLobby(room: Room): void {
+  if (room.phase !== 'lobby') return;
+  for (const d of room.dogs.values()) {
+    if (!d.arrive) continue;
+    const dx = d.arrive.x - d.x;
+    const dz = d.arrive.z - d.z;
     const dist = Math.hypot(dx, dz);
     [d.wantSprint, d.wantCrouch] = [false, false];
-    if (dist < 0.12) {
+    if (dist < 0.25) {
       [d.dx, d.dz] = [0, 0];
-      d.rot = 0;
+      d.arrive = undefined;
     } else {
-      // Full walking pace until close, then ease in.
       const k = Math.min(1, dist / 0.8) / dist;
       [d.dx, d.dz] = [dx * k, dz * k];
     }
   }
 }
 
+/** Old clients still send 'practise' (the lobby used to have a row to stand in). Nothing to do now. */
 export function setPractising(room: Room, d: Dog, on: boolean): void {
-  if (room.phase !== 'lobby' || d.practising === on) return;
+  if (room.phase !== 'lobby') return;
   d.practising = on;
-  [d.dx, d.dz] = [0, 0];
 }
 
 /** A pat: hearts for everyone to see, and the dog's owner hears who it was. */

@@ -80,14 +80,16 @@ const FREEZE = () => {
     const humans = (p) => p.evaluate(() => (window.__GAME_STATE__.pub?.dogs ?? []).filter((d) => !d.bot && d.connected).map((d) => d.look.name).sort().join(','));
     const host = async (port, name) => {
       const p = await open(port, name);
-      await p.click('[data-v="friends"]');
+      await p.click('#hubbar [data-v="friends"]');
+      await p.click('[data-act="join"][data-v="friends"]');
       await p.waitForFunction(() => window.__party.state === 'host', null, { timeout: 20000 });
       return { p, code: await p.evaluate(() => new URL(location.href).searchParams.get('room')) };
     };
     const joinByLink = (port, name, code) => open(port, name, `&room=${code}`);
     const joinByCode = async (port, name, code) => {
       const p = await open(port, name);
-      await p.click('[data-v="friends"]');
+      await p.click('#hubbar [data-v="friends"]');
+      await p.click('[data-act="join"][data-v="friends"]');
       await p.waitForSelector('#code-input', { timeout: 20000 });
       await p.fill('#code-input', code.toLowerCase());
       await p.press('#code-input', 'Enter');
@@ -125,6 +127,7 @@ const FREEZE = () => {
       const kyleId = await h.evaluate(() => window.__GAME_STATE__.me.you);
       await f1.evaluate((id) => window.__game_actions__.send({ t: 'pet', id }), kyleId);
       s.patSeen = await f2.waitForFunction((id) => window.__GAME_STATE__.pub.dogs.find((d) => d.id === id)?.pets === 1, kyleId, { timeout: 8000 }).then(() => true).catch(() => false);
+      await h.click('#hubbar [data-v="play"]');
       await h.click('[data-act="start"]');
       await Promise.all([f1, f2].map((f) => f.waitForFunction(() => window.__GAME_STATE__.pub.phase === 'playing', null, { timeout: 30000 })));
       s.friendsInRun = true;
@@ -201,6 +204,7 @@ const FREEZE = () => {
       const f = await joinByLink(PORT_MEM, 'Sam', code);
       await asGuest(f);
       await hostHas(h, 1);
+      await h.click('#hubbar [data-v="play"]');
       await h.click('[data-act="start"]');
       await f.waitForFunction(() => window.__GAME_STATE__.pub.phase === 'playing', null, { timeout: 30000 });
       const seat = await f.evaluate(() => window.__GAME_STATE__.me.you);
@@ -250,8 +254,11 @@ const FREEZE = () => {
       const f = await joinByCode(PORT_CUT, 'Sam', code);
       await asGuest(f);
       await hostHas(h, 1);
-      await h.click('[data-act="mode"][data-v="versus"]');
+      await h.click('#hubbar [data-v="play"]');
+      await h.click('[data-act="tab"][data-v="versus"]');
       await h.click('[data-act="start"]');
+      // The host's own game starts at once (it runs the room): if not, the click went astray.
+      await h.waitForFunction(() => window.__GAME_STATE__.pub.phase !== 'lobby', null, { timeout: 5000 }).catch(() => { throw new Error('V: the host pressed Start but its own game did not start'); });
       await f.waitForFunction(() => window.__GAME_STATE__.pub.phase === 'playing' && window.__GAME_STATE__.pub.mode === 'versus', null, { timeout: 30000 });
       const v = { states: [], toasts: [] };
       await f.evaluate(() => { window.__toasts = []; new MutationObserver(() => document.querySelectorAll('.toast').forEach((t) => window.__toasts.includes(t.textContent) || window.__toasts.push(t.textContent))).observe(document.body, { childList: true, subtree: true }); });
@@ -275,7 +282,8 @@ const FREEZE = () => {
       const hp = await ctx.newPage();
       await hp.goto(`http://127.0.0.1:${PORT_MEM}/?lowfx&norender&name=Kyle`, { waitUntil: 'domcontentloaded', timeout: 90000 });
       await hp.waitForFunction(() => window.__party, null, { timeout: 60000 });
-      await hp.click('[data-v="friends"]');
+      await hp.click('#hubbar [data-v="friends"]');
+      await hp.click('[data-act="join"][data-v="friends"]');
       await hp.waitForFunction(() => window.__party.state === 'host', null, { timeout: 20000 });
       const code = await hp.evaluate(() => new URL(location.href).searchParams.get('room'));
       await hp.close({ runBeforeUnload: true });

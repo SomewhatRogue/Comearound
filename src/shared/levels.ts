@@ -31,6 +31,20 @@ export const TRIALS: FieldDef[] = [
     starts: [{ x: 2, z: 14.5, team: 0 }, { x: -1, z: 14.5, team: 0 }, { x: 5, z: 14.5, team: 0 }],
   },
   {
+    // A big duck pond in the middle: the flock splits round it, and the ducks don't like being rushed.
+    id: 'duckpond', name: 'Duck Pond', w: 46, d: 32, timeLimit: 130,
+    pens: [{ x: 17, z: 5, w: 7, d: 6, gate: 'w', gateW: 3.4, team: null }],
+    obstacles: [
+      { kind: 'pond', x: -2, z: -1, r: 4.5 }, { kind: 'pond', x: 3, z: 2, r: 2.6 },
+      { kind: 'tree', x: -15, z: 9, r: 1.3 }, { kind: 'tree', x: 10, z: -10, r: 1.2 }, { kind: 'rock', x: -10, z: -9, r: 1 }, { kind: 'hay', x: 19, z: -10, r: 1 },
+    ],
+    flocks: [{ x: -14, z: -6, n: 6, team: null }, { x: -12, z: 4, n: 6, team: null }],
+    goats: [{ x: 8, z: -4 }],
+    lowFences: [{ a: [-20, 12], b: [-17, 14], kind: 'log' }, { a: [6, 12], b: [9, 13.5], kind: 'stones' }],
+    wind: { dir: 0.3, strength: 0.25 },
+    starts: [{ x: -20, z: -12, team: 0 }, { x: -17, z: -13, team: 0 }, { x: -20, z: -9, team: 0 }],
+  },
+  {
     id: 'hillside', name: 'Windy Hillside', w: 48, d: 34, timeLimit: 150,
     pens: [{ x: -17, z: -11, w: 7, d: 6, gate: 'e', gateW: 2.4, team: null }],
     obstacles: [
@@ -102,6 +116,23 @@ export const TRICKY: FieldDef[] = [
     lowFences: [{ a: [5, 10], b: [8, 12], kind: 'log' }],
     starts: [{ x: 23, z: -3, team: 0 }, { x: 23, z: 3, team: 0 }, { x: 23, z: 0, team: 0 }],
     wind: { dir: -Math.PI / 2, strength: 0.55, gusty: true },
+  },
+  {
+    // The mill race: one stream, one bridge by the mill, mud either side of it, and a gap in the west fence.
+    id: 'millrace', name: 'Mill Race', w: 50, d: 34, timeLimit: 145,
+    pens: [{ x: 19, z: -10, w: 7, d: 6, gate: 'w', gateW: 3, team: null }],
+    streams: [{ pts: [[-6, -18], [-4, -8], [-7, 0], [-4, 8], [-6, 18]], w: 2.6, bridges: [{ x: -5.5, z: -4, w: 3.4 }] }],
+    mud: [{ x: -10, z: -4, r: 1.8 }, { x: -1, z: -4, r: 1.8 }],
+    gaps: [{ side: 'w', at: 8, w: 4 }],
+    obstacles: [
+      { kind: 'windmill', x: -1, z: -12, r: 2.2 }, { kind: 'tree', x: 10, z: 10, r: 1.3 }, { kind: 'tree', x: -18, z: -12, r: 1.3 },
+      { kind: 'bramble', x: 6, z: 3, r: 1.1 }, { kind: 'bramble', x: 8, z: 5, r: 1.1 }, { kind: 'rock', x: 15, z: 4, r: 1 },
+    ],
+    flocks: [{ x: -17, z: 3, n: 10, team: null }],
+    goats: [{ x: -14, z: 10 }, { x: 8, z: -6 }],
+    lowFences: [{ a: [12, 13], b: [15, 15], kind: 'log' }, { a: [-20, -6], b: [-17, -8], kind: 'stones' }],
+    starts: [{ x: -21, z: -2, team: 0 }, { x: -21, z: 2, team: 0 }, { x: -22, z: 0, team: 0 }],
+    wind: { dir: Math.PI / 2, strength: 0.4 },
   },
   {
     // Three billy goats, two bridges over the stream, a gap in the east fence, and a gale.
@@ -245,37 +276,146 @@ const RIVERSIDE: FieldDef = {
   wind: { dir: Math.PI / 2, strength: 0.35 },
 };
 
-/** A versus match is three fields. */
-export const VERSUS_FIELDS: FieldDef[] = [VERSUS, RIVERSIDE, VERSUS];
+/** Highland course: dry-stone walls, a burn, peat bogs and heather, and a loch in the rain. */
+export const HIGHLAND: FieldDef[] = [
+  {
+    // A burn down the glen with two crossings, and the old walls of a sheep fank to jump.
+    id: 'glen', name: 'Glen Crossing', w: 54, d: 34, timeLimit: 140,
+    pens: [{ x: 21, z: 8, w: 7, d: 6, gate: 'n', gateW: 3, team: null }],
+    streams: [{ pts: [[4, -18], [2, -9], [6, -2], [3, 6], [5, 18]], w: 2.4, bridges: [{ x: 2.5, z: -8, w: 3 }, { x: 4, z: 9, w: 3 }] }],
+    obstacles: [
+      { kind: 'rock', x: -10, z: -6, r: 1.3 }, { kind: 'rock', x: 14, z: -10, r: 1.2 }, { kind: 'rock', x: -18, z: 10, r: 1.1 },
+      { kind: 'tree', x: 12, z: 12, r: 1.3 }, { kind: 'tree', x: -22, z: -12, r: 1.3 }, { kind: 'bramble', x: 15, z: 0, r: 1.1 },
+    ],
+    flocks: [{ x: -14, z: 2, n: 10, team: null }],
+    goats: [{ x: -6, z: 10 }],
+    lowFences: [
+      { a: [-20, -4], b: [-20, 6], kind: 'stones' }, { a: [-8, -14], b: [-3, -15], kind: 'stones' }, { a: [12, 4], b: [16, 3], kind: 'stones' },
+      { a: [-12, 13], b: [-8, 14.5], kind: 'stones' },
+    ],
+    starts: [{ x: -24, z: -2, team: 0 }, { x: -24, z: 2, team: 0 }, { x: -25, z: 0, team: 0 }],
+    wind: { dir: 0.2, strength: 0.35 },
+  },
+  {
+    // Open moor: peat bogs to keep out of, patches of heather the sheep go round, and a stiff wind.
+    id: 'moor', name: 'Heather Moor', w: 58, d: 38, timeLimit: 160,
+    pens: [{ x: -22, z: -12, w: 7, d: 6, gate: 'e', gateW: 3, team: null }],
+    mud: [{ x: -6, z: -4, r: 2.4 }, { x: 8, z: 6, r: 2.2 }, { x: 14, z: -9, r: 2 }],
+    obstacles: [
+      ...[[-12, 6], [-10, 8], [2, -12], [4, -10], [18, 10], [20, 8], [-2, 12]].map(([x, z]) => ({ kind: 'bramble' as const, x, z, r: 1.1 })),
+      { kind: 'rock', x: -16, z: -2, r: 1.3 }, { kind: 'rock', x: 6, z: -2, r: 1.1 }, { kind: 'rock', x: 22, z: -4, r: 1.2 },
+    ],
+    flocks: [{ x: 18, z: -2, n: 8, team: null }, { x: 10, z: 13, n: 8, team: null }],
+    goats: [{ x: 0, z: 2 }],
+    lowFences: [{ a: [-26, 4], b: [-22, 6], kind: 'stones' }, { a: [24, 12], b: [26, 16], kind: 'stones' }, { a: [-4, -16], b: [0, -17], kind: 'log' }],
+    starts: [{ x: 24, z: -15, team: 0 }, { x: 21, z: -16, team: 0 }, { x: 24, z: -12, team: 0 }],
+    wind: { dir: Math.PI * 0.85, strength: 0.65, gusty: true },
+  },
+  {
+    // A loch fills the middle of the field: take the flock round by the shore, in the rain.
+    id: 'loch', name: 'Loch Side', w: 60, d: 40, timeLimit: 175, weather: 'rain',
+    pens: [{ x: 23, z: 13, w: 7, d: 6, gate: 'w', gateW: 3, team: null }],
+    obstacles: [
+      { kind: 'pond', x: -4, z: 0, r: 5.5 }, { kind: 'pond', x: 4, z: -2, r: 4.5 }, { kind: 'pond', x: 10, z: 2, r: 3 },
+      { kind: 'tree', x: -20, z: -14, r: 1.4 }, { kind: 'tree', x: 18, z: -15, r: 1.3 }, { kind: 'tree', x: -24, z: 14, r: 1.3 },
+      { kind: 'rock', x: 16, z: 8, r: 1.1 }, { kind: 'bramble', x: -14, z: 8, r: 1.1 },
+    ],
+    mud: [{ x: -14, z: -8, r: 1.8 }],
+    flocks: [{ x: -20, z: 2, n: 9, team: null }, { x: 6, z: -14, n: 9, team: null }],
+    goats: [{ x: -10, z: 13 }, { x: 14, z: -8 }],
+    lowFences: [{ a: [-26, -4], b: [-23, -6], kind: 'stones' }, { a: [22, -6], b: [25, -4], kind: 'stones' }],
+    starts: [{ x: -26, z: -16, team: 0 }, { x: -23, z: -17, team: 0 }, { x: -26, z: -13, team: 0 }],
+    wind: { dir: -0.4, strength: 0.45, gusty: true },
+  },
+];
 
-export type CourseId = 'gentle' | 'tricky' | 'wild' | 'challenge';
+/** Versus Orchard Rumble: rows of apple trees down the middle; both flocks graze between them. */
+const ORCHARD_RUMBLE: FieldDef = {
+  id: 'rumble', name: 'Orchard Rumble', w: 54, d: 32, timeLimit: 150,
+  pens: [
+    { x: -22, z: 0, w: 6, d: 7, gate: 'e', gateW: 3, team: 0 },
+    { x: 22, z: 0, w: 6, d: 7, gate: 'w', gateW: 3, team: 1 },
+  ],
+  obstacles: [...[-8, -2.5, 3, 8.5].flatMap((x) => [-9, 0, 9].map((z) => ({ kind: 'tree' as const, x: x + (z === 0 ? 2.7 : 0), z, r: 1.1 })))],
+  flocks: [{ x: 0, z: -4.5, n: 7, team: 0 }, { x: 0, z: 4.5, n: 7, team: 1 }],
+  goats: [{ x: 0, z: 13 }],
+  lowFences: [{ a: [-15, -12], b: [-12, -13.5], kind: 'log' }, { a: [15, 12], b: [12, 13.5], kind: 'log' }],
+  starts: [{ x: -17, z: -9, team: 0 }, { x: -17, z: 9, team: 0 }, { x: -18, z: 0, team: 0 }, { x: 17, z: 9, team: 1 }, { x: 17, z: -9, team: 1 }, { x: 18, z: 0, team: 1 }],
+  wind: { dir: 0, strength: 0.2 },
+};
+
+/** Versus Stone Circle: standing stones in a ring in the middle; the flocks start inside it. */
+const STONE_CIRCLE: FieldDef = {
+  id: 'stones', name: 'Stone Circle', w: 54, d: 34, timeLimit: 150,
+  pens: [
+    { x: -22, z: 0, w: 6, d: 7, gate: 'e', gateW: 3, team: 0 },
+    { x: 22, z: 0, w: 6, d: 7, gate: 'w', gateW: 3, team: 1 },
+  ],
+  obstacles: [
+    ...Array.from({ length: 7 }, (_, i) => ({ kind: 'rock' as const, x: Math.cos((i / 7) * Math.PI * 2 + 0.45) * 10, z: Math.sin((i / 7) * Math.PI * 2 + 0.45) * 10, r: 0.9 })),
+    { kind: 'tree', x: -14, z: 12, r: 1.3 }, { kind: 'tree', x: 14, z: -12, r: 1.3 },
+  ],
+  flocks: [{ x: 1, z: -5, n: 7, team: 0 }, { x: -1, z: 5, n: 7, team: 1 }],
+  goats: [{ x: 0, z: 0 }],
+  lowFences: [{ a: [-12, -14], b: [-8, -15], kind: 'stones' }, { a: [12, 14], b: [8, 15], kind: 'stones' }],
+  starts: [{ x: -17, z: -9, team: 0 }, { x: -17, z: 9, team: 0 }, { x: -18, z: 0, team: 0 }, { x: 17, z: 9, team: 1 }, { x: 17, z: -9, team: 1 }, { x: 18, z: 0, team: 1 }],
+  wind: { dir: Math.PI / 2, strength: 0.3 },
+};
+
+/** Versus Muddy Middle: both flocks start side by side, stuck in the bog in the middle. Get yours out and home first. */
+const MUDDY_MIDDLE: FieldDef = {
+  id: 'muddy', name: 'Muddy Middle', w: 56, d: 32, timeLimit: 150,
+  pens: [
+    { x: -23, z: 0, w: 6, d: 7, gate: 'e', gateW: 3, team: 0 },
+    { x: 23, z: 0, w: 6, d: 7, gate: 'w', gateW: 3, team: 1 },
+  ],
+  mud: [{ x: 0, z: -4.5, r: 2.6 }, { x: 0, z: 0, r: 2.8 }, { x: 0, z: 4.5, r: 2.6 }],
+  obstacles: [{ kind: 'hay', x: -10, z: -10, r: 1 }, { kind: 'hay', x: 10, z: 10, r: 1 }, { kind: 'tree', x: -12, z: 9, r: 1.2 }, { kind: 'tree', x: 12, z: -9, r: 1.2 }],
+  flocks: [{ x: -1.5, z: -3.5, n: 7, team: 0 }, { x: 1.5, z: 3.5, n: 7, team: 1 }],
+  goats: [{ x: 0, z: 13 }],
+  lowFences: [{ a: [-16, -12], b: [-13, -13.5], kind: 'log' }, { a: [16, 12], b: [13, 13.5], kind: 'log' }],
+  starts: [{ x: -18, z: -9, team: 0 }, { x: -18, z: 9, team: 0 }, { x: -19, z: 0, team: 0 }, { x: 18, z: 9, team: 1 }, { x: 18, z: -9, team: 1 }, { x: 19, z: 0, team: 1 }],
+  wind: { dir: -Math.PI / 2, strength: 0.25 },
+};
+
+/** Every versus field. A match is three of them, drawn at random (VERSUS_FIELDS is the fallback order). */
+export const VERSUS_POOL: FieldDef[] = [VERSUS, RIVERSIDE, ORCHARD_RUMBLE, STONE_CIRCLE, MUDDY_MIDDLE];
+export const VERSUS_FIELDS: FieldDef[] = [VERSUS, RIVERSIDE, ORCHARD_RUMBLE];
+
+export type CourseId = 'gentle' | 'tricky' | 'wild' | 'challenge' | 'highland';
 export const COURSES: Record<CourseId, { name: string; blurb: string; fields: FieldDef[] }> = {
-  gentle: { name: 'Gentle', blurb: 'Meadow, Orchard, Windy Hillside', fields: TRIALS },
-  tricky: { name: 'Tricky', blurb: 'Streams, brambles, a broken fence and three goats', fields: TRICKY },
+  gentle: { name: 'Gentle', blurb: 'Meadow, Orchard, Duck Pond, Windy Hillside', fields: TRIALS },
+  tricky: { name: 'Tricky', blurb: 'Streams, brambles, a mill race, a broken fence and three goats', fields: TRICKY },
   wild: { name: 'Wild', blurb: 'Big fields, black and white sheep to sort, rain and a thunderstorm', fields: WILD },
   challenge: { name: 'Challenge', blurb: 'Exact numbers: so many sheep in each pen, and not one more', fields: CHALLENGE },
+  highland: { name: 'Highland', blurb: 'Dry-stone walls, a burn, peat bogs and heather, and a loch in the rain', fields: HIGHLAND },
 };
 
 /**
- * The lobby: The Meadow with its flock out, and a full agility course along the top (instead of
- * the log and the stone wall), for running about while you wait.
+ * The hub: where everyone gathers between games. A roomier meadow than The Meadow, with its own
+ * flock and pen to practise on, and an agility course looping round the top, the pieces well
+ * spaced so there's room to line up for each one (on a phone too).
  */
 const PRACTICE_AGILITY = course([
-  { kind: 'hurdle', x: -14, z: -8.5, dir: 0 },
-  { kind: 'hurdle', x: -10.5, z: -10.5, dir: 0 },
-  { kind: 'tunnel', x: -3.4, z: -11, dir: 0 },
-  { kind: 'weave', x: 2.6, z: -11, dir: 0 },
-  { kind: 'tire', x: 8, z: -10.5, dir: 0 },
-  { kind: 'hurdle', x: 11.5, z: -9, dir: 0.3 },
-  { kind: 'table', x: 15, z: -9.5, dir: 0 },
+  { kind: 'hurdle', x: -21, z: -10.5, dir: 0 },
+  { kind: 'tire', x: -13, z: -13, dir: 0 },
+  { kind: 'tunnel', x: -4.5, z: -14, dir: 0 },
+  { kind: 'weave', x: 5.5, z: -14, dir: 0 },
+  { kind: 'hurdle', x: 15, z: -12.5, dir: 0.35 },
+  { kind: 'hurdle', x: 21.5, z: -7.5, dir: 1.2 },
+  { kind: 'table', x: 22, z: 0, dir: Math.PI / 2 },
 ]);
 export const PRACTICE: FieldDef = {
-  ...TRIALS[0],
-  id: 'practice',
-  lowFences: [TRIALS[0].lowFences![0], ...PRACTICE_AGILITY.lowFences],
+  id: 'practice', name: 'The Meadow', w: 56, d: 40, timeLimit: 100,
+  pens: [{ x: 18, z: 11, w: 7, d: 6, gate: 'w', gateW: 3.2, team: null }],
+  obstacles: [{ kind: 'tree', x: -13, z: -3, r: 1.2 }, { kind: 'tree', x: 4, z: 13, r: 1.2 }, { kind: 'rock', x: 7, z: -4, r: 0.9 }, { kind: 'tree', x: -24, z: 14, r: 1.3 }],
+  flocks: [{ x: -4, z: 5, n: 8, team: null }],
+  goats: [],
+  lowFences: [{ a: [8.5, 20], b: [8.5, 15], broken: true }, ...PRACTICE_AGILITY.lowFences],
   agility: PRACTICE_AGILITY.agility,
+  starts: [{ x: -22, z: 3, team: 0 }],
 };
 
 export function fieldById(id: string): FieldDef {
-  return [PRACTICE, ...TRIALS, ...TRICKY, ...WILD, ...CHALLENGE, VERSUS, RIVERSIDE].find((f) => f.id === id) ?? TRIALS[0];
+  return [PRACTICE, ...TRIALS, ...TRICKY, ...WILD, ...CHALLENGE, ...HIGHLAND, ...VERSUS_POOL].find((f) => f.id === id) ?? TRIALS[0];
 }

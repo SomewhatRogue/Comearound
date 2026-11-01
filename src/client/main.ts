@@ -98,6 +98,7 @@ const weather = new WeatherView(stage, lowfx);
 const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement);
 const tour = new IntroTour(stage);
 const hud = new Hud();
+const agilityPill = document.getElementById('agility-pill')!;
 const input = new Input();
 const local = solo || online ? new LocalNet(() => look) : null;
 const net = new SwitchNet(local ?? new Net(room, token, () => look));
@@ -169,7 +170,11 @@ entities.onBark = (d, at) => {
   hud.floatText(d.look.breed === 'chicken' ? 'BAWK!' : 'WOOF!', at, stage.camera, 'woof');
 };
 // The agility course: a rising chime per piece, your time at the end.
-fieldView.agilityEvents.onStep = (step, of) => sfx.agility(step, of);
+fieldView.agilityEvents.onStep = (step, of, at) => {
+  sfx.agility(step, of);
+  if (step < of - 1) hud.floatText(`\u2713 ${step + 1}/${of}`, at, stage.camera, 'agility-step');
+};
+fieldView.agilityEvents.onWrong = (next, at) => hud.floatText(next === 1 ? 'Start at 1' : `Next: ${next}`, at, stage.camera, 'agility-wrong');
 fieldView.agilityEvents.onFinish = (sec, best, at) => {
   hud.floatText(`${sec.toFixed(1)} s!`, at, stage.camera, 'agility');
   hud.toast(best === null ? `Clear round! ${sec.toFixed(1)} s. Run it again to beat it.` : sec < best ? `New best round! ${sec.toFixed(1)} s (was ${best.toFixed(1)})` : `Clear round! ${sec.toFixed(1)} s (best ${best.toFixed(1)})`);
@@ -202,22 +207,17 @@ const tryPet = (x: number, y: number) => {
 };
 input.onTap = tryPet;
 stage.renderer.domElement.addEventListener('click', (e) => tryPet(e.clientX, e.clientY));
-// Practising is the lobby panel folded away; otherwise your dog stands in the pack's row.
-let practiseSent: boolean | null = null;
-let practiseAt = 0;
+// The hub: everyone runs free. My dog holds you still for dressing (walk off to leave it); back
+// from a run, no sheet is open; the first time in, a hint about the buttons.
 let lastPhase = '';
-function syncPractise(pub: PublicView, me: DogPub, now: number): void {
+let hinted = false;
+function syncHub(pub: PublicView): void {
   if (pub.phase === 'lobby') {
-    // Back from a run: everyone gathers in the row again, panel open.
-    if (lastPhase && lastPhase !== 'lobby') panels.fold(false);
-    // Steering with the panel open means you want to run about: fold it.
-    if (!panels.collapsed && Math.hypot(input.dx, input.dz) > 0.1) panels.fold(true);
-    const want = panels.collapsed;
-    if (me.lineup === want && (want !== practiseSent || now - practiseAt > 700)) {
-      net.send({ t: 'practise', on: want });
-      [practiseSent, practiseAt] = [want, now];
-      // The stick or keys you're already holding: send them again, now that the room will listen.
-      lastSent = '';
+    if (lastPhase && lastPhase !== 'lobby') panels.open(null);
+    if (panels.sheet === 'dog' && Math.hypot(input.dx, input.dz) > 0.1) panels.open(null);
+    if (!hinted && lastPhase !== '') {
+      hinted = true;
+      hud.toast(document.body.classList.contains('touch') ? 'Run around the meadow! Up top: My dog, Friends, and Play to start.' : 'Run around the meadow (WASD)! Up top: My dog, Friends, and Play to start.');
     }
   }
   lastPhase = pub.phase;
@@ -255,11 +255,15 @@ function frame(now: number) {
     fieldView.show(field, pub.mode);
     fieldView.update(now / 1000, dt, pub, me.spectator ? null : predicted);
     if (!me.spectator) fieldView.agility?.update(predicted.x, predicted.z, me.down, dt, now, pub.phase === 'lobby');
+    // A round of agility going: how far through, and the clock.
+    const ag = fieldView.agility?.progress(now);
+    agilityPill.hidden = !ag;
+    if (ag) agilityPill.textContent = `Agility ${ag.done}/${ag.of} \u00b7 ${ag.sec.toFixed(1)} s`;
     // Predict our own run; ease back toward the server so we never drift far from the truth.
     if (!havePrediction) [predicted.x, predicted.z, predicted.rot, havePrediction] = [me.x, me.z, me.rot, true];
     const len = Math.hypot(input.dx, input.dz);
-    syncPractise(pub, me, now);
-    const canMove = !me.spectator && !me.frozen && (pub.phase === 'playing' || (pub.phase === 'lobby' && panels.collapsed));
+    syncHub(pub);
+    const canMove = !me.spectator && !me.frozen && (pub.phase === 'playing' || (pub.phase === 'lobby' && panels.sheet !== 'dog'));
     const sprinting = input.sprint && !input.crouch && net.me.stamina > 1;
     if (canMove && len > 0.1) {
       const ground = (inMud(field, predicted.x, predicted.z) ? HAZARD.mudSlow : inWater(field, predicted.x, predicted.z) ? HAZARD.wadeSlow : 1) * (nearLowFence(field, predicted.x, predicted.z) < DOG.hopWithin * (sprinting ? 1.5 : 1) ? (sprinting ? DOG.hopSlowSprint : DOG.hopSlow) : 1);
@@ -286,7 +290,7 @@ function frame(now: number) {
     const touring = tour.focus(pub, field, predicted, now);
     const focus = touring ?? (me.spectator ? centroid(pub.sheep) ?? predicted : predicted);
     // While you dress your dog (the lobby panel open) the camera comes in close on it.
-    const dressing = pub.phase === 'lobby' && !panels.collapsed;
+    const dressing = pub.phase === 'lobby' && panels.sheet === 'dog';
     const close = pub.phase === 'lobby' && (dressing || idleFor > 1.2);
     if (!noLoop) followCamera(stage, focus.x, focus.z, dt, close, !!touring, dressing && !touring ? breedScale(look.breed) : 0);
     frameBesidePanel(dressing, dt);

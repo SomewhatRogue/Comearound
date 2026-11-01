@@ -5,7 +5,7 @@
  * then a score card. Score = penned sheep + time left (only if you penned them all) + calm
  * herding (a settled flock, soft feet, few barks: calm.ts) + the goat, if you managed to pen it.
  */
-import { COURSES, VERSUS_FIELDS, inPen } from '../shared/field';
+import { COURSES, VERSUS_POOL, inPen } from '../shared/field';
 import type { FieldScore, Mode } from '../shared/protocol';
 import { DOG, HAZARD, SCORE } from '../shared/tuning';
 import { isPenned, spawnFlock } from './flock';
@@ -22,7 +22,9 @@ export const CARD_SEC = 6;
 export function startRun(room: Room, mode: Mode): void {
   room.mode = mode;
   room.fieldIdx = 0;
-  room.fieldCount = mode === 'trials' ? COURSES[room.course].fields.length : VERSUS_FIELDS.length;
+  // A versus match: three different fields, drawn from the pool.
+  room.versusFields = room.rng.shuffle([...VERSUS_POOL]).slice(0, 3);
+  room.fieldCount = mode === 'trials' ? COURSES[room.course].fields.length : room.versusFields.length;
   room.fieldScores = [];
   const dogs = room.rng.shuffle(activeDogs(room));
   // Versus: alternate so teams stay even (humans were added first, so they spread across teams).
@@ -31,7 +33,7 @@ export function startRun(room: Room, mode: Mode): void {
 }
 
 export function startField(room: Room): void {
-  room.field = room.mode === 'trials' ? COURSES[room.course].fields[room.fieldIdx] : VERSUS_FIELDS[room.fieldIdx];
+  room.field = room.mode === 'trials' ? COURSES[room.course].fields[room.fieldIdx] : room.versusFields[room.fieldIdx];
   room.sheep = spawnFlock(room);
   room.goats = makeGoats(room);
   startWind(room);

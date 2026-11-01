@@ -16,6 +16,8 @@ export interface RunStep {
   took?: number;
   /** Seconds for the round, when the last piece is taken. */
   finished?: number;
+  /** A piece taken out of order: the number of the one to take next (1 if no round is going). */
+  wrong?: number;
 }
 
 export class AgilityRun {
@@ -37,7 +39,10 @@ export class AgilityRun {
       if (!this.took(p, x, z, down, dt)) continue;
       // Taking the first piece always (re)starts the round.
       if (p.n === 1) [this.next, this.t0] = [1, now];
-      if (p.n !== this.next) continue;
+      if (p.n !== this.next) {
+        out.wrong = this.next;
+        continue;
+      }
       out.took = p.n;
       this.next++;
       if (p.n === this.pieces.length) {
@@ -54,8 +59,9 @@ export class AgilityRun {
     if (p.kind === 'hurdle' || p.kind === 'tire') {
       const half = (p.kind === 'hurdle' ? AG.hurdleW : AG.tireW) / 2;
       const prev = s.prev;
-      s.prev = Math.abs(lat) < half + 0.6 && Math.abs(along) < 2 ? along : null;
-      return prev !== null && s.prev !== null && s.prev !== 0 && Math.abs(lat) < half + 0.15 && Math.sign(prev) !== Math.sign(s.prev);
+      // Generous at the ends: on a phone it's hard to hit the middle exactly.
+      s.prev = Math.abs(lat) < half + 0.9 && Math.abs(along) < 2 ? along : null;
+      return prev !== null && s.prev !== null && s.prev !== 0 && Math.abs(lat) < half + 0.35 && Math.sign(prev) !== Math.sign(s.prev);
     }
     if (p.kind === 'tunnel') {
       const inside = Math.abs(along) < AG.tunnelLen / 2 && Math.abs(lat) < AG.tunnelR;
@@ -80,8 +86,8 @@ export class AgilityRun {
   private weave(s: PieceState, along: number, lat: number): boolean {
     const prev = s.prev;
     s.prev = along;
-    if (Math.abs(lat) > 1.2) s.idx = 0;
-    if (prev === null || Math.abs(lat) > 1.2) return false;
+    if (Math.abs(lat) > 1.6) s.idx = 0;
+    if (prev === null || Math.abs(lat) > 1.6) return false;
     const poles = weavePoles();
     const n = poles.length;
     for (let k = 0; k < n; k++) {

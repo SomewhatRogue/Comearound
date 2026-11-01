@@ -29,7 +29,8 @@ const FREEZE = () => {
   const humans = (p) => p.evaluate(() => (window.__GAME_STATE__.pub?.dogs ?? []).filter((d) => !d.bot && d.connected).map((d) => d.look.name).sort().join(','));
   try {
     const h = await page('PhoneHost');
-    await h.click('[data-v="friends"]');
+    await h.click('#hubbar [data-v="friends"]');
+    await h.click('[data-act="join"][data-v="friends"]');
     await h.waitForFunction(() => window.__party.state === 'host', null, { timeout: 30000 });
     const code = await h.evaluate(() => new URL(location.href).searchParams.get('room'));
     out.code = code; at('hosting');

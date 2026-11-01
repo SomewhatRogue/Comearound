@@ -96,7 +96,7 @@ export class FieldView {
   private wildlife: Wildlife | null = null;
   /** The field's agility course, if it has one (main.ts runs it with your dog). */
   agility: AgilityCourse | null = null;
-  agilityEvents: AgilityEvents = { onStep: () => {}, onFinish: () => {} };
+  agilityEvents: AgilityEvents = { onStep: () => {}, onWrong: () => {}, onFinish: () => {} };
   id = '';
 
   constructor(private stage: Stage, private lowfx: boolean) {}

@@ -19,7 +19,7 @@ export class Hud {
   update(pub: PublicView, me: PrivateView): void {
     const field = fieldById(pub.fieldId);
     const run = pub.phase !== 'lobby';
-    $('phase').textContent = pub.phase === 'lobby' ? 'Lobby: practise on the flock' : `${field.name} · ${pub.fieldIdx + 1}/${pub.fieldCount}`;
+    $('phase').textContent = pub.phase === 'lobby' ? 'The Meadow' : `${field.name} · ${pub.fieldIdx + 1}/${pub.fieldCount}`;
     const playing = pub.phase === 'playing';
     $('clock').style.display = playing ? '' : 'none';
     const mm = Math.floor(pub.timeLeft / 60);

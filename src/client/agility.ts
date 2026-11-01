@@ -12,8 +12,10 @@ import { gearMesh } from './agilitygear';
 import { label } from './scene';
 
 export interface AgilityEvents {
-  /** A piece taken in order: step 0 is the first. */
-  onStep: (step: number, of: number) => void;
+  /** A piece taken in order: step 0 is the first; `at` is where the dog is. */
+  onStep: (step: number, of: number, at: THREE.Vector3) => void;
+  /** A piece taken out of order: `next` is the one to take. */
+  onWrong: (next: number, at: THREE.Vector3) => void;
   /** Round done, in `sec` seconds; `best` is the best before this one (null if first). */
   onFinish: (sec: number, best: number | null, at: THREE.Vector3) => void;
 }
@@ -23,6 +25,10 @@ export class AgilityCourse {
   private flags: { el: HTMLElement; p: AgilityPiece }[] = [];
   private run: AgilityRun;
   private readonly key: string;
+  /** A glowing ring on the ground round the piece to take next. */
+  private ring: THREE.Mesh;
+  private t0 = 0;
+  private wrongAt = 0;
 
   constructor(f: FieldDef, heightAt: (x: number, z: number) => number, private ev: AgilityEvents) {
     this.key = `comebye.agility.${f.id}`;
@@ -34,6 +40,17 @@ export class AgilityCourse {
       this.group.add(flag);
       this.flags.push({ el: flag.element, p });
     }
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(1.45, 1.75, 40), new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.6, depthWrite: false }));
+    this.ring.rotation.x = -Math.PI / 2;
+    this.group.add(this.ring);
+    this.height = heightAt;
+  }
+
+  private height: (x: number, z: number) => number;
+
+  /** While a round is on: how far through, and the time so far (for the HUD). */
+  progress(now: number): { done: number; of: number; sec: number } | null {
+    return this.run.next > 1 ? { done: this.run.next - 1, of: this.run.pieces.length, sec: (now - this.t0) / 1000 } : null;
   }
 
   /** Where your dog is now. `alwaysShow`: the flags show from anywhere (the lobby); otherwise only nearby. */
@@ -41,13 +58,40 @@ export class AgilityCourse {
     const of = this.run.pieces.length;
     if (!of) return;
     const r = this.run.step(x, z, down, dt, now);
-    if (r.took) this.ev.onStep(r.took - 1, of);
+    const at = new THREE.Vector3(x, 0, z);
+    if (r.took === 1) this.t0 = now;
+    if (r.took) {
+      this.ev.onStep(r.took - 1, of, at);
+      // The flag it belongs to pops to a tick.
+      const f = this.flags.find((q) => q.p.n === r.took);
+      if (f) {
+        f.el.classList.remove('just');
+        void f.el.offsetWidth;
+        f.el.classList.add('just');
+      }
+    }
+    if (r.wrong && now - this.wrongAt > 1500) {
+      this.wrongAt = now;
+      this.ev.onWrong(r.wrong, at);
+    }
     if (r.finished !== undefined) this.finish(r.finished, x, z);
     const next = this.run.next;
     for (const { el, p } of this.flags) {
-      el.style.display = alwaysShow || Math.hypot(p.x - x, p.z - z) < 16 ? '' : 'none';
+      el.style.display = alwaysShow || Math.hypot(p.x - x, p.z - z) < 18 ? '' : 'none';
+      const done = next > 1 && p.n < next;
       el.classList.toggle('next', p.n === next);
-      el.classList.toggle('done', next > 1 && p.n < next);
+      el.classList.toggle('done', done);
+      const t = done ? '\u2713' : String(p.n);
+      if (el.textContent !== t) el.textContent = t;
+    }
+    // The ring sits round the next piece and breathes, brighter as you come near.
+    const np = this.run.pieces.find((p) => p.n === next);
+    this.ring.visible = !!np && (alwaysShow || Math.hypot(np.x - x, np.z - z) < 18);
+    if (np) {
+      this.ring.position.set(np.x, this.height(np.x, np.z) + 0.06, np.z);
+      const near = Math.max(0, 1 - Math.hypot(np.x - x, np.z - z) / 14);
+      this.ring.scale.setScalar(1 + 0.06 * Math.sin(now / 260));
+      (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.35 + 0.35 * near + 0.1 * Math.sin(now / 260);
     }
   }
 

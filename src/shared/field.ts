@@ -205,4 +205,4 @@ export function crossesWater(f: FieldDef, p: { x: number; z: number }, q: { x: n
   return false;
 }
 
-export { COURSES, PRACTICE, TRIALS, VERSUS, VERSUS_FIELDS, fieldById, type CourseId } from './levels';
+export { COURSES, PRACTICE, TRIALS, VERSUS, VERSUS_FIELDS, VERSUS_POOL, fieldById, type CourseId } from './levels';

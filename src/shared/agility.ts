@@ -13,14 +13,14 @@ export interface AgilityPiece { kind: AgilityKind; x: number; z: number; dir: nu
 
 export const AG = {
   hurdleW: 1.5,
-  tireW: 0.9,
+  tireW: 1.2,
   /** Height of the middle of the tyre. */
   tireY: 0.95,
   tunnelLen: 3.4,
   /** The tunnel's half width: room for a dog (radius 0.45) with a little to spare. */
   tunnelR: 0.62,
   weaveN: 6,
-  weaveGap: 0.8,
+  weaveGap: 1.1,
   /** The table's side, and how high a dog stands on it. */
   table: 1.2,
   tableH: 0.4,

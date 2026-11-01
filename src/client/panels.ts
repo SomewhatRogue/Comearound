@@ -4,7 +4,8 @@
  * use data-act attributes and one listener.
  */
 import { COURSES, fieldById, type CourseId } from '../shared/field';
-import { BREEDS, BREED_NAMES, BUILDS, COLLARS, DEFAULT_COAT, EYES, VOICES, coatsFor, type Breed } from '../shared/looks';
+import { DEFAULT_COAT, type Breed } from '../shared/looks';
+import { dogSheet, friendsSheet, hubBar, playSheet, type PlayTab, type Sheet } from './hub';
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
 /** Extra lobby lines from whichever online layer is running (friends on the page, or an online room). */
@@ -22,13 +23,14 @@ const store = {
 
 export class Panels {
   menuOpen = false;
-  /** The lobby panel can fold away so you can practise on the flock (on phones it covers the buttons). */
-  collapsed = false;
-  private keys = { lobby: '', modal: '' };
-  /** What the host has picked: a trials course, or versus. */
-  private pick: CourseId | 'versus' = 'gentle';
+  /** The hub sheet that's open (My dog, Friends, Play), or none: run about the meadow. */
+  sheet: Sheet | null = null;
+  private keys = { lobby: '', modal: '', bar: '' };
+  /** The Play sheet: its section, and the course the host has picked. */
+  private tab: PlayTab = 'trials';
+  private course: CourseId = 'gentle';
   private bots = true;
-  private bests: Record<CourseId, number> = { gentle: Number(store.get('tac-best-trials') ?? 0) || 0, tricky: Number(store.get('tac-best-tricky') ?? 0) || 0, wild: Number(store.get('tac-best-wild') ?? 0) || 0, challenge: Number(store.get('tac-best-challenge') ?? 0) || 0 };
+  private bests: Record<CourseId, number> = { gentle: Number(store.get('tac-best-trials') ?? 0) || 0, tricky: Number(store.get('tac-best-tricky') ?? 0) || 0, wild: Number(store.get('tac-best-wild') ?? 0) || 0, challenge: Number(store.get('tac-best-challenge') ?? 0) || 0, highland: Number(store.get('tac-best-highland') ?? 0) || 0 };
   private best = 0;
   private newBest = false;
   private savedRun = '';
@@ -49,16 +51,16 @@ export class Panels {
     });
   }
 
-  /** Fold the lobby panel away (to practise) or open it again. */
-  fold(on: boolean): void {
-    if (this.collapsed === on) return;
-    this.collapsed = on;
+  /** Open a hub sheet, or close it (null). */
+  open(sheet: Sheet | null): void {
+    if (this.sheet === sheet) return;
+    this.sheet = sheet;
     this.keys.lobby = '';
   }
 
   /** Draw the panels afresh (the friends list changed, or you joined someone's game). */
   refresh(): void {
-    this.keys = { lobby: '', modal: '' };
+    this.keys = { lobby: '', modal: '', bar: '' };
   }
 
   private setLook(l: Look, rerender = true): void {
@@ -80,9 +82,11 @@ export class Panels {
       // A preview, so you can hear the chonky boi squeak.
       bark(this.look, 0.7);
     }
-    if (act === 'mode') [this.pick, this.keys.lobby] = [v as CourseId | 'versus', ''];
+    if (act === 'sheet') this.open(v ? (this.sheet === v ? null : (v as Sheet)) : null);
+    if (act === 'tab') [this.tab, this.keys.lobby] = [v as PlayTab, ''];
+    if (act === 'course') [this.course, this.keys.lobby] = [v as CourseId, ''];
     if (act === 'bots') [this.bots, this.keys.lobby] = [!this.bots, ''];
-    if (act === 'start') this.startPick(this.pick);
+    if (act === 'start') this.startPick(v === 'versus' ? 'versus' : this.course);
     if (act === 'again') this.startPick(v as CourseId | 'versus');
     if (act === 'copy') void navigator.clipboard?.writeText(location.href).catch(() => {});
     if (act === 'close') this.menuOpen = false;
@@ -96,7 +100,6 @@ export class Panels {
     if (act === 'rejoin') this.party?.rejoin?.();
     if (act === 'copydetails') this.party?.copyDetails?.();
     if (act === 'joincode') this.party?.joinCode?.((document.getElementById('code-input') as HTMLInputElement | null)?.value ?? '');
-    if (act === 'fold') [this.collapsed, this.keys.lobby] = [!this.collapsed, ''];
     if (act === 'endField') {
       this.send({ t: 'endField' });
       this.menuOpen = false;
@@ -115,14 +118,25 @@ export class Panels {
 
   render(pub: PublicView, me: PrivateView): void {
     const lobby = document.getElementById('lobby')!;
-    const lk = pub.phase === 'lobby' ? JSON.stringify([this.look, pub.dogs.map((d) => [d.look, d.connected, d.bot]), pub.hostId === me.you, this.pick, this.bots, this.collapsed, this.party?.key()]) : 'off';
+    const inHub = pub.phase === 'lobby';
+    const sheet = inHub ? this.sheet : null;
+    const lk = sheet ? JSON.stringify([sheet, this.look, pub.dogs.map((d) => [d.look, d.connected, d.bot]), pub.hostId === me.you, this.tab, this.course, this.bots, this.party?.key()]) : 'off';
     if (lk !== this.keys.lobby) {
       this.keys.lobby = lk;
       const typing = ['name-input', 'code-input'].includes(document.activeElement?.id ?? '');
-      if (!typing) lobby.innerHTML = pub.phase === 'lobby' ? (this.collapsed ? '<button class="chip on unfold" data-act="fold">Your dog &amp; start</button>' : this.lobbyHtml(pub, me)) : '';
-      lobby.style.display = pub.phase === 'lobby' ? '' : 'none';
-      lobby.classList.toggle('folded', this.collapsed);
-      document.body.classList.toggle('panel-open', pub.phase === 'lobby' && !this.collapsed);
+      if (!typing) lobby.innerHTML = sheet ? this.sheetHtml(sheet, pub, me) : '';
+      lobby.style.display = sheet ? '' : 'none';
+      lobby.dataset.sheet = sheet ?? '';
+      document.body.classList.toggle('panel-open', !!sheet);
+    }
+    // The hub's buttons, along the top.
+    const bar = document.getElementById('hubbar')!;
+    const humans = pub.dogs.filter((d) => !d.bot && d.connected).length;
+    const bk = inHub ? JSON.stringify([this.look.breed, sheet, humans]) : 'off';
+    if (bk !== this.keys.bar) {
+      this.keys.bar = bk;
+      bar.innerHTML = inHub ? hubBar(this.look, sheet, humans > 1 ? `${humans} here` : '') : '';
+      bar.hidden = !inHub;
     }
     this.recordBest(pub);
     const modal = document.getElementById('modal')!;
@@ -152,51 +166,10 @@ export class Panels {
     }
   }
 
-  private lobbyHtml(pub: PublicView, me: PrivateView): string {
-    const host = pub.hostId === me.you;
-    const breeds = BREEDS.map((b) => `<button class="chip ${b === this.look.breed ? 'on' : ''}" data-act="breed" data-v="${b}">${BREED_NAMES[b]}</button>`).join('');
-    const coats = coatsFor(this.look.breed).map((c) => `<button class="swatch coat ${c.id === this.look.coat ? 'on' : ''}" style="--a:${c.main};--b:${c.accent};--c:${c.mask}" data-act="coat" data-v="${c.id}" title="${c.name}" aria-label="${c.name}"></button>`).join('');
-    const eyes = EYES.map((e) => `<button class="chip eye-chip ${e.id === this.look.eyes ? 'on' : ''}" data-act="eyes" data-v="${e.id}"><i style="background:${e.color}"></i>${e.name}</button>`).join('');
-    const builds = BUILDS.map((b) => `<button class="chip ${b.v === (this.look.build ?? 0) ? 'on' : ''}" data-act="build" data-v="${b.v}">${b.name}</button>`).join('');
-    const voice = this.look.voice;
-    const auto = voice === undefined || voice === null;
-    const voices = [`<button class="chip ${auto ? 'on' : ''}" data-act="voice" data-v="auto" title="Pitched to the breed and build">Auto</button>`, ...VOICES.map((o) => `<button class="chip ${!auto && o.v === voice ? 'on' : ''}" data-act="voice" data-v="${o.v}">${o.name}</button>`)].join('');
-    const collars = COLLARS.map((c) => `<button class="swatch ${c === this.look.collar ? 'on' : ''}" style="background:${c}" data-act="collar" data-v="${c}" aria-label="collar ${c}"></button>`).join('');
-    const pack = pub.dogs.filter((d) => !d.bot).map((d) => `<li><i style="background:${d.look.collar}"></i>${esc(d.look.name)} <span class="quiet">${BREED_NAMES[d.look.breed]}</span>${d.id === pub.hostId ? ' <em>host</em>' : ''}${d.connected ? '' : ' <span class="quiet">(away)</span>'}</li>`).join('');
-    const modes = ([
-      ['gentle', 'Trials: Gentle', 'The Meadow, Old Orchard, Windy Hillside. Learn the ropes, meet the goat.'],
-      ['tricky', 'Trials: Tricky', 'Streams and bridges, brambles, a broken fence, wind, and three goats.'],
-      ['challenge', 'Trials: Challenge', 'Exact numbers: so many sheep in each pen. A gate swings shut when its count is right.'],
-      ['wild', 'Trials: Wild', 'Big fields: sort black sheep from white in the rain, a huge pasture, a thunderstorm.'],
-      ['versus', 'Versus', 'Two teams, two pens. Pen yours, or go and stir up theirs.'],
-    ] as const).map(([m, n, d]) => `<button class="mode ${m === this.pick ? 'on' : ''}" data-act="mode" data-v="${m}"><b>${n}</b><span>${d}</span></button>`).join('');
-    const controls = host
-      ? `<div class="label">Mode</div><div class="modes">${modes}</div>${this.solo || this.party?.forceBots ? '' : `<button class="chip ${this.bots ? 'on' : ''}" data-act="bots">Fill empty spots with bot dogs</button>`}<button class="big" data-act="start">Start ${this.pick === 'versus' ? 'the match' : 'the trials'}</button>`
-      : `<p class="quiet">Waiting for the host to start.</p>`;
-    const roomLine = this.solo
-      ? this.party?.html() ?? '<p class="quiet">Solo: bot dogs work alongside you. Practise on the flock while you choose your dog.</p>'
-      : this.party
-        ? this.party.html(pub, me)
-        : `<p class="quiet">Room <b>${esc(this.room)}</b> <button class="link" data-act="copy">copy invite link</button></p>`;
-    const touchTip = document.body.classList.contains('touch')
-      ? '<p class="touch-tip">Tap a dog to give it a pat. Drag on the field (or tap <b>Practise</b>) to go and run at the flock; drag past the ring to sprint.</p>'
-      : '<p class="touch-tip">Click a dog to give it a pat. Walk off (WASD) or press <b>Practise</b> to go and run at the flock.</p>';
-    const best = this.bests.gentle || this.bests.tricky || this.bests.wild || this.bests.challenge ? `<p class="quiet">Your best runs: Gentle <b>${this.bests.gentle}</b> &middot; Tricky <b>${this.bests.tricky}</b> &middot; Wild <b>${this.bests.wild}</b> &middot; Challenge <b>${this.bests.challenge}</b></p>` : '';
-    return `<button class="chip fold" data-act="fold">Practise</button><h2>Come Bye!</h2>${roomLine}
-      <label>Your ${this.look.breed === 'chicken' ? 'chicken' : 'dog'}'s name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>${touchTip}
-      <div class="label">Breed</div><div class="row wrap">${breeds}</div>
-      <div class="label">Coat</div><div class="swatches">${coats}</div>
-      <div class="label">Build</div><div class="row wrap">${builds}</div>
-      <div class="label">${this.look.breed === 'chicken' ? 'Bawk' : 'Bark'}</div><div class="row wrap">${voices}</div>
-      <div class="label">Eyes</div><div class="row wrap">${eyes}</div>
-      <div class="label">Collar</div><div class="swatches">${collars}</div>
-      <div class="label">How to herd</div><ul class="how-mini">
-        <li>Sheep move away from you. Get <b>behind</b> them, on the far side from the pen.</li>
-        <li><b>Crouch</b> (Space) and face them to give them <b>the eye</b>: they ease away calmly.</li>
-        <li>Hold still while crouched to <b>lie down</b> and settle them.</li>
-        <li><b>Bark</b> (E) sends them running, but the goat hates it. Bark too much and it comes to stare you down.</li>
-      </ul>${best}
-      ${this.party && !this.solo ? '' : `<div class="label">The pack (${pub.dogs.filter((d) => !d.bot).length})</div><ul class="who">${pack}</ul>`}${controls}`;
+  private sheetHtml(sheet: Sheet, pub: PublicView, me: PrivateView): string {
+    if (sheet === 'dog') return dogSheet(this.look);
+    if (sheet === 'friends') return friendsSheet(pub, me, this.party ? (this.solo ? this.party.html() : this.party.html(pub, me)) : null, this.room);
+    return playSheet(pub, me, { tab: this.tab, course: this.course, bots: this.bots, showBots: !(this.solo || this.party?.forceBots), bests: this.bests });
   }
 
   private resultsHtml(pub: PublicView, me: PrivateView): string {

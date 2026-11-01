@@ -49,7 +49,7 @@ export function gearMesh(p: AgilityPiece, y: number): THREE.Group {
     g.add(bar);
   }
   if (p.kind === 'tire') {
-    const side = 0.78;
+    const side = AG.tireW / 2 + 0.33;
     const top = AG.tireY + 0.75;
     for (const s of [-1, 1]) {
       g.add(part(new THREE.BoxGeometry(0.08, top, 0.08), '#f4f1ea', s * side, top / 2, 0));
@@ -59,13 +59,13 @@ export function gearMesh(p: AgilityPiece, y: number): THREE.Group {
     // The tyre: black, taped in the course colour, hung on four cords.
     const arcs = 8;
     for (let i = 0; i < arcs; i++) {
-      const seg = part(new THREE.TorusGeometry(0.42, 0.075, 6, 6, (Math.PI * 2) / arcs), i % 2 ? '#26272b' : colors[1], 0, AG.tireY, 0);
+      const seg = part(new THREE.TorusGeometry(0.52, 0.08, 6, 6, (Math.PI * 2) / arcs), i % 2 ? '#26272b' : colors[1], 0, AG.tireY, 0);
       seg.rotation.z = (i * Math.PI * 2) / arcs;
       g.add(seg);
     }
     const cord = new THREE.CylinderGeometry(0.008, 0.008, 1, 4);
     for (const a of [Math.PI / 4, (3 * Math.PI) / 4, -Math.PI / 4, (-3 * Math.PI) / 4]) {
-      const [cx, cy] = [Math.cos(a) * 0.5, AG.tireY + Math.sin(a) * 0.5];
+      const [cx, cy] = [Math.cos(a) * 0.6, AG.tireY + Math.sin(a) * 0.6];
       const [tx, ty] = [Math.sign(Math.cos(a)) * side, a > 0 ? top : 0.05];
       const len = Math.hypot(tx - cx, ty - cy);
       const c = part(cord, '#333333', (cx + tx) / 2, (cy + ty) / 2, 0, false);

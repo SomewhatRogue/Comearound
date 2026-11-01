@@ -76,7 +76,6 @@ async function main() {
   mark(`movement +${moved.toFixed(2)} m, crouch, down and bark ok`);
 
   // The phone's stick: drag it.
-  await phone.page.click('[data-act=fold]');
   const px0 = meIn(await state(phone.page)).x;
   await phone.page.locator('#touch .stick-zone').waitFor({ state: 'visible' });
   const box = await phone.page.locator('#touch .stick-zone').boundingBox();
@@ -91,7 +90,8 @@ async function main() {
   await phone.page.screenshot({ path: 'shots/1b-phone-lobby.png' });
   mark(`phone stick moved +${phoneMoved.toFixed(2)} m`);
 
-  await host.page.click('[data-act="mode"][data-v="gentle"]');
+  await host.page.click('#hubbar [data-v="play"]');
+  await host.page.click('[data-act="course"][data-v="gentle"]');
   await host.page.click('[data-act="start"]');
   await until('intro', async () => (await state(host.page)).pub.phase === 'intro');
   await host.page.waitForTimeout(200);

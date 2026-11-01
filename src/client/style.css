@@ -315,3 +315,53 @@ button.audio.is-off .off { display: inline; }
 .ag-num.done { background: #8fd18a; opacity: 0.55; }
 @keyframes ag-bob { 50% { translate: 0 -5px; } }
 .agility { font-weight: 800; font-size: 26px; color: #ffd23f; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; animation: woof 0.8s ease-out forwards; }
+.ag-num { width: 26px; height: 26px; font-size: 14px; }
+.ag-num.done { background: #5fbf5a; color: #fff; opacity: 0.8; }
+.ag-num.just { animation: ag-pop 0.7s ease-out; }
+@keyframes ag-pop { 0% { scale: 1; } 30% { scale: 2.1; background: #5fbf5a; } 100% { scale: 1; } }
+.agility-step { font-weight: 800; font-size: 28px; color: #7ee07a; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; animation: woof 0.8s ease-out forwards; }
+.agility-wrong { font-weight: 800; font-size: 22px; color: #ffb35c; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; animation: woof 0.8s ease-out forwards; }
+#agility-pill { position: fixed; top: calc(56px + env(safe-area-inset-top, 0px)); left: 50%; translate: -50% 0; background: #ffd23f; color: var(--ink); font-weight: 700; font-size: 15px; padding: 5px 14px; border-radius: 999px; border: 2px solid var(--ink); z-index: 6; pointer-events: none; }
+
+/* The hub: three buttons under the top bar, each opening a sheet. */
+#hubbar { position: fixed; top: calc(54px + env(safe-area-inset-top, 0px)); left: 50%; translate: -50% 0; display: flex; gap: 8px; z-index: 16; pointer-events: auto; }
+#hubbar[hidden] { display: none; }
+.hub-btn { display: flex; align-items: center; gap: 7px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-radius: 999px; padding: 8px 16px 8px 12px; font: inherit; font-weight: 700; font-size: 15px; box-shadow: 0 3px 0 #0003; white-space: nowrap; }
+.hub-btn .ico { font-size: 17px; line-height: 1; }
+.hub-btn small { font-weight: 600; font-size: 11px; color: var(--ink-soft); }
+.hub-btn.on { background: var(--sun); }
+.hub-btn:active { translate: 0 2px; box-shadow: 0 1px 0 #0003; }
+#agility-pill { top: calc(104px + env(safe-area-inset-top, 0px)); }
+/* Sheets: the hub panel, under the buttons. */
+#lobby { top: calc(102px + env(safe-area-inset-top, 0px)); max-height: calc(100% - 118px); }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.sheet-head h2 { margin: 0; }
+.sheet-head .x { background: var(--paper-2); border: 2px solid var(--line); border-radius: 999px; width: 34px; height: 34px; font-size: 20px; line-height: 1; color: var(--ink); display: grid; place-items: center; padding: 0; }
+.mode[disabled] { opacity: 0.75; cursor: default; }
+.mode em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--good); margin-left: 4px; }
+.mode .fields { font-size: 11px; color: var(--ink-soft); opacity: 0.85; }
+#lobby .wait { background: #fff6d6; border: 2px dashed var(--sun); border-radius: 12px; padding: 8px 10px; font-size: 14px; margin: 6px 0; }
+#lobby details.how { margin-top: 12px; }
+#lobby details.how summary { font-weight: 700; font-size: 14px; cursor: pointer; }
+@media (max-width: 560px) {
+  #hubbar { gap: 5px; top: calc(44px + env(safe-area-inset-top, 0px)); }
+  .hub-btn { padding: 7px 11px 7px 9px; font-size: 14px; gap: 5px; }
+  .hub-btn small { display: none; }
+  #agility-pill { top: calc(90px + env(safe-area-inset-top, 0px)); }
+}
+/* Phones upright: the sheet comes up from the bottom, leaving the dog in view above it. */
+@media (max-width: 700px) and (orientation: portrait) {
+  #lobby { top: auto; bottom: calc(10px + var(--safe-b)); max-height: 58%; }
+  #lobby[data-sheet="dog"] { max-height: 52%; }
+}
+/* Phones sideways: a narrow sheet down the right. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #hubbar { top: calc(36px + env(safe-area-inset-top, 0px)); }
+  .hub-btn { padding: 4px 11px 4px 9px; font-size: 13px; }
+  #lobby { top: 72px; max-height: calc(100% - 80px); width: 300px; }
+  #agility-pill { top: 72px; }
+}
+/* The Start button stays in reach at the foot of the Play sheet, however long the list. */
+#lobby .sheet-foot { position: sticky; bottom: -16px; margin: 10px -18px -16px; padding: 8px 18px 14px; background: linear-gradient(to bottom, #fdf7e800, var(--paper) 18px); display: grid; gap: 6px; }
+#lobby .sheet-foot .big { margin-top: 4px; }
+@media (max-height: 500px) { #lobby .sheet-foot { bottom: -12px; margin: 8px -14px -12px; padding: 6px 14px 10px; } }

@@ -5,7 +5,7 @@
  * Join and rejoin are one path: a client says hello with its token, gets its seat back if it had
  * one, and the next snapshot (full state, every tick) brings it up to date.
  */
-import { PRACTICE, TRIALS } from '../shared/field';
+import { COURSES, PRACTICE, TRIALS, type FieldDef } from '../shared/field';
 import { BREEDS, COLLARS, DEFAULT_COAT, DOG_BREEDS, EYES, coatsFor, type Breed } from '../shared/looks';
 import type { ClientMsg, Look, PrivateEvent, ServerMsg } from '../shared/protocol';
 import { Rng } from '../shared/rng';
@@ -16,7 +16,7 @@ import { spawnFlock, tickFlock } from './flock';
 import { tickGoats } from './goat';
 import { tickWind } from './wind';
 import { tickWeather } from './weather';
-import { ARRIVE, pet, setPractising, tickLobby } from './lobby';
+import { arriveAt, gatherInHub, pet, setPractising, tickLobby } from './lobby';
 import { freshCalm } from './calm';
 import { endField, startRun, tickRound } from './round';
 import { activeDogs, type Dog, type Room } from './state';
@@ -48,6 +48,7 @@ export class GameRoom implements Room {
   field = PRACTICE;
   fieldIdx = 0;
   fieldCount = TRIALS.length;
+  versusFields: FieldDef[] = [];
   dogs = new Map<string, Dog>();
   sheep: Room['sheep'] = [];
   goats: Room['goats'] = [];
@@ -118,7 +119,7 @@ export class GameRoom implements Room {
         break;
       case 'start':
         if (d.id === this.hostId && (this.phase === 'lobby' || this.phase === 'results')) {
-          this.course = m.course === 'tricky' || m.course === 'wild' || m.course === 'challenge' ? m.course : 'gentle';
+          this.course = m.course && m.course in COURSES ? m.course : 'gentle';
           this.start(m.mode === 'versus' ? 'versus' : 'trials', m.fillBots);
         }
         break;
@@ -151,8 +152,8 @@ export class GameRoom implements Room {
     if (!d) {
       d = blankDog(`p${this.nextId++}`, String(token).slice(0, 64), cleanLook(look));
       d.spectator = this.phase !== 'lobby' && this.phase !== 'results';
-      // Lobby: appear at the meadow's corner and trot over to the pack's row.
-      [d.x, d.z] = [ARRIVE.x, ARRIVE.z];
+      // The hub: appear at the gate and trot in a few steps.
+      arriveAt(this, d);
       this.dogs.set(d.id, d);
     }
     d.connected = true;
@@ -165,7 +166,7 @@ export class GameRoom implements Room {
   private start(mode: Room['mode'], fillBots: boolean): void {
     for (const [id, d] of this.dogs) {
       if (d.bot) this.dogs.delete(id);
-      else d.spectator = !d.connected;
+      else [d.spectator, d.arrive] = [!d.connected, undefined];
     }
     const humans = activeDogs(this).length;
     const want = mode === 'versus' ? Math.max(4, humans + (humans % 2)) : Math.max(3, humans);
@@ -194,6 +195,7 @@ export class GameRoom implements Room {
     }
     this.goats = [];
     this.field = PRACTICE;
+    gatherInHub(this);
     this.wind = { x: 1, z: 0, s: 0 };
     this.weather = { kind: 'clear', flashes: this.weather.flashes, nextFlash: 99, fx: 0, fz: 0 };
     this.phase = 'lobby';

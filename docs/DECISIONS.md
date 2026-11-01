@@ -2,6 +2,34 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (late evening): the hub, more maps, kinder agility (Claude Opus 5.5)
+
+- **The hub** (Kyle: "we don't need a button for practice since you can just run around"): no more
+  row and no Practise toggle. Everyone runs free in `PRACTICE`, now its own roomier meadow (56 x 40,
+  its own flock, pen and agility loop). Three buttons under the top bar (`client/hub.ts`) open a sheet
+  each: **My dog** (customise; the dressing camera comes in and your dog holds still, walking off
+  closes it), **Friends** (solo or with friends, code, invite, join, who's here) and **Play** (Trials
+  courses and **Versus as its own section**, each with its Start pinned at the foot; others see who
+  starts). A dog that joins appears at the gate and trots in a few steps (`Dog.arrive`, the sheep
+  ignore it) so friends arriving are easy to spot; back from a run everyone is gathered near the gate.
+  Any dog standing still for 1.5 s gets up to its idles, and pats work on any dog. The hub buttons sit
+  outside the HUD layer: inside it, the phone's stick zone covered them (caught by a phone test).
+- **Agility on phones** (Kyle: the flags were too hard): the course is spread out 7 to 9 m between
+  pieces, the tyre is 1.2 m wide, weave poles 1.1 m apart, and edges are forgiving (35 cm past a
+  hurdle or tyre end still counts; weaving up to 1.6 m off the line). It's clear when you get one: the
+  flag pops to a green tick, a tick and "3/7" over your dog, a pill with progress and time, and a ring on
+  the ground round the next piece. Taking one out of order says "Next: 3" (or "Start at 1").
+- **Maps:** a **Highland** course (Glen Crossing: a burn and dry-stone walls; Heather Moor: peat bogs,
+  heather, a gale; Loch Side: a loch to work round, in the rain), **Duck Pond** in Gentle and **Mill
+  Race** in Tricky (4 fields each now), and three more versus fields: Orchard Rumble, Stone Circle and
+  Muddy Middle. A match draws three different fields from the five (`VERSUS_POOL`).
+- Versus design rule learned from the bench: the two flocks must not have to cross each other to get
+  home, or bots (and people) fight over one mixed flock in the middle. Riverside gets away with it
+  only because the river forces each flock onto its own bridge. First drafts of Muddy Middle and
+  Stone Circle broke this (0-0 most seeds); redrawn, they're 7-7 on most seeds.
+- The "every field is playable" test now covers every field (versus pool and hub too): starts and
+  goats clear of obstacles, nothing inside a pen or the fence, pens inside the field.
+
 ## 2026-10-31 (evening): back in after a crash, and a link preview (Claude Opus 5.5)
 
 - **Seen live:** a friend's game crashed mid-run; she reopened it and got into the room, but only

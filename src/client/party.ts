@@ -157,7 +157,7 @@ export class Party {
 
   /** The lobby's "play with friends" block. */
   html(): string {
-    if (this.state === 'off') return '<p class="quiet">Solo: bot dogs work alongside you. Practise on the flock while you choose your dog.</p>';
+    if (this.state === 'off') return '<p class="quiet">Solo: bot dogs work alongside you. Run about the meadow while you choose your dog.</p>';
     if (this.state === 'guest') {
       return `<div class="friends"><p>You're in <b>${esc(this.guestOf?.name ?? 'a friend')}</b>'s game. They pick the course and start it.</p><button class="chip" data-act="leave">Leave and play on my own</button></div>`;
     }

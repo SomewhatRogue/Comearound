@@ -54,7 +54,7 @@ const POSES: Record<string, Pose> = {
   land: { y: 0.76, front: 0.16, back: -0.04, head: -0.1, legFold: 0.76, frontLegs: -0.2, backLegs: 0.25, tail: 0.55 },
 };
 
-interface DogView { jump: Jump['phase']; jumpScale: number; rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number; chicken: boolean; flap: number; mud: MudCoat; lift: number }
+interface DogView { jump: Jump['phase']; jumpScale: number; rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number; chicken: boolean; flap: number; mud: MudCoat; lift: number; still: number }
 interface SheepView { rig: SheepRig; facing: number; phase: number; lastX: number; lastZ: number; speed: number; penned: boolean; hop: number; jitter: number }
 
 export class Entities {
@@ -163,8 +163,9 @@ export class Entities {
       }
       v.jump = jump.phase;
 
-      // Waiting in the lobby's row: get up to something now and then.
-      const waiting = d.lineup && v.speed < 0.3;
+      // Standing about in the hub: get up to something now and then.
+      v.still = v.speed < 0.3 ? v.still + dt : 0;
+      const waiting = pub.phase === 'lobby' && !d.lineup && d.posture === 'walk' && !d.down && v.still > 1.5;
       const idle = v.idle;
       if (waiting) tickIdle(idle, time);
       else idle.act = 'stand';
@@ -266,7 +267,7 @@ export class Entities {
     calm.position.y = 0.05;
     rig.root.add(calm);
     this.stage.scene.add(rig.root);
-    const v: DogView = { jump: 'none', jumpScale: 1, rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look), chicken: d.look.breed === 'chicken', flap: 0, mud: mudCoat(rig, d.look.breed === 'chicken'), lift: 0 };
+    const v: DogView = { jump: 'none', jumpScale: 1, rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look), chicken: d.look.breed === 'chicken', flap: 0, mud: mudCoat(rig, d.look.breed === 'chicken'), lift: 0, still: 0 };
     this.dogs.set(d.id, v);
     return v;
   }

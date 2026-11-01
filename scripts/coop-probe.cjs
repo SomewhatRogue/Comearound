@@ -24,7 +24,8 @@ const { chromium } = require('playwright');
   const after = await host.evaluate(() => { const d = [...window.__solo_room.dogs.values()].find((d) => d.look.name === 'Sam'); return [d.x, d.barks]; });
   console.log('Sam moved', before, '->', after);
   // Host starts the gentle trials; guest should see the run.
-  await host.click('[data-v="gentle"]');
+  await host.click('#hubbar [data-v="play"]');
+  await host.click('[data-act="course"][data-v="gentle"]');
   await host.click('[data-act="start"]');
   await wait(guest, () => window.__GAME_STATE__.pub.phase === 'playing', null, 30000);
   const gs = await guest.evaluate(() => JSON.parse(render_game_to_text()));

@@ -37,6 +37,13 @@ waiting on Kyle's first play. Spec: `docs/features/slice-02.md`.
 - [x] Dressing-room camera in the lobby; visible collars
 - [x] Online rooms through a Vercel WebSocket relay with Redis (replaces WebRTC/PeerJS); relay and browser tests
 
+## Done (2026-10-31, from Kyle's playtests)
+
+- [x] Online with friends on comebye.online (relay + Redis), rejoin after a crash, link preview
+- [x] Bark voices, mud and Clean dogs, play as a chicken, agility (lobby and Big Sky), lofi piano tracks
+- [x] The hub: everyone runs free in a roomier meadow; My dog / Friends / Play buttons; Versus its own section
+- [x] Highland course; Duck Pond (Gentle) and Mill Race (Tricky); three more versus fields, a match draws three
+
 ## Next (in order)
 
 1. Kyle plays it with friends (solo link first, then a hosted room). Collect taste calls:

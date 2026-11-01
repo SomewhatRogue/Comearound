@@ -404,11 +404,20 @@ describe('hazards, wind and weather', () => {
     expect(isPenned(f, s)).toBe(true);
   });
 
-  it('every course field is playable: starts, flocks and goats are on dry open ground', () => {
-    for (const c of Object.values(COURSES)) {
-      for (const f of c.fields) {
-        for (const p of [...f.starts, ...f.flocks, ...f.goats]) expect(inWater(f, p.x, p.z), `${f.id} ${p.x},${p.z}`).toBe(false);
+  it('every field is playable: starts, flocks and goats are on dry open ground, inside the fence, clear of pens and obstacles', async () => {
+    const { PRACTICE, VERSUS_POOL } = await import('../src/shared/field');
+    const fields = [...Object.values(COURSES).flatMap((c) => c.fields), ...VERSUS_POOL, PRACTICE];
+    for (const f of fields) {
+      for (const p of [...f.starts, ...f.flocks, ...f.goats]) {
+        const where = `${f.id} ${p.x},${p.z}`;
+        expect(inWater(f, p.x, p.z), where).toBe(false);
+        expect(Math.abs(p.x) < f.w / 2 - 0.6 && Math.abs(p.z) < f.d / 2 - 0.6, where).toBe(true);
+        // A flock is only where its sheep spread out from (they spawn clear of obstacles); dogs and goats stand right there.
+        if (!('n' in p)) for (const o of f.obstacles) expect(Math.hypot(p.x - o.x, p.z - o.z), `${where} vs ${o.kind}`).toBeGreaterThan(o.r + 0.8);
+        for (const pen of f.pens) expect(inPen(pen, p.x, p.z), `${where} in a pen`).toBe(false);
       }
+      // Every pen fits inside the fence.
+      for (const pen of f.pens) expect(Math.abs(pen.x) + pen.w / 2 < f.w / 2 && Math.abs(pen.z) + pen.d / 2 < f.d / 2, `${f.id} pen`).toBe(true);
     }
   });
 });
@@ -447,52 +456,59 @@ describe('challenge: exact numbers per pen', () => {
   });
 });
 
-describe('the lobby pack', () => {
-  const row = (h: ReturnType<typeof harness>) => [...h.room.dogs.values()].map((d) => [+d.x.toFixed(1), +d.z.toFixed(1)]);
-
-  it('dogs walk to their own spot in the row and stand facing the camera', () => {
-    const h = harness(3);
-    h.run(8);
-    const spots = row(h);
-    const xs = spots.map(([x]) => x).sort((p, q) => p - q);
-    expect(xs[1] - xs[0]).toBeGreaterThan(1.1);
-    expect(xs[2] - xs[1]).toBeGreaterThan(1.1);
-    expect(spots.every(([, z]) => Math.abs(z - 8.5) < 0.15)).toBe(true);
-    for (const d of h.room.dogs.values()) expect(d.rot).toBe(0);
-    // Steering does nothing while you stand in the row.
-    h.say(0, { t: 'input', dx: 1, dz: 0, sprint: false, crouch: false });
-    h.run(1);
-    expect(row(h)).toEqual(spots);
-  });
-
-  it('practising sets your dog free; stopping walks it back to its spot', () => {
-    const h = harness(2);
-    h.run(8);
-    const home = { x: h.dog(0).x, z: h.dog(0).z };
-    h.say(0, { t: 'practise', on: true });
-    h.say(0, { t: 'input', dx: 0, dz: -1, sprint: false, crouch: false });
-    h.run(1.5);
-    expect(home.z - h.dog(0).z).toBeGreaterThan(5);
-    h.say(0, { t: 'practise', on: false });
-    h.run(6);
-    expect(Math.hypot(h.dog(0).x - home.x, h.dog(0).z - home.z)).toBeLessThan(0.2);
-  });
-
-  it('the sheep ignore dogs in the row, but not a practising dog', () => {
+describe('the hub', () => {
+  it('a dog that joins trots in from the gate a few steps, then runs free', () => {
     const h = harness(1);
-    h.run(8);
+    const d = h.dog(0);
+    expect(d.x).toBeLessThan(-25);
+    // Steering does nothing while it trots in.
+    h.say(0, { t: 'input', dx: 0, dz: 1, sprint: false, crouch: false });
+    h.run(0.5);
+    expect(Math.abs(d.z - 4)).toBeLessThan(1.5);
+    h.run(3);
+    expect(d.arrive).toBeUndefined();
+    expect(d.x).toBeGreaterThan(-23);
+    // Now it's yours: it goes where you steer.
+    const z0 = d.z;
+    h.say(0, { t: 'input', dx: 0, dz: 1, sprint: false, crouch: false });
+    h.run(1.5);
+    expect(d.z - z0).toBeGreaterThan(3);
+  });
+
+  it('friends arriving get their own spots, not one on top of another', () => {
+    const h = harness(3);
+    h.run(4);
+    const ds = [...h.room.dogs.values()];
+    for (let i = 0; i < ds.length; i++) for (let j = i + 1; j < ds.length; j++) expect(Math.hypot(ds[i].x - ds[j].x, ds[i].z - ds[j].z)).toBeGreaterThan(1);
+  });
+
+  it('the sheep ignore a dog walking in, but not a dog running about', () => {
+    const h = harness(1);
     const d = h.dog(0);
     const s = h.room.sheep[0];
-    // Put the dog right next to a sheep: standing in the row, nothing happens.
     const fearNear = () => {
       for (const o of h.room.sheep) Object.assign(o, { fear: 0, vx: 0, vz: 0 });
       Object.assign(d, { x: s.x - 1.5, z: s.z });
       h.room.tick(0.05);
       return s.fear;
     };
+    d.arrive = { x: s.x - 8, z: s.z };
     expect(fearNear()).toBe(0);
-    h.say(0, { t: 'practise', on: true });
+    d.arrive = undefined;
     expect(fearNear()).toBeGreaterThan(0);
+  });
+
+  it('back from a run, everyone is in the hub together, free to run', () => {
+    const h = harness(2);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: true });
+    h.toPlaying();
+    h.say(0, { t: 'toLobby' });
+    expect(h.room.phase).toBe('lobby');
+    expect(h.room.field.id).toBe('practice');
+    for (const d of h.room.dogs.values()) {
+      expect(Math.abs(d.x) < h.room.field.w / 2 && Math.abs(d.z) < h.room.field.d / 2).toBe(true);
+      expect(d.arrive).toBeUndefined();
+    }
   });
 
   it("a pat counts once per pat (not too fast), and tells the dog's owner who it was", () => {
@@ -534,9 +550,10 @@ describe('sheep and walls', () => {
   it('sheep left against the outer fence ease back off it after a few seconds', () => {
     const h = harness(1, 3);
     h.say(0, { t: 'practise', on: true });
-    Object.assign(h.dog(0), { x: 15, z: 12 });
-    h.room.sheep.forEach((s, i) => Object.assign(s, { x: -6 + i * 0.8, z: -14.4, vx: 0, vz: 0, fear: 0 }));
-    const off = () => h.room.sheep.reduce((n, s) => n + (15 + s.z), 0) / h.room.sheep.length;
+    const half = h.room.field.d / 2;
+    Object.assign(h.dog(0), { x: h.room.field.w / 2 - 3, z: half - 3 });
+    h.room.sheep.forEach((s, i) => Object.assign(s, { x: -6 + i * 0.8, z: -(half - 0.6), vx: 0, vz: 0, fear: 0 }));
+    const off = () => h.room.sheep.reduce((n, s) => n + (half + s.z), 0) / h.room.sheep.length;
     const start = off();
     h.run(8);
     expect(off() - start).toBeGreaterThan(1.2);
@@ -608,7 +625,7 @@ describe('agility', () => {
   it('the lobby has a whole course, clear of trees, rocks and the pen, inside the field', async () => {
     const { PRACTICE } = await import('../src/shared/field');
     const pieces = PRACTICE.agility!;
-    expect(pieces.map((p) => p.kind)).toEqual(['hurdle', 'hurdle', 'tunnel', 'weave', 'tire', 'hurdle', 'table']);
+    expect(pieces.map((p) => p.kind)).toEqual(['hurdle', 'tire', 'tunnel', 'weave', 'hurdle', 'hurdle', 'table']);
     for (const p of pieces) {
       expect(Math.abs(p.x)).toBeLessThan(PRACTICE.w / 2 - 3);
       expect(Math.abs(p.z)).toBeLessThan(PRACTICE.d / 2 - 3);
@@ -662,12 +679,12 @@ describe('agility', () => {
         }
         if (p.kind === 'weave' && !weave) {
           // Straight past, outside the poles.
-          for (let a = -3; a <= 3; a += 0.1) { const q = pt(p, a, 1.6); go(q.x, q.z); }
+          for (let a = -3.6; a <= 3.6; a += 0.1) { const q = pt(p, a, 2); go(q.x, q.z); }
           continue;
         }
-        for (let a = -3; a <= 3; a += 0.1) {
+        for (let a = -3.6; a <= 3.6; a += 0.1) {
           // In and out between the poles: a different side of each.
-          const lat = p.kind === 'weave' ? 0.35 * Math.sin(((a + 0.4) / 0.8) * Math.PI) : 0;
+          const lat = p.kind === 'weave' ? 0.4 * Math.sin(((a + 2.75) / 1.1 + 0.5) * Math.PI) : 0;
           const q = pt(p, a, lat);
           go(q.x, q.z);
         }
@@ -682,14 +699,31 @@ describe('agility', () => {
     expect(skipped.finished).toBeUndefined();
   });
 
+  it('a piece out of order says which is next; the tyre counts near its edge (phones), not past it', async () => {
+    const { PRACTICE } = await import('../src/shared/field');
+    const { AgilityRun } = await import('../src/shared/agilityrun');
+    const tire = PRACTICE.agility!.find((p) => p.kind === 'tire')!;
+    const through = (lat: number, run = new AgilityRun(PRACTICE.agility!)) => {
+      const out: { took?: number; wrong?: number }[] = [];
+      for (let a = -2, now = 0; a <= 2; a += 0.1, now += 50) { const q = pt(tire, a, lat); out.push(run.step(q.x, q.z, false, 0.05, now)); }
+      return { took: out.find((r) => r.took)?.took, wrong: out.find((r) => r.wrong)?.wrong };
+    };
+    // The tyre is piece 2: with no round going, taking it says start at 1.
+    expect(through(0)).toEqual({ took: undefined, wrong: 1 });
+    // Mid-round (piece 1 taken), near the tyre's edge still counts; well past it doesn't.
+    const after1 = () => { const r = new AgilityRun(PRACTICE.agility!); const h = PRACTICE.agility![0]; for (let a = -2, now = 0; a <= 2; a += 0.1, now += 50) { const q = pt(h, a, 0); r.step(q.x, q.z, false, 0.05, now); } return r; };
+    expect(through(0.85, after1()).took).toBe(2);
+    expect(through(1.4, after1()).took).toBeUndefined();
+  });
+
   it('weaving the wrong way (same side of two poles) breaks the weave', async () => {
     const { PRACTICE } = await import('../src/shared/field');
     const { AgilityRun } = await import('../src/shared/agilityrun');
     const weave = PRACTICE.agility!.find((p) => p.kind === 'weave')!;
     const run = new AgilityRun([{ ...weave, n: 1 }]);
     let took = false;
-    for (let a = -3, now = 0; a <= 3; a += 0.1, now += 50) {
-      const q = pt(weave, a, 0.35);
+    for (let a = -3.6, now = 0; a <= 3.6; a += 0.1, now += 50) {
+      const q = pt(weave, a, 0.4);
       if (run.step(q.x, q.z, false, 0.05, now).took) took = true;
     }
     expect(took).toBe(false);

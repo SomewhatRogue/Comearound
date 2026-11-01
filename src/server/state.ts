@@ -53,6 +53,8 @@ export interface Dog {
   auto?: BotBrain | null;
   /** Lobby: running free at the practice flock, rather than standing in the pack's row. */
   practising: boolean;
+  /** Hub: walking in from the gate to here (just joined); not steerable until it arrives. */
+  arrive?: { x: number; z: number };
   /** Pats received (counts up, so every client can show hearts once per pat), and when this dog last gave one. */
   pets: number;
   petAt: number;
@@ -124,6 +126,8 @@ export interface Room {
   field: FieldDef;
   fieldIdx: number;
   fieldCount: number;
+  /** This versus match's three fields. */
+  versusFields: FieldDef[];
   dogs: Map<string, Dog>;
   sheep: Sheep[];
   goats: Goat[];
