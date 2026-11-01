@@ -54,6 +54,8 @@ export interface Dog {
   /** Pats received (counts up, so every client can show hearts once per pat), and when this dog last gave one. */
   pets: number;
   petAt: number;
+  /** How muddy the dog is, 0 to 1 (mud wallows quickly, wading slowly). Reset each field. */
+  mud: number;
 }
 
 export interface Sheep {

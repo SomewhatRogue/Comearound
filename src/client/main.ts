@@ -3,7 +3,7 @@
  * draws the field, and exposes text state for tests (window.__GAME_STATE__, render_game_to_text).
  */
 import { fieldById, inMud, inWater, nearLowFence } from '../shared/field';
-import { BREEDS, COLLARS, DEFAULT_COAT } from '../shared/looks';
+import { BREEDS, COLLARS, DEFAULT_COAT, barkPitch, coatsFor } from '../shared/looks';
 import type { DogPub, Look, PublicView } from '../shared/protocol';
 import { DOG, HAZARD } from '../shared/tuning';
 import { collide } from '../server/physics';
@@ -14,12 +14,13 @@ import { LocalNet } from './local';
 import { Online } from './online';
 import { Party, SwitchNet } from './party';
 import { breedScale, dogMesh } from './models';
+import { mudCoat, showMud } from './mud';
 import { pickDog } from './lobbypack';
 import { Net, type NetLike } from './net';
 import { audioState, Panels } from './panels';
 import { FieldView, followCamera, glLost, glRestored, makeStage } from './scene';
 import { sfx } from './sfx';
-import { PITCH, SoundDirector } from './sounds';
+import { SoundDirector } from './sounds';
 import { WeatherView } from './weatherview';
 import { Music } from './music';
 import { Minimap } from './minimap';
@@ -74,7 +75,7 @@ const stage = makeStage(document.getElementById('game')!, lowfx, isTouch);
 const fieldView = new FieldView(stage, lowfx);
 const entities = new Entities(stage);
 entities.sizeOf = breedScale;
-entities.pitchOf = (b) => PITCH[b] ?? 1;
+entities.pitchOf = barkPitch;
 const weather = new WeatherView(stage, lowfx);
 const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement);
 const tour = new IntroTour(stage);
@@ -147,7 +148,7 @@ net.onEvent = (ev) => {
 };
 entities.onBark = (d, at) => {
   sounds.woof(d, Math.hypot(at.x - predicted.x, at.z - predicted.z));
-  hud.floatText('WOOF!', at, stage.camera, 'woof');
+  hud.floatText(d.look.breed === 'chicken' ? 'BAWK!' : 'WOOF!', at, stage.camera, 'woof');
 };
 entities.onBleat = (at) => sounds.bleat(Math.hypot(at.x - predicted.x, at.z - predicted.z));
 
@@ -369,11 +370,14 @@ w.__dogOnScreen = (id: string) => {
 
 /** Art review: every breed in a row, in a pose, with the camera close. `__lineup('crouch')`;
  * `__lineup('walk', 'corgi')` shows that breed in every build, lean to chonk, instead. */
-w.__lineup = (pose = 'walk', builds?: string) => {
+w.__lineup = (pose = 'walk', builds?: string, mud = 0) => {
   noLoop = true;
   const row = builds ? [-2, -1, 0, 1, 2].map((v) => [builds, v] as const) : BREEDS.map((b) => [b, 0] as const);
   row.forEach(([b, build], i) => {
-    const rig = dogMesh({ name: b, breed: b as Look['breed'], coat: DEFAULT_COAT[b as Look['breed']], collar: '#e4572e', eyes: b === 'collie' ? 'blue' : 'brown', build });
+    // Chickens in a builds row show off a different hen each.
+    const coat = b === 'chicken' && builds ? coatsFor('chicken')[i % 5].id : DEFAULT_COAT[b as Look['breed']];
+    const rig = dogMesh({ name: b, breed: b as Look['breed'], coat, collar: '#e4572e', eyes: b === 'collie' ? 'blue' : 'brown', build });
+    if (mud) showMud(mudCoat(rig, b === 'chicken'), mud);
     rig.root.position.set(-5.6 + i * 1.6, 0, 30);
     rig.root.rotation.y = 0.5;
     if (pose === 'crouch') { rig.rig.position.y *= 0.6; rig.front.rotation.x = 0.2; rig.head.rotation.x = 0.38; rig.legs.forEach((l) => (l.scale.y = 0.6)); }

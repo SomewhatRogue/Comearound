@@ -228,6 +228,16 @@ export const sfx = {
       noise({ dur: 0.08, f0: 700 * pitch, f1: 300 * pitch, gain: 0.08 * volume, at, q: 1.5 });
     }
   },
+  /** A chicken's bark: buk-buk-BAWK, the last note rising and squawking. */
+  bawk(pitch = 1, volume = 1) {
+    for (const at of [0, 0.11]) voice({ f0: 520 * pitch, f1: 430 * pitch, dur: 0.07, type: 'square', gain: 0.06 * volume, lp: 1800 * pitch, at });
+    voice({ f0: 620 * pitch, f1: 1050 * pitch, dur: 0.3, type: 'sawtooth', gain: 0.09 * volume, lp: 2600 * pitch, vib: 40, vibRate: 22, at: 0.24 });
+    noise({ dur: 0.18, f0: 2200 * pitch, f1: 1400 * pitch, gain: 0.05 * volume, at: 0.25, q: 2 });
+  },
+  /** A contented chicken: a soft low bok-bok. */
+  cluck(pitch = 1, volume = 1) {
+    for (const at of [0, 0.13, 0.24]) voice({ f0: 380 * pitch, f1: 300 * pitch, dur: 0.06, type: 'square', gain: 0.05 * volume, lp: 1200 * pitch, at });
+  },
   /** A sheep: baa, softer and lower than the goat, with a wobble. */
   baa(volume = 1, pitch = 1) {
     voice({ f0: 240 * pitch, f1: 210 * pitch, dur: 0.6, type: 'sawtooth', gain: 0.05 * volume, lp: 1100, vib: 9, vibRate: 9 });

@@ -6,7 +6,7 @@
  * one, and the next snapshot (full state, every tick) brings it up to date.
  */
 import { TRIALS } from '../shared/field';
-import { BREEDS, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } from '../shared/looks';
+import { BREEDS, COLLARS, DEFAULT_COAT, DOG_BREEDS, EYES, coatsFor, type Breed } from '../shared/looks';
 import type { ClientMsg, Look, PrivateEvent, ServerMsg } from '../shared/protocol';
 import { Rng } from '../shared/rng';
 import { DOG } from '../shared/tuning';
@@ -153,7 +153,7 @@ export class GameRoom implements Room {
     if (fillBots) {
       for (let i = humans; i < want; i++) {
         const id = `p${this.nextId++}`;
-        const breed = BREEDS[(i + 2) % BREEDS.length];
+        const breed = DOG_BREEDS[(i + 2) % DOG_BREEDS.length];
         const bot = blankDog(id, `bot-${id}`, { name: BOT_NAMES[i % BOT_NAMES.length], breed, coat: DEFAULT_COAT[breed], collar: COLLARS[(i + 3) % COLLARS.length], eyes: 'brown' });
         bot.connected = true;
         this.dogs.set(id, bot);
@@ -243,10 +243,11 @@ function cleanLook(l: Partial<Look> | undefined): Look {
   return {
     name: String(l?.name ?? 'Good dog').replace(/[^\p{L}\p{N} _'-]/gu, '').slice(0, 14) || 'Good dog',
     breed,
-    coat: COATS.some((c) => c.id === l?.coat) ? String(l!.coat) : DEFAULT_COAT[breed],
+    coat: coatsFor(breed).some((c) => c.id === l?.coat) ? String(l!.coat) : DEFAULT_COAT[breed],
     collar: COLLARS.includes(String(l?.collar)) ? String(l!.collar) : COLLARS[0],
     eyes: EYES.some((e) => e.id === l?.eyes) ? String(l!.eyes) : 'brown',
     build: Math.max(-2, Math.min(2, Math.round(Number(l?.build) || 0))),
+    ...(l?.voice === undefined || l?.voice === null ? {} : { voice: Math.max(-2, Math.min(2, Math.round(Number(l.voice) || 0))) }),
   };
 }
 
@@ -254,6 +255,6 @@ function blankDog(id: string, token: string, look: Look): Dog {
   return {
     id, token, look, team: 0, x: 0, z: 0, dx: 0, dz: 0, rot: 0, wantSprint: false, wantCrouch: false, posture: 'walk', stillFor: 0,
     stamina: DOG.staminaMax, frozen: 0, cower: 0, barkCd: 0, barks: 0, fieldBarks: 0, connected: false, leftAt: 0, spectator: false, bot: null,
-    practising: false, pets: 0, petAt: -9,
+    practising: false, pets: 0, petAt: -9, mud: 0,
   };
 }

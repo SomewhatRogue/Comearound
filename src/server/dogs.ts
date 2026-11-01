@@ -20,6 +20,10 @@ export function moveDog(room: Room, d: Dog, dt: number): void {
   d.stamina = Math.max(0, Math.min(DOG.staminaMax, d.stamina + (d.posture === 'sprint' ? -DOG.staminaDrain : DOG.staminaRegen) * dt));
   d.barkCd = Math.max(0, d.barkCd - dt);
   d.stillFor = moving ? 0 : d.stillFor + dt;
+  // Mud: a wallow cakes you quickly; wading through water washes it off; otherwise it dries and
+  // drops off only slowly. (Only while playing: the lobby has no mud.)
+  const muddy = inMud(room.field, d.x, d.z) ? HAZARD.mudCake : inWater(room.field, d.x, d.z) ? -HAZARD.wadeWash : -HAZARD.mudDry;
+  d.mud = Math.max(0, Math.min(1, d.mud + muddy * dt));
   const from = { x: d.x, z: d.z };
   if (moving) {
     // Mud slows you; so does wading a stream or pond.

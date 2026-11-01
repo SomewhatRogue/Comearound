@@ -15,6 +15,7 @@ import { heightAt } from './terrain';
 import { Hearts, newIdle, patSound, tickIdle, type Idle } from './lobbypack';
 import { sfx } from './sfx';
 import { dogMesh, sheepMesh, type DogRig, type SheepRig } from './models';
+import { mudCoat, showMud, type MudCoat } from './mud';
 import { TEAM_COLORS, label, type Stage } from './scene';
 
 /** How high a dog's leap over a low fence goes (the rail tops out around 0.6 m). */
@@ -52,7 +53,7 @@ const POSES: Record<string, Pose> = {
   land: { y: 0.76, front: 0.16, back: -0.04, head: -0.1, legFold: 0.76, frontLegs: -0.2, backLegs: 0.25, tail: 0.55 },
 };
 
-interface DogView { jump: Jump['phase']; jumpScale: number; rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number }
+interface DogView { jump: Jump['phase']; jumpScale: number; rig: DogRig; tag: CSS2DObject; key: string; facing: number; phase: number; pose: Pose; lastX: number; lastZ: number; speed: number; eye: THREE.Mesh; calm: THREE.Mesh; barks: number; pets: number; idle: Idle; size: number; pitch: number; chicken: boolean; flap: number; mud: MudCoat }
 interface SheepView { rig: SheepRig; facing: number; phase: number; lastX: number; lastZ: number; speed: number; penned: boolean; hop: number; jitter: number }
 
 export class Entities {
@@ -76,7 +77,7 @@ export class Entities {
   }
   /** Each dog's size and bark pitch (set by main.ts from the breed), for hearts and yips. */
   sizeOf: (breed: string) => number = () => 1;
-  pitchOf: (breed: string) => number = () => 1;
+  pitchOf: (look: DogPub['look']) => number = () => 1;
 
   /** The field being drawn (for the lie of the land and its low fences). */
   private field = fieldById('meadow');
@@ -165,7 +166,7 @@ export class Entities {
       // A pat: hearts, a yip, and a happy wiggle for a moment.
       if (d.pets > v.pets) {
         this.hearts.burst(root, v.size);
-        patSound(v.pitch, d.id === you);
+        patSound(v.pitch, d.id === you, v.chicken);
         idle.happy = 1.6;
         idle.act = 'stand';
         idle.until = time + 2;
@@ -214,6 +215,15 @@ export class Entities {
       // Cowering after lightning: a shiver.
       r.rig.position.x = d.cower ? Math.sin(time * 45) * 0.025 : 0;
       for (const e of r.ears) e.rotation.x = d.frozen ? -0.6 : jump.phase === 'leap' || d.posture === 'sprint' ? -0.4 : 0;
+      // A chicken: wings flap when it runs flat out, jumps or bawks, and its head bobs as it walks.
+      if (r.wings) {
+        v.flap = Math.max(0, v.flap - dt);
+        const flapping = !d.frozen && (gallop || jump.phase !== 'none' || v.flap > 0 || happy > 0);
+        const spread = flapping ? 0.7 + 0.6 * Math.sin(time * 34) : 0.06;
+        r.wings.forEach((w, i) => (w.rotation.z += ((i ? -1 : 1) * -spread - w.rotation.z) * Math.min(1, dt * 20)));
+        if (moving) r.head.position.z = 0.16 + Math.sin(v.phase * 2) * 0.035;
+      }
+      showMud(v.mud, d.mud ?? 0);
 
       // Teaching aids: the eye cone (crouched) and the calm ring (lying down).
       const isYou = d.id === you;
@@ -227,6 +237,7 @@ export class Entities {
       if (d.barks > v.barks) {
         this.ring(root.position.x, root.position.z, SHEEP.barkRadius, '#fff6c8');
         this.onBark(d, root.position);
+        v.flap = 0.6;
       }
       v.barks = d.barks;
     }
@@ -250,7 +261,7 @@ export class Entities {
     calm.position.y = 0.05;
     rig.root.add(calm);
     this.stage.scene.add(rig.root);
-    const v: DogView = { jump: 'none', jumpScale: 1, rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look.breed) };
+    const v: DogView = { jump: 'none', jumpScale: 1, rig, tag, key, facing: d.rot, phase: 0, pose: { ...POSES.walk }, lastX: d.x, lastZ: d.z, speed: 0, eye, calm, barks: d.barks, pets: d.pets, idle: newIdle(), size: this.sizeOf(d.look.breed), pitch: this.pitchOf(d.look), chicken: d.look.breed === 'chicken', flap: 0, mud: mudCoat(rig, d.look.breed === 'chicken') };
     this.dogs.set(d.id, v);
     return v;
   }

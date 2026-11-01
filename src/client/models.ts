@@ -8,7 +8,10 @@ import * as THREE from 'three';
 import { COATS, EYES, type Breed } from '../shared/looks';
 import type { Look } from '../shared/protocol';
 
+import { chickenMesh } from './chicken';
+
 const mats = new Map<string, THREE.MeshStandardMaterial>();
+
 export function mat(color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}): THREE.MeshStandardMaterial {
   const key = color + JSON.stringify(extra);
   let m = mats.get(key);
@@ -28,7 +31,7 @@ export function at<T extends THREE.Object3D>(o: T, x: number, y: number, z: numb
   return o;
 }
 
-function group(name: string, ...kids: THREE.Object3D[]): THREE.Group {
+export function group(name: string, ...kids: THREE.Object3D[]): THREE.Group {
   const g = new THREE.Group();
   g.name = name;
   if (kids.length) g.add(...kids);
@@ -65,7 +68,7 @@ interface BreedShape {
   bigEyes?: boolean;
 }
 
-const SHAPES: Record<Breed, BreedShape> = {
+const SHAPES: Record<Exclude<Breed, 'chicken'>, BreedShape> = {
   collie: { scale: 1, leg: 0.36, body: 0.5, girth: 0.17, snout: 0.16, ears: 'tip', tail: 'plume' },
   keeshond: { scale: 0.95, leg: 0.3, body: 0.42, girth: 0.2, snout: 0.11, ears: 'prick', tail: 'curl', fluff: 'ruff' },
   malinois: { scale: 1.06, leg: 0.42, body: 0.52, girth: 0.16, snout: 0.19, ears: 'prick', tail: 'straight' },
@@ -80,6 +83,7 @@ const SHAPES: Record<Breed, BreedShape> = {
 
 /** How big a breed is (1 = a collie), for framing the dressing-room camera. */
 export function breedScale(breed: string): number {
+  if (breed === 'chicken') return 0.62;
   return (SHAPES as Record<string, BreedShape>)[breed]?.scale ?? 1;
 }
 
@@ -95,6 +99,8 @@ export interface DogRig {
   ears: THREE.Object3D[];
   hip: number;
   leg: number;
+  /** The chicken's wings (flap when it runs, jumps or bawks). */
+  wings?: THREE.Object3D[];
 }
 
 /**
@@ -102,9 +108,10 @@ export interface DogRig {
  * head), the head pivots at the neck, each leg at its shoulder or hip.
  */
 export function dogMesh(look: Look): DogRig {
+  if (look.breed === 'chicken') return chickenMesh(look);
   // Build, lean to chonk: a rounder (or slighter) body on a little shorter (or longer) legs.
   const b = Math.max(-2, Math.min(2, look.build ?? 0));
-  const base = SHAPES[look.breed] ?? SHAPES.collie;
+  const base = (SHAPES as Record<string, BreedShape>)[look.breed] ?? SHAPES.collie;
   const s: BreedShape = { ...base, girth: base.girth * (1 + 0.15 * b), leg: base.leg * (1 - 0.05 * b), body: base.body * (1 + 0.03 * b) };
   const legThick = 1 + 0.2 * b;
   const coat = COATS.find((c) => c.id === look.coat) ?? COATS[0];

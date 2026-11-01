@@ -44,7 +44,7 @@ export function startField(room: Room): void {
   for (const d of activeDogs(room)) {
     const starts = room.field.starts.filter((s) => s.team === d.team);
     const s = starts[counts[d.team]++ % starts.length];
-    Object.assign(d, { x: s.x + room.rng.range(-0.5, 0.5), z: s.z + room.rng.range(-0.5, 0.5), dx: 0, dz: 0, stamina: DOG.staminaMax, frozen: 0, cower: 0, barkCd: 0, fieldBarks: 0, stillFor: 0 });
+    Object.assign(d, { x: s.x + room.rng.range(-0.5, 0.5), z: s.z + room.rng.range(-0.5, 0.5), dx: 0, dz: 0, stamina: DOG.staminaMax, frozen: 0, cower: 0, barkCd: 0, fieldBarks: 0, stillFor: 0, mud: 0 });
   }
   room.phase = 'intro';
   room.timeLeft = INTRO_SEC;
@@ -120,8 +120,10 @@ export function scoreField(room: Room, team: 0 | 1 | null): FieldScore {
   const goatBonus = room.goats.filter((g) => goatPenned(room, g, team)).length * SCORE.goatPenned;
   const lost = room.sheep.filter((s) => s.lost && (team === null || s.team === team)).length;
   const lostPenalty = lost * HAZARD.lostPenalty;
-  const score = Math.max(0, penned * SCORE.perSheep + timeBonus + calmBonus + goatBonus - lostPenalty);
-  return { team, penned, total, timeBonus, calmBonus, goatBonus, lost, lostPenalty, score };
+  // Clean dogs: on a field with mud, points for how clean the team's dogs are at the end.
+  const cleanBonus = room.field.mud?.length && dogs.length ? Math.round(HAZARD.cleanBonus * (1 - dogs.reduce((n, d) => n + d.mud, 0) / dogs.length)) : 0;
+  const score = Math.max(0, penned * SCORE.perSheep + timeBonus + calmBonus + goatBonus + cleanBonus - lostPenalty);
+  return { team, penned, total, timeBonus, calmBonus, goatBonus, lost, lostPenalty, cleanBonus, score };
 }
 
 export function endField(room: Room): void {

@@ -2,6 +2,26 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (night, latest): bark voices, Clean dogs, and a chicken (Claude Opus 5.5)
+
+- **The bark follows the build:** each breed has a base pitch (`BARK_PITCH`), and a chonkier dog
+  barks lower (7% per build step). Or pick it yourself: a **Bark** row (Auto, Deep, Low, Normal,
+  High, Squeaky) plays a preview when you tap it, so a Chonk with a Squeaky bark is one tap away.
+  `Look.voice` (-2..2, missing means Auto) is clamped by the room and carried on the wire.
+- **Mud cakes dogs, water washes it off:** standing in mud cakes a dog in about two seconds,
+  wading a stream washes it in about two, and it dries off slowly anywhere else (`Dog.mud`, 0..1,
+  on the wire). Drawn as brown socks creeping up the legs, muddy paws, and splotches
+  (`client/mud.ts`). **Clean dogs** on any field with mud: up to 150 points for how clean the
+  team's dogs are when the field ends (`HAZARD.cleanBonus`), on the field card and as a Clean
+  column in the results (only on courses that have mud). Rules only: it doesn't change herding,
+  bench unchanged.
+- **Play as a chicken** (`client/chicken.ts`): a round hen on the dogs' rig (so postures, the
+  jump, the lobby antics and pats all work), with comb, wattle, beak, tail fan, two yellow legs,
+  and wings that flap when it sprints, jumps, bawks or gets a pat. Five hens to choose from
+  (red, white, black, buff, speckled; chicken coats and dog coats are kept apart by `coatsFor`).
+  It bawks instead of woofing ("BAWK!" over its head), clucks when patted, and takes the same
+  build and voice options. Bots stay dogs (`DOG_BREEDS`).
+
 ## 2026-10-31 (night, later still): sprint leaps, logs and walls, a calm sky, chatty sheep (Claude Opus 5.5)
 
 - **Sprinting through a jump keeps its speed:** a sprinting dog slows only to 90% (walking: 62%) and

@@ -9,8 +9,9 @@ export type Phase = 'lobby' | 'intro' | 'playing' | 'fieldEnd' | 'results';
 export type Mode = 'trials' | 'versus';
 export type Posture = 'walk' | 'sprint' | 'crouch';
 
-/** `build`: -2 lean, -1 trim, 0 regular, 1 chunky, 2 chonk (missing means regular). */
-export interface Look { name: string; breed: Breed; coat: string; collar: string; eyes: string; build?: number }
+/** `build`: -2 lean, -1 trim, 0 regular, 1 chunky, 2 chonk (missing means regular).
+ * `voice`: the bark, -2 deep to 2 squeaky (missing means it follows the breed and build). */
+export interface Look { name: string; breed: Breed; coat: string; collar: string; eyes: string; build?: number; voice?: number }
 
 export type ClientMsg =
   | { t: 'hello'; token: string; look: Look }
@@ -50,6 +51,8 @@ export interface DogPub {
   lineup: boolean;
   /** Pats received: counts up, so each pat shows its hearts once. */
   pets: number;
+  /** How muddy this dog is (0 clean to 1 caked), from mud wallows and wading. */
+  mud: number;
 }
 
 export interface SheepPub {
@@ -89,6 +92,8 @@ export interface FieldScore {
   /** Sheep lost through gaps in the fence, and the points that cost. */
   lost: number;
   lostPenalty: number;
+  /** Fields with mud or water: points for keeping the dogs clean. */
+  cleanBonus: number;
   score: number;
 }
 

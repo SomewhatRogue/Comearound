@@ -59,9 +59,10 @@ export class Hearts {
   }
 }
 
-/** A pat: a happy yip, pitched to the dog. */
-export function patSound(pitch: number, near: boolean): void {
-  sfx.woof(pitch * 1.35, near ? 0.3 : 0.15);
+/** A pat: a happy yip pitched to the dog (a chicken clucks). */
+export function patSound(pitch: number, near: boolean, chicken = false): void {
+  if (chicken) sfx.cluck(pitch * 1.2, near ? 0.6 : 0.3);
+  else sfx.woof(pitch * 1.35, near ? 0.3 : 0.15);
   sfx.chime(near ? 7 : 4);
 }
 

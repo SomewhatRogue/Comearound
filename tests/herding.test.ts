@@ -542,3 +542,59 @@ describe('sheep and walls', () => {
     expect(off() - start).toBeGreaterThan(1.2);
   });
 });
+
+describe('mud and clean dogs', () => {
+  it('mud cakes a dog, wading the brook washes it off', () => {
+    const h = onField('tricky', 0);
+    const d = h.dog(0);
+    const m = h.room.field.mud![0];
+    Object.assign(d, { x: m.x, z: m.z });
+    h.say(0, { t: 'input', dx: 0, dz: 0, sprint: false, crouch: false });
+    h.run(2.5);
+    expect(d.mud).toBeGreaterThan(0.9);
+    // Into the brook (away from the bridges), standing in the water.
+    Object.assign(d, { x: -1, z: -12 });
+    expect(inWater(h.room.field, d.x, d.z)).toBe(true);
+    h.run(2.5);
+    expect(d.mud).toBeLessThan(0.05);
+  });
+
+  it('the Clean bonus is scored only on fields with mud, and a muddy team loses it', async () => {
+    const { scoreField } = await import('../src/server/round');
+    const h = onField('tricky', 0);
+    const d = h.dog(0);
+    d.mud = 0;
+    expect(scoreField(h.room, null).cleanBonus).toBe(150);
+    d.mud = 1;
+    expect(scoreField(h.room, null).cleanBonus).toBe(0);
+    const g = harness(1);
+    g.say(0, { t: 'start', mode: 'trials', fillBots: false });
+    g.toPlaying();
+    g.dog(0).mud = 0;
+    expect(scoreField(g.room, null).cleanBonus).toBe(0);
+  });
+});
+
+describe('looks', () => {
+  it('voice is kept when given and clamped; chickens are for players only', () => {
+    const h = harness(1);
+    h.say(0, { t: 'look', look: { name: 'Bok', breed: 'chicken', coat: 'hen-speckled', collar: '#e4572e', eyes: 'brown', build: 2, voice: 7 } });
+    const l = h.dog(0).look;
+    expect(l.breed).toBe('chicken');
+    expect(l.coat).toBe('hen-speckled');
+    expect(l.voice).toBe(2);
+    // A dog coat on a chicken falls back to the chicken default.
+    h.say(0, { t: 'look', look: { name: 'Bok', breed: 'chicken', coat: 'black-white', collar: '#e4572e', eyes: 'brown' } });
+    expect(h.dog(0).look.coat).toBe('hen-red');
+    expect(h.dog(0).look.voice).toBeUndefined();
+    h.say(0, { t: 'start', mode: 'trials', fillBots: true });
+    expect([...h.room.dogs.values()].filter((d) => d.bot).every((d) => d.look.breed !== 'chicken')).toBe(true);
+  });
+
+  it('a chonky dog barks lower unless you pick its voice yourself', async () => {
+    const { barkPitch } = await import('../src/shared/looks');
+    const base = { name: 'A', breed: 'corgi' as const, coat: 'x', collar: '#fff', eyes: 'brown' };
+    expect(barkPitch({ ...base, build: 2 })).toBeLessThan(barkPitch({ ...base, build: -2 }));
+    expect(barkPitch({ ...base, build: 2, voice: 2 })).toBeGreaterThan(barkPitch({ ...base, build: -2 }));
+  });
+});

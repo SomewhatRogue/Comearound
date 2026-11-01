@@ -40,11 +40,11 @@ export function encodeView(v: PublicView): WireView {
     p: v.pens.map((p) => [p.count, p.quota ?? -1, p.closed ? 1 : 0]),
     d: v.dogs.map((d) => [
       d.id, d.look.name, d.look.breed, d.look.coat, d.look.collar, d.look.eyes, d.team, q(d.x), q(d.z), a(d.rot), POSTURES.indexOf(d.posture),
-      (d.down ? 1 : 0) | (d.frozen ? 2 : 0) | (d.cower ? 4 : 0) | (d.bot ? 8 : 0) | (d.connected ? 16 : 0) | (d.spectator ? 32 : 0) | (d.lineup ? 64 : 0), d.barks, d.pets, d.look.build ?? 0,
+      (d.down ? 1 : 0) | (d.frozen ? 2 : 0) | (d.cower ? 4 : 0) | (d.bot ? 8 : 0) | (d.connected ? 16 : 0) | (d.spectator ? 32 : 0) | (d.lineup ? 64 : 0), d.barks, d.pets, d.look.build ?? 0, d.look.voice ?? 9, Math.round(d.mud * 20),
     ]),
     s: v.sheep.flatMap((s) => [s.id, q(s.x), q(s.z), a(s.rot), Math.round(s.fear * 20), (team(s.team) + 1) | (s.penned ? 4 : 0) | (s.lost ? 8 : 0)]),
     g: v.goats.map((g) => [g.id, q(g.x), q(g.z), a(g.rot), MOODS.indexOf(g.mood), a(g.annoy), g.target, g.bleats, g.penned ? 1 : 0]),
-    fs: v.fieldScores.map((f) => f.map((s) => [team(s.team), s.penned, s.total, s.timeBonus, s.calmBonus, s.goatBonus, s.lost, s.lostPenalty, s.score])),
+    fs: v.fieldScores.map((f) => f.map((s) => [team(s.team), s.penned, s.total, s.timeBonus, s.calmBonus, s.goatBonus, s.lost, s.lostPenalty, s.score, s.cleanBonus])),
     lb: v.leaderboard.slice(0, 5).map((r) => [r.names.map((n) => n.slice(0, 14)), r.score, MODES.indexOf(r.mode), r.course, r.when]),
   };
 }
@@ -71,10 +71,10 @@ export function decodeView(w: WireView): PublicView {
       const f = d[11] as number;
       return {
         id: d[0] as string,
-        look: { name: d[1] as string, breed: d[2] as Breed, coat: d[3] as string, collar: d[4] as string, eyes: d[5] as string, build: (d[14] as number) || 0 },
+        look: { name: d[1] as string, breed: d[2] as Breed, coat: d[3] as string, collar: d[4] as string, eyes: d[5] as string, build: (d[14] as number) || 0, ...((d[15] as number) !== undefined && d[15] !== 9 ? { voice: d[15] as number } : {}) },
         team: d[6] as 0 | 1, x: uq(d[7] as number), z: uq(d[8] as number), rot: ua(d[9] as number), posture: POSTURES[d[10] as number] ?? 'walk',
         down: !!(f & 1), frozen: !!(f & 2), cower: !!(f & 4), bot: !!(f & 8), connected: !!(f & 16), spectator: !!(f & 32), barks: d[12] as number,
-        lineup: !!(f & 64), pets: (d[13] as number) || 0,
+        lineup: !!(f & 64), pets: (d[13] as number) || 0, mud: ((d[16] as number) || 0) / 20,
       };
     }),
     sheep,
@@ -82,7 +82,7 @@ export function decodeView(w: WireView): PublicView {
       id: g[0] as number, x: uq(g[1] as number), z: uq(g[2] as number), rot: ua(g[3] as number), mood: MOODS[g[4] as number] ?? 'wander',
       annoy: ua(g[5] as number), target: g[6] as string | null, bleats: g[7] as number, penned: !!g[8],
     })),
-    fieldScores: w.fs.map((f) => f.map((s): FieldScore => ({ team: unteam(s[0]), penned: s[1], total: s[2], timeBonus: s[3], calmBonus: s[4], goatBonus: s[5], lost: s[6], lostPenalty: s[7], score: s[8] }))),
+    fieldScores: w.fs.map((f) => f.map((s): FieldScore => ({ team: unteam(s[0]), penned: s[1], total: s[2], timeBonus: s[3], calmBonus: s[4], goatBonus: s[5], lost: s[6], lostPenalty: s[7], score: s[8], cleanBonus: s[9] ?? 0 }))),
     leaderboard: w.lb.map((r): LeaderRow => ({ names: r[0] as string[], score: r[1] as number, mode: MODES[r[2] as number] ?? 'trials', course: r[3] as CourseId, when: r[4] as number })),
   };
 }

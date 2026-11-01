@@ -4,12 +4,13 @@
  * use data-act attributes and one listener.
  */
 import { COURSES, fieldById, type CourseId } from '../shared/field';
-import { BREEDS, BREED_NAMES, BUILDS, COATS, COLLARS, DEFAULT_COAT, EYES, type Breed } from '../shared/looks';
+import { BREEDS, BREED_NAMES, BUILDS, COLLARS, DEFAULT_COAT, EYES, VOICES, coatsFor, type Breed } from '../shared/looks';
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
 /** Extra lobby lines from whichever online layer is running (friends on the page, or an online room). */
 export interface LobbyExtra { html(pub?: PublicView, me?: PrivateView): string; key(): string; forceBots?: boolean; join?(v: string): void; leave?(): void; retry?(): void; share?(): void; joinCode?(code: string): void; newRoom?(): void; hostRoom?(): void; copyDetails?(): void }
 import { sfx } from './sfx';
+import { bark } from './sounds';
 /** Whether sound and music are on, for the menu (main.ts fills these in). */
 export const audioState = { sound: () => true, music: () => true };
 
@@ -73,6 +74,12 @@ export class Panels {
     if (act === 'eyes') this.setLook({ ...this.look, eyes: v });
     if (act === 'collar') this.setLook({ ...this.look, collar: v });
     if (act === 'build') this.setLook({ ...this.look, build: Number(v) || 0 });
+    if (act === 'voice') {
+      const { voice: _, ...rest } = this.look;
+      this.setLook(v === 'auto' ? rest : { ...rest, voice: Number(v) });
+      // A preview, so you can hear the chonky boi squeak.
+      bark(this.look, 0.7);
+    }
     if (act === 'mode') [this.pick, this.keys.lobby] = [v as CourseId | 'versus', ''];
     if (act === 'bots') [this.bots, this.keys.lobby] = [!this.bots, ''];
     if (act === 'start') this.startPick(this.pick);
@@ -147,9 +154,12 @@ export class Panels {
   private lobbyHtml(pub: PublicView, me: PrivateView): string {
     const host = pub.hostId === me.you;
     const breeds = BREEDS.map((b) => `<button class="chip ${b === this.look.breed ? 'on' : ''}" data-act="breed" data-v="${b}">${BREED_NAMES[b]}</button>`).join('');
-    const coats = COATS.map((c) => `<button class="swatch coat ${c.id === this.look.coat ? 'on' : ''}" style="--a:${c.main};--b:${c.accent};--c:${c.mask}" data-act="coat" data-v="${c.id}" title="${c.name}" aria-label="${c.name}"></button>`).join('');
+    const coats = coatsFor(this.look.breed).map((c) => `<button class="swatch coat ${c.id === this.look.coat ? 'on' : ''}" style="--a:${c.main};--b:${c.accent};--c:${c.mask}" data-act="coat" data-v="${c.id}" title="${c.name}" aria-label="${c.name}"></button>`).join('');
     const eyes = EYES.map((e) => `<button class="chip eye-chip ${e.id === this.look.eyes ? 'on' : ''}" data-act="eyes" data-v="${e.id}"><i style="background:${e.color}"></i>${e.name}</button>`).join('');
     const builds = BUILDS.map((b) => `<button class="chip ${b.v === (this.look.build ?? 0) ? 'on' : ''}" data-act="build" data-v="${b.v}">${b.name}</button>`).join('');
+    const voice = this.look.voice;
+    const auto = voice === undefined || voice === null;
+    const voices = [`<button class="chip ${auto ? 'on' : ''}" data-act="voice" data-v="auto" title="Pitched to the breed and build">Auto</button>`, ...VOICES.map((o) => `<button class="chip ${!auto && o.v === voice ? 'on' : ''}" data-act="voice" data-v="${o.v}">${o.name}</button>`)].join('');
     const collars = COLLARS.map((c) => `<button class="swatch ${c === this.look.collar ? 'on' : ''}" style="background:${c}" data-act="collar" data-v="${c}" aria-label="collar ${c}"></button>`).join('');
     const pack = pub.dogs.filter((d) => !d.bot).map((d) => `<li><i style="background:${d.look.collar}"></i>${esc(d.look.name)} <span class="quiet">${BREED_NAMES[d.look.breed]}</span>${d.id === pub.hostId ? ' <em>host</em>' : ''}${d.connected ? '' : ' <span class="quiet">(away)</span>'}</li>`).join('');
     const modes = ([
@@ -172,10 +182,11 @@ export class Panels {
       : '<p class="touch-tip">Click a dog to give it a pat. Walk off (WASD) or press <b>Practise</b> to go and run at the flock.</p>';
     const best = this.bests.gentle || this.bests.tricky || this.bests.wild || this.bests.challenge ? `<p class="quiet">Your best runs: Gentle <b>${this.bests.gentle}</b> &middot; Tricky <b>${this.bests.tricky}</b> &middot; Wild <b>${this.bests.wild}</b> &middot; Challenge <b>${this.bests.challenge}</b></p>` : '';
     return `<button class="chip fold" data-act="fold">Practise</button><h2>Come Bye!</h2>${roomLine}
-      <label>Your dog's name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>${touchTip}
+      <label>Your ${this.look.breed === 'chicken' ? 'chicken' : 'dog'}'s name<input id="name-input" maxlength="14" value="${esc(this.look.name)}"></label>${touchTip}
       <div class="label">Breed</div><div class="row wrap">${breeds}</div>
       <div class="label">Coat</div><div class="swatches">${coats}</div>
       <div class="label">Build</div><div class="row wrap">${builds}</div>
+      <div class="label">${this.look.breed === 'chicken' ? 'Bawk' : 'Bark'}</div><div class="row wrap">${voices}</div>
       <div class="label">Eyes</div><div class="row wrap">${eyes}</div>
       <div class="label">Collar</div><div class="swatches">${collars}</div>
       <div class="label">How to herd</div><ul class="how-mini">
@@ -204,14 +215,16 @@ export class Panels {
         <tr class="total"><td>Total</td><td class="t0">${a}</td><td class="t1">${b}</td></tr><tr><td class="quiet">Fields won</td><td class="t0">${wins[0]}</td><td class="t1">${wins[1]}</td></tr></tbody></table>${again}</div>`;
     }
     const run = runTotal(pub.fieldScores, null);
+    // The Clean column only on courses with mud in them.
+    const muddy = COURSES[pub.course].fields.some((f) => f.mud?.length);
     const rows = pub.fieldScores.map((f, i) => {
       const s = f[0];
-      return `<tr style="--d:${i * 0.35}s"><td>${COURSES[pub.course].fields[i]?.name ?? `Field ${i + 1}`}</td><td>${s.penned}/${s.total}${s.lost ? ` <span class="bad">-${s.lost} lost</span>` : ''}</td><td>+${s.timeBonus}</td><td>+${s.calmBonus}</td><td>${s.goatBonus ? '+' + s.goatBonus : ''}</td><td class="pts">${s.score}</td></tr>`;
+      return `<tr style="--d:${i * 0.35}s"><td>${COURSES[pub.course].fields[i]?.name ?? `Field ${i + 1}`}</td><td>${s.penned}/${s.total}${s.lost ? ` <span class="bad">-${s.lost} lost</span>` : ''}</td><td>+${s.timeBonus}</td><td>+${s.calmBonus}</td><td>${s.goatBonus ? '+' + s.goatBonus : ''}</td>${muddy ? `<td>${s.cleanBonus ? '+' + s.cleanBonus : ''}</td>` : ''}<td class="pts">${s.score}</td></tr>`;
     }).join('');
     const rows2 = pub.leaderboard.filter((r) => r.course === pub.course);
     const board = rows2.map((r, i) => `<li class="${r.score === run && i === rows2.findIndex((q) => q.score === run) ? 'this' : ''}"><b>${i + 1}</b><span>${r.names.map(esc).join(', ')}</span><span class="pts">${r.score}</span></li>`).join('');
     return `<div class="sheet results"><h4>Co-op Trials: ${COURSES[pub.course].name}</h4><h2>${run} points</h2>${this.newBest ? '<p class="banner">New best for this browser!</p>' : `<p class="quiet">Your best: ${this.best}</p>`}
-      <table><thead><tr><th>Field</th><th>Sheep</th><th>Time</th><th>Calm</th><th>Goat</th><th>Score</th></tr></thead><tbody>${rows}</tbody></table>
+      <table><thead><tr><th>Field</th><th>Sheep</th><th>Time</th><th>Calm</th><th>Goat</th>${muddy ? '<th>Clean</th>' : ''}<th>Score</th></tr></thead><tbody>${rows}</tbody></table>
       <h3>Leaderboard (this room)</h3><ol class="board">${board}</ol>${again}</div>`;
   }
 }
@@ -232,6 +245,7 @@ function fieldCard(pub: PublicView, me: PrivateView): string {
       ['Time left', s.timeBonus ? '' : 'pen them all to earn it', s.timeBonus],
       ['Calm herding', 'settled flock, soft feet, few barks', s.calmBonus],
       ...(s.goatBonus ? [[s.goatBonus > 250 ? 'Goats!' : 'The goat!', 'penned', s.goatBonus] as const] : []),
+      ...(field.mud?.length ? [['Clean dogs', s.cleanBonus > 140 ? 'not a speck of mud' : 'stayed out of the mud', s.cleanBonus] as const] : []),
       ...(s.lost ? [['Lost sheep', `${s.lost} out the broken fence`, -s.lostPenalty] as const] : []),
     ];
     return `<div class="tally ${s.team === null ? '' : `team${s.team}`}">${s.team === null ? '' : `<h3>${TEAM_NAMES[s.team]}</h3>`}

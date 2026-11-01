@@ -14,11 +14,15 @@ describe('the live-room snapshot', () => {
     room.message('c0', JSON.stringify({ t: 'start', mode: 'trials', fillBots: true, course: 'wild' }));
     // Jump to the biggest pasture, mid-field, with a full run of scores and a full leaderboard.
     for (let t = 0; t < 12; t++) room.tick(0.05);
-    const score = { team: null, penned: 23, total: 24, timeBonus: 240, calmBonus: 180, goatBonus: 250, lost: 1, lostPenalty: 75, score: 2895 };
+    const score = { team: null, penned: 23, total: 24, timeBonus: 240, calmBonus: 180, goatBonus: 250, lost: 1, lostPenalty: 75, cleanBonus: 120, score: 2895 };
     room.fieldScores = [[score], [score], [score]];
     room.leaderboard = Array.from({ length: 10 }, (_, i) => ({ names: ['Wigglebottom1', 'Wigglebottom2', 'Wigglebottom3', 'Wigglebottom4'], score: 9000 - i, mode: 'trials' as const, course: 'wild' as const, when: 1793000000000 + i }));
     const big = fieldById('bigsky');
     room.field = big;
+    // A squeaky chonk, half caked in mud.
+    const first = [...room.dogs.values()][0];
+    first.look = { ...first.look, build: 2, voice: 2 };
+    first.mud = 0.45;
     const v = publicView(room);
     v.sheep = Array.from({ length: big.flocks.reduce((n, f) => n + f.n, 0) }, (_, i) => ({ id: i, x: -33.33 + i, z: 21.17, rot: -3.14, fear: 0.73, team: null, penned: i % 2 === 0, lost: i === 5 }));
     const json = JSON.stringify(encodeView(v));
@@ -30,6 +34,9 @@ describe('the live-room snapshot', () => {
       expect(Math.abs(s.x - v.sheep[i].x)).toBeLessThan(0.03);
       expect([s.penned, s.lost, s.team]).toEqual([v.sheep[i].penned, v.sheep[i].lost, v.sheep[i].team]);
     });
+    expect(back.dogs.map((d) => d.mud)).toEqual(v.dogs.map((d) => d.mud));
+    expect(back.dogs[0].look.voice).toBe(2);
+    expect(back.dogs[1].look.voice).toBeUndefined();
     expect(back.pens).toEqual(v.pens);
     expect(back.fieldScores).toEqual(v.fieldScores);
     expect(back.leaderboard).toEqual(v.leaderboard.slice(0, 5));

@@ -103,6 +103,13 @@ export const HAZARD = {
   brambleKick: 4.5,
   /** Sheep out through a gap in the fence: points lost each. */
   lostPenalty: 75,
+  /** Mud on a dog: how fast a wallow cakes it (per second), how fast wading washes it off, how
+   * fast it dries and drops off otherwise. */
+  mudCake: 0.5,
+  wadeWash: 0.45,
+  mudDry: 0.012,
+  /** Fields with mud: up to this many points for clean dogs at the end (scaled by how clean). */
+  cleanBonus: 150,
 };
 
 /** Weather. */

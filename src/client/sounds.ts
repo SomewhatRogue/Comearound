@@ -4,9 +4,15 @@
  * way, and the end of a field. It compares each snapshot with the last one.
  */
 import type { DogPub, PrivateView, PublicView } from '../shared/protocol';
+import { barkPitch } from '../shared/looks';
+import type { Look } from '../shared/protocol';
 import { sfx } from './sfx';
 
-export const PITCH: Record<string, number> = { pug: 1.6, corgi: 1.3, keeshond: 1.1, collie: 1, poodle: 0.95, husky: 0.92, golden: 0.88, malinois: 0.85 };
+/** A dog's bark (or a chicken's bawk), at its own pitch: the breed, then its build or chosen voice. */
+export function bark(look: Look, volume = 1): void {
+  if (look.breed === 'chicken') sfx.bawk(barkPitch(look), volume);
+  else sfx.woof(barkPitch(look), volume);
+}
 
 export class SoundDirector {
   private phase = '';
@@ -21,7 +27,7 @@ export class SoundDirector {
 
   /** A dog barked at `at`; quieter the further it is from you. */
   woof(d: DogPub, dist: number): void {
-    sfx.woof(PITCH[d.look.breed] ?? 1, Math.max(0.15, 1 - dist / 30));
+    bark(d.look, Math.max(0.15, 1 - dist / 30));
   }
 
   bleat(dist: number): void {
