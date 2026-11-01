@@ -95,6 +95,8 @@ export class RelaySocket {
       this.heardAt = performance.now();
       try {
         const m = JSON.parse(String(e.data)) as RelayMsg;
+        // Told we host: say something at once, since only what a host sends keeps the room its.
+        if (m.t === 'role' && m.role === 'host' && ws.readyState === WebSocket.OPEN) ws.send('{"ping":1}');
         if (m.t !== 'pong') this.onMessage(m);
       } catch { /* not ours */ }
     };

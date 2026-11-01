@@ -17,8 +17,11 @@ import { GameRoom, TICK_HZ } from './game';
 // Vercel's do: through Redis if REDIS_URL is set, else a shared in-memory bus. New connections
 // alternate between them, so local tests cover friends landing on different instances.
 const relayBus = { kv: new Map(), subs: new Map() };
-const relays = Promise.all([0, 1].map(async () => new Relay(process.env.REDIS_URL ? await redisBackend(process.env.REDIS_URL) : memoryBackend(relayBus))));
+const newRelay = async () => new Relay(process.env.REDIS_URL ? await redisBackend(process.env.REDIS_URL) : memoryBackend(relayBus));
+const relays = Promise.all([0, 1].map(newRelay));
 let relayTurn = 0;
+/** Each relay instance's sockets, so a test can crash one (`/__crash_instance?i=0`). */
+const instSockets: Set<import('ws').WebSocket>[] = [new Set(), new Set()];
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DIST = join(process.cwd(), 'dist');
@@ -44,6 +47,21 @@ function roomFor(name: string) {
 
 const http = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://x');
+  // Test hook: one relay instance dies the way a crashed function does: its sockets drop, and it
+  // never gets to say who left. A fresh instance takes its place.
+  if (url.pathname === '/__crash_instance') {
+    const i = Number(url.searchParams.get('i')) % 2;
+    void relays.then(async (r) => {
+      for (const ws of instSockets[i]) {
+        ws.removeAllListeners('close');
+        ws.terminate();
+      }
+      instSockets[i].clear();
+      r[i] = await newRelay();
+    });
+    res.end(`crashed relay instance ${i}`);
+    return;
+  }
   if (url.pathname === '/__report') {
     const r = rooms.get(url.searchParams.get('room') ?? '');
     res.end(r ? r.game.report() : 'no such room');
@@ -58,7 +76,10 @@ const http = createServer((req, res) => {
 const wss = new WebSocketServer({ server: http });
 wss.on('connection', (ws, req) => {
   if ((req.url ?? '').startsWith('/api/room')) {
-    void relays.then((r) => r[relayTurn++ % 2].attach(ws, new URL(req.url ?? '/', 'http://localhost')));
+    const i = relayTurn++ % 2;
+    instSockets[i].add(ws);
+    ws.on('close', () => instSockets[i].delete(ws));
+    void relays.then((r) => r[i].attach(ws, new URL(req.url ?? '/', 'http://localhost')));
     // RELAY_MAX_MS: end each connection after this long, the way Vercel ends a function at its
     // maximum duration. The relay sees it close; the browser isn't told (seen live: a host's phone
     // only noticed by its heartbeat), so its socket goes silent, then really closes later.

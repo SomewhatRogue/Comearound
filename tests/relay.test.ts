@@ -22,10 +22,15 @@ async function instance(backend: Backend, staleMs = 600): Promise<{ port: number
   return { port: (server.address() as AddressInfo).port, close: () => (wss.clients.forEach((c) => c.terminate()), server.close()) };
 }
 
-function player(port: number, room: string, id: string, want: 'host' | 'take' | 'join') {
+/** A player's socket. Like the game, it says something as soon as it's told it hosts (unless `silent`: a crashed page). */
+function player(port: number, room: string, id: string, want: 'host' | 'take' | 'join', silent = false) {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/api/room?room=${room}&id=${id}&want=${want}`);
   const msgs: Msg[] = [];
-  ws.on('message', (d) => msgs.push(JSON.parse(String(d))));
+  ws.on('message', (d) => {
+    const m = JSON.parse(String(d)) as Msg;
+    msgs.push(m);
+    if (!silent && m.t === 'role' && m.role === 'host') ws.send('{"ping":1}');
+  });
   const until = async (pred: (m: Msg) => boolean, ms = 4000): Promise<Msg> => {
     const end = Date.now() + ms;
     for (;;) {
@@ -117,7 +122,7 @@ for (const be of backends) {
 
     it('a host that goes quiet (a phone in the background) can be replaced, and steps down when it comes back', async () => {
       const room = code();
-      const host = player(A.port, room, 'kyle-0004', 'host');
+      const host = player(A.port, room, 'kyle-0004', 'host', true);
       await host.until((m) => m.t === 'role' && m.role === 'host');
       await wait(900); // longer than this test's stale time
       const ava = player(B.port, room, 'ava-00004', 'take');
@@ -168,6 +173,53 @@ for (const be of backends) {
       [host, sam].forEach((p) => p.close());
     });
 
+    it('a host that keeps reconnecting but never says anything (a crashed page) does not keep the room', async () => {
+      const room = code();
+      const ghost = player(A.port, room, 'kyle-0006', 'host', true);
+      await ghost.until((m) => m.role === 'host');
+      const sam = player(B.port, room, 'sam-00006', 'join');
+      await sam.until((m) => m.role === 'guest');
+      // Silent past the stale time, then a fresh connection (its heartbeat timer gave up on the old one).
+      await wait(700);
+      const ghost2 = player(B.port, room, 'kyle-0006', 'take', true);
+      await ghost2.until((m) => m.t === 'role');
+      // A friend who was in the room asks to take it: it's theirs.
+      const sam2 = player(A.port, room, 'sam-00006', 'take');
+      expect(await sam2.until((m) => m.t === 'role')).toMatchObject({ role: 'host' });
+      [ghost, ghost2, sam, sam2].forEach((p) => p.close());
+    });
+
+    it("a host whose connection closed and who reconnects without a word doesn't win the room back", async () => {
+      const room = code();
+      const ghost = player(A.port, room, 'kyle-0009', 'host', true);
+      await ghost.until((m) => m.role === 'host');
+      const sam = player(B.port, room, 'sam-00009', 'join');
+      await sam.until((m) => m.role === 'guest');
+      ghost.close();
+      await sam.until((m) => m.t === 'left');
+      const ghost2 = player(A.port, room, 'kyle-0009', 'host', true);
+      await ghost2.until((m) => m.t === 'role');
+      const sam2 = player(B.port, room, 'sam-00009', 'take');
+      expect(await sam2.until((m) => m.t === 'role')).toMatchObject({ role: 'host' });
+      // And when the old host does speak again, it's told who has the room.
+      await ghost2.until((m) => m.t === 'role' && m.role === 'guest' && m.host === 'sam-00009');
+      [ghost2, sam, sam2].forEach((p) => p.close());
+    });
+
+    it('a new claim by a page that never speaks lasts only a moment, so a live friend gets the room', async () => {
+      const room = code();
+      const ghost = player(A.port, room, 'kyle-0010', 'take', true);
+      expect(await ghost.until((m) => m.t === 'role')).toMatchObject({ role: 'host' });
+      await wait(350); // past the claim's grace, well short of the stale time
+      const sam = player(B.port, room, 'sam-00010', 'take');
+      expect(await sam.until((m) => m.t === 'role')).toMatchObject({ role: 'host' });
+      // A live host keeps it: the ghost, asking again, is sent to them.
+      await wait(350);
+      const ghost2 = player(A.port, room, 'kyle-0010', 'take', true);
+      expect(await ghost2.until((m) => m.t === 'role')).toMatchObject({ role: 'guest', host: 'sam-00010' });
+      [ghost, ghost2, sam].forEach((p) => p.close());
+    });
+
     it("a friend who opened the code never takes the room, even when its host is away", async () => {
       const room = code();
       const sam = player(A.port, room, 'sam-00005', 'join');
@@ -178,6 +230,51 @@ for (const be of backends) {
     });
   });
 }
+
+describe('the relay spares Redis', () => {
+  it('players all on one instance barely publish; a friend on another instance still gets everything', async () => {
+    const pool = { kv: new Map(), subs: new Map() };
+    const counted = (n: { v: number }): Backend => {
+      const b = memoryBackend(pool);
+      return { ...b, bus: { ...b.bus, publish: (ch, m) => (n.v++, b.bus.publish(ch, m)) } };
+    };
+    const pa = { v: 0 }, pb = { v: 0 };
+    const [A, B] = await Promise.all([instance(counted(pa)), instance(counted(pb))]);
+    const room = code();
+    const host = player(A.port, room, 'kyle-0101', 'host');
+    await host.until((m) => m.role === 'host');
+    const ava = player(A.port, room, 'ava-00101', 'join');
+    await ava.until((m) => m.role === 'guest');
+    ava.send('kyle-0101', { t: 'hello' });
+    await host.until((m) => m.t === 'msg' && m.from === 'ava-00101');
+    // Three seconds of play on one instance: 15 snapshots a second and inputs.
+    pa.v = 0;
+    for (let i = 0; i < 45; i++) {
+      host.send('*', { s: i });
+      if (i % 3 === 0) ava.send('kyle-0101', { t: 'input', i });
+      await wait(66);
+    }
+    await ava.until((m) => m.t === 'msg' && (m.d as { s?: number }).s === 44);
+    expect(pa.v).toBeLessThanOrEqual(4);
+    // A friend lands on the other instance: hello reaches the host, and from then on everything reaches them.
+    const sam = player(B.port, room, 'sam-00101', 'join');
+    await sam.until((m) => m.role === 'guest');
+    sam.send('kyle-0101', { t: 'hello' });
+    await host.until((m) => m.t === 'msg' && m.from === 'sam-00101');
+    host.send('sam-00101', { ev: 'welcome-sam' });
+    await sam.until((m) => m.t === 'msg' && (m.d as { ev?: string }).ev === 'welcome-sam');
+    for (let i = 100; i < 130; i++) {
+      host.send('*', { s: i });
+      await wait(20);
+    }
+    await wait(150);
+    const got = sam.msgs.filter((m) => m.t === 'msg' && typeof (m.d as { s?: number }).s === 'number' && (m.d as { s: number }).s >= 100);
+    expect(got.length).toBe(30);
+    [host, ava, sam].forEach((p) => p.close());
+    A.close();
+    B.close();
+  });
+});
 
 describe('the relay when Redis drops out', () => {
   it('a command failing mid-game (the connection dropped) never takes the instance down', async () => {

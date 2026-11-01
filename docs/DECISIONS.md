@@ -2,6 +2,40 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (late night): stress testing joins and leaves, a Redis budget, docs/ONLINE.md (Claude Opus 5.5)
+
+- **`npm run stress:online`**: a room of real browsers (7 by default in our runs) that keep joining,
+  leaving, crashing silently, reloading and coming back (with their storage or as a fresh
+  browser), while the host starts and ends games and a relay instance dies now and then
+  (`/__crash_instance` in the dev server). It checks throughout for split brain, nobody hosting,
+  players stuck outside the game, guests seeing a different phase or field from the host, two dogs
+  for one player, players watching beside their own empty seat, page errors; then a calm, and a
+  strict final check. Seeded (`SEED`), so a failure's timeline can be replayed.
+- **Found by it: a ghost host.** After the host left and a relay instance died, the remaining
+  friends sat "connecting" for 40+ s. The relay log showed a crashed page (network-dead, timers
+  running) reconnecting every 10 s as the room's holder; each reconnect refreshed the claim's
+  last-seen time, so it never went stale and nobody could take over. And when its socket closed
+  first, its goodbye deleted the claim, so the next reconnect was a brand-new claim (refreshed
+  too). Now a host reconnecting to a claim it already holds doesn't refresh it, and a host's
+  goodbye keeps the claim but clears its last-seen time (the room is free to take at once); only
+  what a host sends keeps the room. Then the same seed showed several crashed pages winning the
+  stale room in turn, each new claim counted as 8 s alive, so live friends rarely got a turn. A new
+  claim now holds 1.5 s until its host speaks (the game pings the moment it's told it hosts).
+  Tests: a silent host reconnects past the stale time, or after its goodbye, or claims an empty
+  room, and a friend who asks to take it a moment later gets it (old code: guest, all three).
+  The probe also stopped carrying a player's "stuck since" across a leave and rejoin (a false alarm).
+- **Redis budget.** Kyle asked whether the free database could charge us: it can't (Upstash free
+  rejects commands over 500K a month; Vercel Hobby pauses). But the relay published every message,
+  ~100K to 250K commands an hour for 5 players, so online play would have stopped after a few hours
+  a month. A relay instance now publishes a room's messages only while another instance has players
+  in it (PUBLISH's reply counts the instances that heard it; hearing from another instance keeps
+  the room open 10 s; one message every 2 s still goes out to find newcomers; joins and leaves
+  always go out). Test: three seconds of play on one instance publish at most 4 times (it was
+  ~60); a friend on a second instance still gets the hello through, a direct welcome and every snapshot.
+- **`docs/ONLINE.md`**: how online play works, every failure seen live and the rule it taught,
+  costs, how to read the relay's Vercel logs after a playtest, the tests and their gotchas, a
+  playtest checklist, known limits. Linked from CLAUDE.md; also saved to the claude.ai Project.
+
 ## 2026-10-31 (night): games that survive the host's page, a crash-proof relay, angrier versus goats, a German Shepherd (Claude Opus 5.5)
 
 From Kyle's evening playtest (4 to 5 players, room N2HJG) and the relay's logs:

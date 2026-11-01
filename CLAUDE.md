@@ -34,6 +34,13 @@ This project is separate from Kyle's Unity games (The Old Gods, the drone game).
   profile, the relay as two instances (memory, and real Redis if `redis-server` exists), host
   frozen / dropped / leaving / closed / holding a dead socket / cut at the max duration. Boots its own servers. Run it after any change to
   `src/client/{online,relay}.ts` or `api/`. `tests/relay.test.ts` covers the relay alone.
+- `npm run stress:online` (`SEED=`, `SECS=`, `PLAYERS=`): a room of real browsers joining, leaving,
+  crashing, reloading and the relay dying at random, with invariants checked throughout. Run it
+  before a playtest and after any change to how players join, leave or take over.
+- **Read `docs/ONLINE.md` before touching online play**: how it works, every failure seen in live
+  playtests and the rule it taught, how to read the Vercel relay logs after a playtest. Redis is on
+  Upstash's free plan (500K commands a month): anything that talks to Redis per message needs
+  counting first (`docs/REALTIME-REDIS-BUDGET.md`).
 - `npm run probe`: one blocking call, one JSON report. Boots the server with a fast clock
   (`TIMESCALE`) and `AUTOPILOT=1` (human seats herd with the bot brain), opens a laptop, a friend
   and a phone held sideways, checks move/crouch/down/bark and the touch stick, plays a full run,
