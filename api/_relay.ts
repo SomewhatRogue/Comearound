@@ -57,6 +57,12 @@ const seenKey = (room: string) => `cb:seen:${room}`;
 /** The newest connection of a player: a dead old one that closes late mustn't say they left. */
 const connKey = (room: string, id: string) => `cb:conn:${room}:${id}`;
 const log = (o: Record<string, unknown>) => console.log(JSON.stringify({ relay: 1, ...o }));
+/**
+ * Work started from a socket event, with nobody awaiting it. Redis can drop its connection (it
+ * reconnects by itself); a command in flight then fails, and an uncaught failure would take down
+ * the whole instance and every player on it (seen live: "Socket closed unexpectedly", then exit).
+ */
+const safe = (p: Promise<unknown>, what: string) => void p.catch((e) => log({ ev: 'err', what, msg: String((e as Error)?.message ?? e) }));
 const chan = (room: string) => `cb:room:${room}`;
 
 export class Relay {
@@ -84,10 +90,10 @@ export class Relay {
       await this.b.bus.subscribe(chan(room), (raw) => this.fromBus(room, raw));
     }
     set.add(c);
-    sock.on('message', (data) => void this.fromPlayer(c, String(data)));
+    sock.on('message', (data) => safe(this.fromPlayer(c, String(data)), 'message'));
     sock.on('close', () => {
       clearInterval(beat);
-      void this.gone(c);
+      safe(this.gone(c), 'gone');
     });
     // A phone can vanish without closing its socket: ping it, and drop it if it stops answering.
     sock.on('pong', () => (c.alive = true));
@@ -153,7 +159,7 @@ export class Relay {
     c.alive = true;
     // Anything from the host, its heartbeat included, says it's still there. A host alone in its
     // room sends nothing but heartbeats, and must not look gone to the first friend who joins.
-    void this.touch(c);
+    safe(this.touch(c), 'touch');
     // The game's own heartbeat: answered here, never relayed.
     if ((m as { ping?: unknown }).ping) return this.tell(c, { t: 'pong' });
     const to = typeof m.to === 'string' ? m.to : '';

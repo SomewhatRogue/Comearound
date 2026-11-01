@@ -11,6 +11,7 @@ import type { Look, PrivateView, PublicView } from '../shared/protocol';
 import type { LocalNet } from './local';
 import type { SwitchNet } from './party';
 import { RelayHost, RelayNet, RelaySocket, type RelayMsg } from './relay';
+import { SAVE_FRESH_MS, saveFromView, type RoomSave } from '../server/resume';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 /** Rooms this device has hosted: opening one of those again may take it back. */
@@ -37,6 +38,16 @@ function rememberRoom(room: string, host: string): void {
     localStorage.setItem(LAST, JSON.stringify({ room, host, at: Date.now() }));
   } catch { /* no storage */ }
 }
+/** The host's save of its room, so its page coming back (after a crash, say) carries on the game. */
+const saveKey = (room: string) => `cbx-save-${room}`;
+function loadSave(room: string): RoomSave | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(saveKey(room)) ?? 'null') as RoomSave | null;
+    return v && v.v === 1 && Date.now() - v.at < SAVE_FRESH_MS ? v : null;
+  } catch {
+    return null;
+  }
+}
 const newCode = () => Array.from({ length: 5 }, () => 'BCDFGHJKLMNPQRSTVWXZ23456789'[Math.floor(Math.random() * 28)]).join('');
 
 export class Online {
@@ -53,10 +64,57 @@ export class Online {
   private shared = true;
   private helloTimer = 0;
   private takeTimer = 0;
+  /** The last game we saw as a guest in this room: if we end up hosting it, we carry on from here. */
+  private lastView: { room: string; save: RoomSave } | null = null;
 
   constructor(private room: string, private me: string, private local: LocalNet, private net: SwitchNet, private look: () => Look) {
     this.mode = room ? 'friends' : 'solo';
     this.joiner = !!room && !hosted(room);
+    // Hosting: save the game every couple of seconds (and as the page goes), so it survives the page.
+    const save = () => {
+      if (!this.host) return;
+      try {
+        const s = this.local.room.save();
+        if (s) localStorage.setItem(saveKey(this.room), JSON.stringify(s));
+        else localStorage.removeItem(saveKey(this.room));
+      } catch { /* full or private: no save */ }
+    };
+    setInterval(save, 2000);
+    addEventListener('pagehide', save);
+    // As a guest: remember the last game we saw, in case we end up hosting it.
+    setInterval(() => this.noteView(), 1000);
+    // And watch the host: one whose page has crashed can leave its socket looking open, so no
+    // goodbye ever comes. Silence that long means it's gone (it sends a snapshot 15 times a second).
+    setInterval(() => this.watchHost(), 1000);
+  }
+
+  private connectingSince = 0;
+  /** Each player waits a little differently, so two friends don't grab the room at the same moment. */
+  private readonly patience = 9000 + Math.random() * 4000;
+
+  private watchHost(): void {
+    if (this.mode !== 'friends' || !this.sock) return;
+    const now = performance.now();
+    if (this.state !== 'connecting') this.connectingSince = 0;
+    else if (!this.connectingSince) this.connectingSince = now;
+    const silent = this.state === 'guest' && !!this.guest?.lastAt && now - this.guest.lastAt > this.patience;
+    const unanswered = this.state === 'connecting' && now - this.connectingSince > this.patience + 1000;
+    if (!silent && !unanswered) return;
+    // Ask the relay again. A player who was in the room may take it over (and carry the game on);
+    // the relay only hands it over once the old host has really gone quiet.
+    this.noteView();
+    this.connectingSince = 0;
+    if (silent) this.net.onEvent({ kind: 'toast', text: "The host isn't answering. Finding the room a new host..." });
+    this.dropGuest();
+    this.set('waiting');
+    this.sock.reconnect(this.joiner ? 'join' : 'take');
+  }
+
+  private noteView(): void {
+    const g = this.guest;
+    if (!g?.pub || !g.me) return;
+    const save = saveFromView(g.pub, g.me.you, 'solo');
+    this.lastView = save ? { room: this.room, save } : null;
   }
 
   /** Bot dogs always fill in when you play solo. */
@@ -121,10 +179,23 @@ export class Online {
   }
 
   private becomeHost(): void {
+    this.noteView();
     this.dropGuest();
     this.joiner = false;
     hosted(this.room, true);
-    if (!this.host && this.sock) this.host = new RelayHost(this.sock, this.local, () => this.onChange());
+    if (!this.host && this.sock) {
+      // A game was going in this room (ours, before this page restarted; or the host's, who has
+      // gone): carry it on rather than starting everyone over in the lobby.
+      const mine = loadSave(this.room);
+      const seen = this.lastView?.room === this.room && Date.now() - this.lastView.save.at < 90_000 ? this.lastView.save : null;
+      const pick = [mine, seen].filter((s): s is RoomSave => !!s).sort((a, b) => b.at - a.at)[0];
+      if (pick && this.local.room.phase === 'lobby') {
+        this.local.resume(pick);
+        this.net.onEvent({ kind: 'toast', text: 'Picking the game up where it left off...' });
+      }
+      this.lastView = null;
+      this.host = new RelayHost(this.sock, this.local, () => this.onChange());
+    }
     this.set('host');
   }
 
@@ -236,6 +307,20 @@ export class Online {
     [this.room, this.mode, this.joiner] = [code, 'friends', !hosted(code)];
     this.setUrl();
     this.connect();
+  }
+
+  /** Opened the site afresh (no room in the link) not long after playing with friends: offer the way back. */
+  rejoinOffer(): string | null {
+    const last = lastRoom();
+    if (this.mode !== 'solo' || !last || last.room === this.room) return null;
+    return last.host ? `Back to ${last.host}'s game?` : 'Back to your game with friends?';
+  }
+
+  dismissRejoin(): void {
+    try {
+      localStorage.removeItem(LAST);
+    } catch { /* no storage */ }
+    this.onChange();
   }
 
   /** Back to the friends' room you were last in. */

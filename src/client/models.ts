@@ -66,12 +66,18 @@ interface BreedShape {
   head?: number;
   /** Big round eyes (the chihuahua). */
   bigEyes?: boolean;
+  /** Ears bigger than usual for their kind (the shepherd's tall prick ears). */
+  earSize?: number;
+  /** A dark muzzle in the mask colour, no blaze (the shepherd). */
+  darkMuzzle?: boolean;
 }
 
 const SHAPES: Record<Exclude<Breed, 'chicken'>, BreedShape> = {
   collie: { scale: 1, leg: 0.36, body: 0.5, girth: 0.17, snout: 0.16, ears: 'tip', tail: 'plume' },
   keeshond: { scale: 0.95, leg: 0.3, body: 0.42, girth: 0.2, snout: 0.11, ears: 'prick', tail: 'curl', fluff: 'ruff' },
   malinois: { scale: 1.06, leg: 0.42, body: 0.52, girth: 0.16, snout: 0.19, ears: 'prick', tail: 'straight' },
+  // Big and long in the body, tall pricked ears, a long snout and a bushy tail carried low.
+  shepherd: { scale: 1.12, leg: 0.39, body: 0.58, girth: 0.18, snout: 0.2, ears: 'prick', tail: 'feather', earSize: 1.3, darkMuzzle: true },
   poodle: { scale: 1.08, leg: 0.48, body: 0.44, girth: 0.16, snout: 0.18, ears: 'drop', tail: 'pom', fluff: 'poodle' },
   golden: { scale: 1.06, leg: 0.38, body: 0.54, girth: 0.19, snout: 0.17, ears: 'drop', tail: 'feather' },
   corgi: { scale: 0.85, leg: 0.17, body: 0.56, girth: 0.19, snout: 0.15, ears: 'bat', tail: 'stub' },
@@ -128,6 +134,8 @@ export function dogMesh(look: Look): DogRig {
   // Back half: rear torso, hind legs, tail.
   const back = group('back');
   back.add(at(along(s.girth, half * 0.9, main), 0, 0, -half * 0.45));
+  // A saddle coat: a blanket of darker colour over the back, from the withers to the rump.
+  if (coat.saddle) back.add(saddle(s.girth, half, coat.saddle, -half * 0.42));
   const tail = group('tail');
   // The tail roots on the rump's surface, and wags about that root: lift first, then swing side to side.
   tail.position.set(0, s.girth * 0.55, -half * 0.9 - s.girth * 0.72);
@@ -138,6 +146,7 @@ export function dogMesh(look: Look): DogRig {
   // Front half: chest, front legs, neck and head.
   const front = group('front');
   front.add(at(along(s.girth * 1.05, half * 0.9, main), 0, 0.01, half * 0.45));
+  if (coat.saddle) front.add(saddle(s.girth * 1.05, half * 0.8, coat.saddle, half * 0.35));
   const chest = mesh(new THREE.SphereGeometry(s.girth * 0.85, 10, 8), accent);
   front.add(at(chest, 0, -s.girth * 0.25, half + s.girth * 0.2));
   const head = group('head');
@@ -171,6 +180,15 @@ export function dogMesh(look: Look): DogRig {
   rig.position.y = hip * s.scale;
   const ears = head.children.filter((c) => c.name === 'ear');
   return { root, rig, front, back, head, tail, legs, ears, hip: hip * s.scale, leg: s.leg };
+}
+
+/** The top of a torso half in another colour: the same shape a touch bigger, showing only over the back. */
+function saddle(girth: number, half: number, color: string, z: number): THREE.Mesh {
+  const m = along(girth * 1.04, half * 0.9, color);
+  // (Lying along the body, the capsule's own z is up and down.)
+  m.scale.z *= 0.62;
+  m.position.set(0, girth * 0.42, z);
+  return m;
 }
 
 /**
@@ -218,10 +236,10 @@ function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string,
   const r = 0.15;
   head.add(mesh(new THREE.IcosahedronGeometry(r, 1), maskC));
   // Blaze and muzzle in the accent colour (the collie's white stripe and nose).
-  const muzzle = mesh(new THREE.CapsuleGeometry(0.075, Math.max(0.01, s.snout), 3, 8), s.flatFace ? maskC : accent);
+  const muzzle = mesh(new THREE.CapsuleGeometry(0.075, Math.max(0.01, s.snout), 3, 8), s.flatFace || s.darkMuzzle ? maskC : accent);
   muzzle.rotation.x = Math.PI / 2;
   head.add(at(muzzle, 0, -0.04, r * 0.7 + s.snout / 2));
-  if (!s.flatFace) head.add(at(mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), accent), 0, 0.06, r * 0.8));
+  if (!s.flatFace && !s.darkMuzzle) head.add(at(mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), accent), 0, 0.06, r * 0.8));
   head.add(at(mesh(new THREE.SphereGeometry(0.035, 6, 5), '#1b1414'), 0, -0.01, r * 0.75 + s.snout + 0.06));
   // Eyes: bright and slightly glowing, so blue eyes read from the camera.
   const eyeMat = mat(eyeColor, { emissive: eyeColor, emissiveIntensity: 0.45, roughness: 0.3 });
@@ -231,6 +249,7 @@ function addHead(head: THREE.Group, s: BreedShape, main: string, accent: string,
     head.add(at(mesh(new THREE.SphereGeometry(er * 0.42, 5, 4), '#0a0a0a', false), side * (s.bigEyes ? 0.078 : 0.072), 0.045, r * 0.85 + er * 0.85));
     const ear = group('ear');
     ear.position.set(side * 0.09, 0.1, -0.02);
+    ear.scale.setScalar(s.earSize ?? 1);
     let e: THREE.Mesh;
     switch (s.ears) {
       case 'prick':

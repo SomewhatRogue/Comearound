@@ -8,6 +8,9 @@ import http from 'node:http';
 import { WebSocketServer } from 'ws';
 import { Relay, memoryBackend, redisBackend } from './_relay.js';
 
+// Last line of defence: one failed promise must never take the instance (and its players) down.
+process.on('unhandledRejection', (e) => console.log(JSON.stringify({ relay: 1, ev: 'unhandled', msg: String((e as Error)?.message ?? e) })));
+
 const server = http.createServer((_req, res) => {
   res.writeHead(426, { 'Content-Type': 'text/plain' });
   res.end('Come Bye! rooms: connect with a WebSocket.');

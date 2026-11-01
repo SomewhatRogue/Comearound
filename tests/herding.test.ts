@@ -785,3 +785,91 @@ describe('coming back after a crash', () => {
     expect(seat.connected).toBe(true);
   });
 });
+
+describe("carrying on when the host's page restarts", () => {
+  it("the host's save picks the run up in a fresh room: same field, clock, flock and scores; players back in their seats", async () => {
+    const h = harness(2);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: true, course: 'tricky' });
+    h.toPlaying();
+    h.run(5);
+    const save = h.room.save()!;
+    expect(save.phase).toBe('playing');
+    // The page restarts: a brand-new room, picking up from the save.
+    const inbox = new Map<string, string[]>();
+    const room = new GameRoom((id, msg) => inbox.get(id)!.push(msg), { seed: 99 });
+    room.restore(save, ['tok0']);
+    expect(room.phase).toBe('playing');
+    expect(room.field.id).toBe(h.room.field.id);
+    expect(room.timeLeft).toBeCloseTo(h.room.timeLeft, 1);
+    expect(room.sheep.map((s) => [s.x.toFixed(2), s.z.toFixed(2)])).toEqual(h.room.sheep.map((s) => [s.x.toFixed(2), s.z.toFixed(2)]));
+    // The host says hello again (token tok0), then the friend (tok1): both back in their own dogs.
+    for (const i of [0, 1]) {
+      inbox.set(`n${i}`, []);
+      room.connect(`n${i}`);
+      room.message(`n${i}`, JSON.stringify({ t: 'hello', token: `tok${i}`, look: { name: `H${i}`, breed: 'collie' } }));
+    }
+    for (const i of [0, 1]) {
+      const d = [...room.dogs.values()].find((q) => q.token === `tok${i}`)!;
+      expect(d.id).toBe(h.dog(i).id);
+      expect(d.spectator).toBe(false);
+      expect(d.connected).toBe(true);
+    }
+    expect([...room.dogs.values()].filter((d) => !d.bot).length).toBe(2);
+    // The bots carry on herding.
+    expect([...room.dogs.values()].filter((d) => d.bot).length).toBeGreaterThan(0);
+    for (let t = 0; t < 40; t++) room.tick(0.05);
+    expect(room.phase).toBe('playing');
+  });
+
+  it('a friend taking over carries on from the last snapshot it saw; the others get their seats back by name', async () => {
+    const { saveFromView } = await import('../src/server/resume');
+    const { publicView } = await import('../src/server/view');
+    const h = harness(3);
+    h.say(0, { t: 'start', mode: 'versus', fillBots: true });
+    h.toPlaying();
+    h.run(3);
+    // Player 1 takes over, from what it saw: its own dog keeps its seat as 'solo'.
+    const save = saveFromView(publicView(h.room), h.dog(1).id, 'solo')!;
+    const room = new GameRoom(() => {}, { seed: 5 });
+    room.restore(save, ['solo']);
+    expect(room.mode).toBe('versus');
+    expect(room.field.id).toBe(h.room.field.id);
+    expect(room.versusFields.length).toBe(3);
+    expect(new Set(room.versusFields.map((f) => f.id)).size).toBe(3);
+    room.connect('me');
+    room.message('me', JSON.stringify({ t: 'hello', token: 'solo', look: { name: 'H1', breed: 'collie' } }));
+    expect(room.dogOf('me')!.id).toBe(h.dog(1).id);
+    // The old host and the other friend come back with their own tokens: matched by dog name.
+    for (const i of [0, 2]) {
+      room.connect(`c${i}`);
+      room.message(`c${i}`, JSON.stringify({ t: 'hello', token: `tok${i}`, look: { name: `H${i}`, breed: 'collie' } }));
+      expect(room.dogOf(`c${i}`)!.id).toBe(h.dog(i).id);
+      expect(room.dogOf(`c${i}`)!.spectator).toBe(false);
+    }
+  });
+});
+
+describe('the versus goat', () => {
+  it('has a shorter temper in versus: two barks bring it over (trials takes three)', () => {
+    const comes = (mode: 'trials' | 'versus') => {
+      const h = harness(1);
+      h.say(0, { t: 'start', mode, fillBots: false, course: 'tricky' });
+      h.toPlaying();
+      const d = h.dog(0);
+      parkOthers(h, d);
+      // Past the goats' grace period at the start of a field.
+      h.run(7);
+      for (const q of h.room.goats) q.annoy = 0;
+      const g = h.room.goats[0];
+      for (let i = 0; i < 2; i++) {
+        Object.assign(d, { x: g.x + 5, z: g.z, barkCd: 0 });
+        h.say(0, { t: 'bark' });
+        h.room.tick(0.05);
+      }
+      h.run(0.5);
+      return h.room.goats.some((q) => q.mood === 'coming' || q.mood === 'stare');
+    };
+    expect(comes('versus')).toBe(true);
+    expect(comes('trials')).toBe(false);
+  });
+});

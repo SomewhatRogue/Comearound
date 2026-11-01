@@ -178,3 +178,39 @@ for (const be of backends) {
     });
   });
 }
+
+describe('the relay when Redis drops out', () => {
+  it('a command failing mid-game (the connection dropped) never takes the instance down', async () => {
+    // A backend whose store starts failing, as Redis does while it reconnects.
+    const base = memoryBackend();
+    let failing = false;
+    const flaky: Backend = {
+      ...base,
+      store: new Proxy(base.store, { get: (t, k) => async (...a: unknown[]) => { if (failing) throw new Error('Socket closed unexpectedly'); return (t as any)[k](...a); } }),
+    };
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown) => unhandled.push(e);
+    process.on('unhandledRejection', onUnhandled);
+    const inst = await instance(flaky);
+    const room = code();
+    const h = player(inst.port, room, 'host-aaa', 'host');
+    await h.until((m) => m.role === 'host');
+    const g = player(inst.port, room, 'guest-bbb', 'join');
+    await g.until((m) => m.role === 'guest');
+    failing = true;
+    // Messages, heartbeats and a goodbye while every Redis command fails.
+    h.send('*', { hi: 1 });
+    h.ws.send(JSON.stringify({ ping: 1 }));
+    g.close();
+    await wait(200);
+    failing = false;
+    // Still alive: a new player can join and reach the host.
+    const g2 = player(inst.port, room, 'guest-ccc', 'join');
+    await g2.until((m) => m.role === 'guest');
+    process.off('unhandledRejection', onUnhandled);
+    expect(unhandled).toEqual([]);
+    h.close();
+    g2.close();
+    inst.close();
+  });
+});

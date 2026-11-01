@@ -153,13 +153,20 @@ export class RelayHost {
   readonly guests = new Set<string>();
   /** Each guest's newest connection (from their messages), so a late goodbye from an old one is ignored. */
   private conn = new Map<string, string>();
+  /** When each guest last said anything (every client speaks at least every 3 s). */
+  private heard = new Map<string, number>();
   private timer: number;
+  private sweepTimer: number;
 
   constructor(private sock: RelaySocket, private local: LocalNet, private onGuests: () => void) {
     local.remote = (conn, raw) => {
       if (this.guests.has(conn) && raw.startsWith('{"t":"event"')) this.sock.send(conn, { ev: (JSON.parse(raw) as { ev: PrivateEvent }).ev });
     };
     this.timer = window.setInterval(() => this.broadcast(), 66);
+    // A guest silent for 20 s is gone, even if no goodbye came (a relay instance that crashed can't send one).
+    this.sweepTimer = window.setInterval(() => {
+      for (const [id, at] of this.heard) if (performance.now() - at > 20000) this.drop(id);
+    }, 5000);
   }
 
   /** A message from a friend (or a friend leaving), from the relay. */
@@ -171,6 +178,7 @@ export class RelayHost {
     }
     if (m.t !== 'msg') return;
     if (m.cn) this.conn.set(m.from, m.cn);
+    this.heard.set(m.from, performance.now());
     const d = m.d as ClientMsg | null;
     if (!d || typeof d !== 'object' || typeof d.t !== 'string') return;
     const raw = JSON.stringify(d);
@@ -190,6 +198,7 @@ export class RelayHost {
 
   private drop(id: string): void {
     this.conn.delete(id);
+    this.heard.delete(id);
     if (!this.guests.delete(id)) return;
     this.local.room.disconnect(id);
     this.local.room.quietConns.delete(id);
@@ -209,6 +218,7 @@ export class RelayHost {
 
   close(): void {
     clearInterval(this.timer);
+    clearInterval(this.sweepTimer);
     for (const id of [...this.guests]) this.drop(id);
     this.local.remote = () => {};
   }

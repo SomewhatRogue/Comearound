@@ -9,7 +9,7 @@ import { dogSheet, friendsSheet, hubBar, playSheet, type PlayTab, type Sheet } f
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
 /** Extra lobby lines from whichever online layer is running (friends on the page, or an online room). */
-export interface LobbyExtra { html(pub?: PublicView, me?: PrivateView): string; key(): string; forceBots?: boolean; join?(v: string): void; leave?(): void; retry?(): void; share?(): void; joinCode?(code: string): void; newRoom?(): void; hostRoom?(): void; copyDetails?(): void; rejoin?(): void }
+export interface LobbyExtra { html(pub?: PublicView, me?: PrivateView): string; key(): string; forceBots?: boolean; join?(v: string): void; leave?(): void; retry?(): void; share?(): void; joinCode?(code: string): void; newRoom?(): void; hostRoom?(): void; copyDetails?(): void; rejoin?(): void; rejoinOffer?(): string | null; dismissRejoin?(): void }
 import { sfx } from './sfx';
 import { bark } from './sounds';
 /** Whether sound and music are on, for the menu (main.ts fills these in). */
@@ -98,6 +98,7 @@ export class Panels {
     if (act === 'newroom') this.party?.newRoom?.();
     if (act === 'hostroom') this.party?.hostRoom?.();
     if (act === 'rejoin') this.party?.rejoin?.();
+    if (act === 'norejoin') this.party?.dismissRejoin?.();
     if (act === 'copydetails') this.party?.copyDetails?.();
     if (act === 'joincode') this.party?.joinCode?.((document.getElementById('code-input') as HTMLInputElement | null)?.value ?? '');
     if (act === 'endField') {
@@ -132,10 +133,13 @@ export class Panels {
     // The hub's buttons, along the top.
     const bar = document.getElementById('hubbar')!;
     const humans = pub.dogs.filter((d) => !d.bot && d.connected).length;
-    const bk = inHub ? JSON.stringify([this.look.breed, sheet, humans]) : 'off';
+    const offer = inHub ? this.party?.rejoinOffer?.() ?? null : null;
+    const bk = inHub ? JSON.stringify([this.look.breed, sheet, humans, offer]) : 'off';
     if (bk !== this.keys.bar) {
       this.keys.bar = bk;
-      bar.innerHTML = inHub ? hubBar(this.look, sheet, humans > 1 ? `${humans} here` : '') : '';
+      // Just back after a crash (or opened the site afresh): the way back into the friends' game, front and centre.
+      const back = offer ? `<div class="rejoin-offer"><span>${esc(offer)}</span><button class="chip on" data-act="rejoin">Rejoin</button><button class="link" data-act="norejoin" aria-label="No thanks">&times;</button></div>` : '';
+      bar.innerHTML = inHub ? `<div class="hub-row">${hubBar(this.look, sheet, humans > 1 ? `${humans} here` : '')}</div>${back}` : '';
       bar.hidden = !inHub;
     }
     this.recordBest(pub);

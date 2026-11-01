@@ -17,6 +17,7 @@ import { tickGoats } from './goat';
 import { tickWind } from './wind';
 import { tickWeather } from './weather';
 import { arriveAt, gatherInHub, pet, setPractising, tickLobby } from './lobby';
+import { restoreRoom, saveRoom, type RoomSave } from './resume';
 import { freshCalm } from './calm';
 import { endField, startRun, tickRound } from './round';
 import { activeDogs, type Dog, type Room } from './state';
@@ -62,7 +63,7 @@ export class GameRoom implements Room {
   noises: Room['noises'] = [];
   rng: Rng;
   private conns = new Map<string, string>();
-  private nextId = 1;
+  nextId = 1;
   private timeScale: number;
   private autopilot: boolean;
 
@@ -255,6 +256,17 @@ export class GameRoom implements Room {
       this.dogs.delete(back.id);
       if (this.hostId === back.id) this.hostId = seat.id;
     }
+  }
+
+  /** This room as it is now, to pick up again if the host's page restarts (null in the lobby). */
+  save(): RoomSave | null {
+    return saveRoom(this);
+  }
+
+  /** Pick a game up from a save. `connected`: tokens of players already here (the host's own). */
+  restore(save: RoomSave, connected: string[] = []): void {
+    restoreRoom(this, save, connected);
+    this.conns.clear();
   }
 
   /** Clears lobby seats whose dog has been gone too long, and hands on host if needed. */

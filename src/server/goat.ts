@@ -65,15 +65,17 @@ export function tickGoats(room: Room, dt: number): void {
 
 function tickGoat(room: Room, g: Goat, dt: number): void {
   const from = { x: g.x, z: g.z };
+  // Versus goats have shorter tempers.
+  const T = room.mode === 'versus' ? { ...GOAT, ...GOAT.versus } : GOAT;
   g.stareCd -= dt;
   g.pushedT = Math.max(0, g.pushedT - dt);
-  g.annoy = Math.max(0, g.annoy - GOAT.annoyDecay * dt);
+  g.annoy = Math.max(0, g.annoy - T.annoyDecay * dt);
   const annoy = (by: string, amount: number) => {
     g.annoy = Math.min(1, g.annoy + amount);
     g.lastBarker = by;
   };
   for (const nz of room.noises) {
-    if (nz.kind === 'bark' && nz.by && Math.hypot(nz.x - g.x, nz.z - g.z) < GOAT.earshot) annoy(nz.by, GOAT.annoyPerBark);
+    if (nz.kind === 'bark' && nz.by && Math.hypot(nz.x - g.x, nz.z - g.z) < T.earshot) annoy(nz.by, T.annoyPerBark);
   }
 
   let ax = 0;
@@ -118,7 +120,7 @@ function tickGoat(room: Room, g: Goat, dt: number): void {
       if (d < 1.6) {
         g.mood = 'stare';
         g.timer = GOAT.stareSec;
-        g.stareCd = GOAT.stareCooldown;
+        g.stareCd = T.stareCooldown;
         g.annoy = 0;
         g.rot = Math.atan2(dx, dz);
         t.frozen = GOAT.stareSec;

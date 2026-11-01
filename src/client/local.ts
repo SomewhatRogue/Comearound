@@ -4,6 +4,7 @@
  * shareable solo link, and later for the single-player tutorial.
  */
 import { GameRoom, TICK_HZ } from '../server/game';
+import type { RoomSave } from '../server/resume';
 import type { ClientMsg, Look, PrivateEvent, PrivateView, PublicView, ServerMsg } from '../shared/protocol';
 import type { NetLike } from './net';
 
@@ -19,7 +20,7 @@ export class LocalNet implements NetLike {
   /** Messages for friends playing in this tab's room (hosting over the artifact's live room). */
   remote: (conn: string, raw: string) => void = () => {};
 
-  constructor(look: () => Look) {
+  constructor(private look: () => Look) {
     this.room = new GameRoom((conn, raw) => (conn === 'local' ? this.receive(raw) : this.remote(conn, raw)), { seed: Math.floor(Math.random() * 1e9) });
     this.room.connect('local');
     this.room.message('local', JSON.stringify({ t: 'hello', token: 'solo', look: look() } satisfies ClientMsg));
@@ -46,6 +47,13 @@ export class LocalNet implements NetLike {
       this.ticks++;
       this.acc -= step;
     }
+  }
+
+  /** Pick a game up from a save (this tab now hosts it), and take our own seat in it again. */
+  resume(save: RoomSave): void {
+    this.room.restore(save, ['solo']);
+    this.room.connect('local');
+    this.room.message('local', JSON.stringify({ t: 'hello', token: 'solo', look: this.look() } satisfies ClientMsg));
   }
 
   get connected(): boolean {

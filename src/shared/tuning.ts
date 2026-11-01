@@ -81,6 +81,8 @@ export const GOAT = {
   /** The stare freezes the dog it picked. */
   stareSec: 4,
   stareCooldown: 12,
+  /** Versus: shorter tempers, so a team can't just bark its way round the field. */
+  versus: { earshot: 20, annoyPerBark: 0.55, annoyDecay: 0.03, stareCooldown: 7 },
 };
 
 /** Wind carries your scent: sheep downwind of a dog, within range, get nervous and drift away. */

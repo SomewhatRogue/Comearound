@@ -2,6 +2,40 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (night): games that survive the host's page, a crash-proof relay, angrier versus goats, a German Shepherd (Claude Opus 5.5)
+
+From Kyle's evening playtest (4 to 5 players, room N2HJG) and the relay's logs:
+- **A relay instance crashed** (04:09 UTC): Redis dropped its connection ("Socket closed
+  unexpectedly"), a command started from a socket event (`void this.gone(c)` and friends) rejected
+  with nobody catching it, and Node took the instance down with every player on it. Its players'
+  goodbyes were never sent. Fix: every fire-and-forget call goes through `safe()` (logged, never
+  thrown), and `api/room.ts` has a last-resort `unhandledRejection` handler. Test: a backend that
+  fails every command mid-game; the old code fails it.
+- **Ghost guests:** a host now drops a guest it hasn't heard from in 20 s (every client speaks at
+  least every 3 s), so a crashed relay's missing goodbyes don't leave seats "connected" forever.
+- **The game lived only in the host's tab.** Kyle's page restarted mid-run (04:13); back in his
+  room it hosted a fresh game, so everyone rejoined to the lobby. Now (`server/resume.ts`): the host
+  saves its room every 2 s (and on pagehide) to localStorage; a page that becomes host of a room
+  with a fresh save (under 3 minutes) restores it, field, clock, scores, dogs, flock and goats.
+  A friend who takes over builds the same save from the last snapshot it saw. Seats come back by
+  token (the host's own save) or by dog name (after a takeover).
+- **Frozen hosts:** a crashed phone can leave its socket looking open, so no goodbye ever comes,
+  and friends (and the host's own restarted page) waited on it forever: Kyle's "couldn't fully
+  rejoin at all". Now a guest that hears nothing from its host for 9 to 13 s (each player waits a
+  little differently, so two don't grab the room at once) asks the relay again; a player who was in
+  the room may take it over once the old host has gone quiet, and carries the game on.
+- **Rejoin, front and centre:** opened afresh (no room in the link) within 3 h of a friends' game,
+  the hub shows "Back to Kyle's game? Rejoin" under its buttons, not tucked into Friends.
+- New online scenarios: **S** the host's page crashes mid-run and opens the link again; **T** the
+  host crashes for good and a friend takes over. Both: the run carries on, everyone in their own
+  dog. (A crash is simulated by cutting the page off the network both ways; Chrome's own renderer
+  crash and debugger pause wedge the test browser.)
+- **Versus goats:** two per map (one in each half) and shorter tempers in versus (`GOAT.versus`:
+  hears barks from 20 m, two barks bring it over, quicker to stare again), so a team can't bark its
+  way round the field. Bots still pen 7-7 on most seeds.
+- **German Shepherd:** long in the body, tall prick ears (`earSize`), dark muzzle, bushy tail, a deep
+  bark; a black-and-tan coat with a black saddle (`saddle`, any breed can wear it) and a sable.
+
 ## 2026-10-31 (late evening): the hub, more maps, kinder agility (Claude Opus 5.5)
 
 - **The hub** (Kyle: "we don't need a button for practice since you can just run around"): no more

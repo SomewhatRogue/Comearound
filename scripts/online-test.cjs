@@ -19,7 +19,7 @@ const timeline = [];
 const t0 = Date.now();
 const note = (s) => { const line = `${((Date.now() - t0) / 1000).toFixed(1)}s ${s}`; timeline.push(line); console.error(line); };
 const procs = [];
-const only = (k) => !process.env.ONLY || process.env.ONLY === k;
+const only = (k) => !process.env.ONLY || process.env.ONLY.split(',').includes(k);
 
 function serve(port, env) {
   // RELAY_LOG=dir keeps each server's relay log (joins, roles, goodbyes) for debugging.
@@ -42,7 +42,8 @@ const FREEZE = () => {
   window.__frozen = false;
   window.__sockets = [];
   window.WebSocket = class extends W {
-    constructor(...a) { super(...a); window.__sockets.push(this); }
+    // __dead: the page has "crashed": every socket, old or new, is dead both ways.
+    constructor(...a) { super(...a); window.__sockets.push(this); if (window.__dead) this.__zombie = true; }
     // __zombie: this socket looks open but is dead both ways (a phone back from the background).
     set onmessage(f) { super.onmessage = (e) => { if (!window.__frozen && !this.__zombie) f(e); }; }
     get onmessage() { return super.onmessage; }
@@ -229,6 +230,82 @@ const FREEZE = () => {
       note(`R: ${JSON.stringify(r)}`);
       await cdp.send('Debugger.resume').catch(() => {});
       await Promise.all([h, f, f2].map((p) => p.context().close().catch(() => {})));
+    }
+
+    // S and T: the host's page crashes mid-run (no goodbye, no unload). S: the host opens the link
+    // again and the run carries on from its save. T: the host never comes back; a friend takes the
+    // room over and carries the run on from the last snapshot it saw. Nobody lands in a lobby.
+    const runState = (p) => p.evaluate(() => { const g = window.__GAME_STATE__; return { phase: g.pub.phase, field: g.pub.fieldId, you: g.me?.you, party: window.__party.state }; });
+    const startRun = async (h, fs) => {
+      await h.click('#hubbar [data-v="play"]');
+      await h.click('[data-act="start"]');
+      await Promise.all(fs.map((f) => f.waitForFunction(() => window.__GAME_STATE__.pub.phase === 'playing', null, { timeout: 30000 })));
+      await h.waitForTimeout(3000);
+    };
+    // A crash, as a phone does it: the page goes silent both ways (no goodbye, no unload), its
+    // socket left looking open; nothing it tries afterwards gets through either.
+    const crash = (p) => p.evaluate(() => { window.__dead = true; for (const s of window.__sockets) s.__zombie = true; });
+    if (only('S')) {
+      const ctx = await browser.newContext({ viewport: { width: 1000, height: 640 } });
+      await ctx.addInitScript(FREEZE);
+      const hp = await ctx.newPage();
+      await hp.goto(`http://127.0.0.1:${PORT_MEM}/?lowfx&norender&name=Kyle`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      await hp.waitForFunction(() => window.__party, null, { timeout: 60000 });
+      await hp.click('#hubbar [data-v="friends"]');
+      await hp.click('[data-act="join"][data-v="friends"]');
+      await hp.waitForFunction(() => window.__party.state === 'host', null, { timeout: 20000 });
+      const code = await hp.evaluate(() => new URL(location.href).searchParams.get('room'));
+      const f = await joinByLink(PORT_MEM, 'Sam', code);
+      await asGuest(f);
+      await hostHas(hp, 1);
+      await startRun(hp, [f]);
+      const before = { host: await runState(hp), friend: await runState(f) };
+      note(`S: running ${JSON.stringify(before)}`);
+      // The browser comes back with what it had saved (its storage), in a fresh process.
+      await hp.waitForTimeout(2500);
+      const kept = await hp.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
+      await crash(hp);
+      note('S: host page crashed');
+      const ctx2 = await browser.newContext({ viewport: { width: 1000, height: 640 } });
+      await ctx2.addInitScript((kv) => { if (!sessionStorage.getItem('restored')) { for (const [k, v] of Object.entries(kv)) localStorage.setItem(k, v); sessionStorage.setItem('restored', '1'); } }, kept);
+      const hp2 = await ctx2.newPage();
+      await hp2.goto(`http://127.0.0.1:${PORT_MEM}/?lowfx&norender&name=Kyle&room=${code}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      for (let i = 0; i < 8; i++) {
+        await hp2.waitForTimeout(5000);
+        const dbg = async (p) => p.evaluate(() => ({ party: window.__party?.state, phase: window.__GAME_STATE__?.pub?.phase, you: window.__GAME_STATE__?.me?.you, url: location.search, save: Object.keys(localStorage).filter((k) => k.startsWith('cbx-save')).length, tok: Object.keys(localStorage).filter((k) => k.startsWith('tac-')).join(',') })).catch((e) => String(e).slice(0, 80));
+        note(`S: +${(i + 1) * 5}s host2 ${JSON.stringify(await dbg(hp2))} friend ${JSON.stringify(await dbg(f))}`);
+        if (['host', 'guest'].includes((await runState(hp2).catch(() => ({}))).party)) break;
+      }
+      note('S: host back');
+      await f.waitForFunction((you) => { const g = window.__GAME_STATE__; return ['host', 'guest'].includes(window.__party.state) && g.pub.phase !== 'lobby' && g.me?.you === you; }, before.friend.you, { timeout: 30000 }).catch(() => {});
+      const r = { before, hostAfter: await runState(hp2), friendAfter: await runState(f) };
+      // Whoever ends up hosting (the host's new page, or the friend if it stepped up first), the run carries on, everyone in their own dog.
+      // (The run may have moved on to the next field by now: what matters is nobody landed in a lobby.)
+      r.ok = [r.hostAfter, r.friendAfter].every((a) => a.phase !== 'lobby' && ['host', 'guest'].includes(a.party)) && r.hostAfter.field === r.friendAfter.field && r.hostAfter.you === before.host.you && r.friendAfter.you === before.friend.you && r.hostAfter.party !== r.friendAfter.party;
+      report.scenarios["S: the host's page crashes mid-run; it opens the link again and the run carries on"] = r;
+      note(`S: ${JSON.stringify(r)}`);
+      await Promise.all([ctx, ctx2, f.context()].map((c) => c.close().catch(() => {})));
+    }
+    if (only('T')) {
+      const { p: h, code } = await host(PORT_MEM, 'Kyle');
+      const f1 = await joinByLink(PORT_MEM, 'Sam', code);
+      const f2 = await joinByLink(PORT_MEM, 'Ava', code);
+      await Promise.all([asGuest(f1), asGuest(f2)]);
+      await hostHas(h, 2);
+      await startRun(h, [f1, f2]);
+      const before = [await runState(f1), await runState(f2)];
+      await crash(h);
+      // A friend steps up after the host has been gone a while (13 to 16 s); the other follows.
+      const carried = (p, you) => p.waitForFunction((y) => { const g = window.__GAME_STATE__; return ['host', 'guest'].includes(window.__party.state) && g.pub.phase !== 'lobby' && g.me?.you === y && g.pub.dogs.some((d) => d.id === y && !d.spectator); }, you, { timeout: 45000 }).then(() => true).catch(() => false);
+      // First someone takes the room over, then both should be in the run, in their own dogs.
+      const tookOver = await Promise.race([f1, f2].map((p) => p.waitForFunction(() => window.__party.state === 'host', null, { timeout: 45000 }).then(() => true).catch(() => false)));
+      const ok = tookOver ? await Promise.all([carried(f1, before[0].you), carried(f2, before[1].you)]) : [false, false];
+      const after = [await runState(f1), await runState(f2)];
+      const r = { before, after, carried: ok };
+      r.ok = ok.every(Boolean) && after.some((a) => a.party === 'host') && after[0].field === after[1].field;
+      report.scenarios['T: the host crashes for good; a friend takes over and the run carries on'] = r;
+      note(`T: ${JSON.stringify(r)}`);
+      await Promise.all([h, f1, f2].map((p) => p.context().close().catch(() => {})));
     }
 
     // H: the host makes a room and waits a while (texting the code) before the friend types it in.

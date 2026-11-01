@@ -3,18 +3,23 @@
  * Breeds change the model's shape (ears, tail, legs, snout, fluff); coats change its colours.
  * The first four are the friend group's own dogs (Kyle, 2026-10-30).
  */
-export const BREEDS = ['collie', 'keeshond', 'malinois', 'poodle', 'golden', 'corgi', 'husky', 'pug', 'chihuahua', 'chicken'] as const;
+export const BREEDS = ['collie', 'keeshond', 'malinois', 'shepherd', 'poodle', 'golden', 'corgi', 'husky', 'pug', 'chihuahua', 'chicken'] as const;
 export type Breed = (typeof BREEDS)[number];
 /** Yes, you can herd as a chicken (Kyle, 2026-10-31). The bots stay dogs. */
 export const DOG_BREEDS = BREEDS.filter((b) => b !== 'chicken');
 
 export const BREED_NAMES: Record<Breed, string> = {
-  collie: 'Border Collie', keeshond: 'Keeshond', malinois: 'Malinois', poodle: 'Standard Poodle',
+  collie: 'Border Collie', keeshond: 'Keeshond', malinois: 'Malinois', shepherd: 'German Shepherd', poodle: 'Standard Poodle',
   golden: 'Golden Retriever', corgi: 'Corgi', husky: 'Husky', pug: 'Pug', chihuahua: 'Chihuahua', chicken: 'Chicken',
 };
 
-/** Coat palettes: main colour, accent (chest, muzzle, socks), and mask (face, ears; the Malinois's black mask). */
-export const COATS: { id: string; name: string; main: string; accent: string; mask: string }[] = [
+/**
+ * Coat palettes: main colour, accent (chest, muzzle, socks), and mask (face, ears; the Malinois's
+ * black mask); `saddle`, a blanket of colour over the back (the German Shepherd's black saddle).
+ */
+export const COATS: { id: string; name: string; main: string; accent: string; mask: string; saddle?: string }[] = [
+  { id: 'black-tan', name: 'Black and tan', main: '#b8773a', accent: '#d8a866', mask: '#1e1a17', saddle: '#1e1a17' },
+  { id: 'sable', name: 'Sable', main: '#8f6a3e', accent: '#c79a62', mask: '#2a2219', saddle: '#4a3a28' },
   { id: 'black-white', name: 'Black and white', main: '#232328', accent: '#f6f3ec', mask: '#232328' },
   { id: 'wolf-grey', name: 'Wolf grey', main: '#9a958c', accent: '#d9d4c8', mask: '#2b2b30' },
   { id: 'fawn-mask', name: 'Fawn, black mask', main: '#c08a4a', accent: '#d9a866', mask: '#231c18' },
@@ -38,12 +43,12 @@ export function coatsFor(breed: Breed): typeof COATS {
 }
 
 export const DEFAULT_COAT: Record<Breed, string> = {
-  collie: 'black-white', keeshond: 'wolf-grey', malinois: 'fawn-mask', poodle: 'apricot',
+  collie: 'black-white', keeshond: 'wolf-grey', malinois: 'fawn-mask', shepherd: 'black-tan', poodle: 'apricot',
   golden: 'golden', corgi: 'red-white', husky: 'wolf-grey', pug: 'fawn-mask', chihuahua: 'fawn', chicken: 'hen-red',
 };
 
 /** Each breed's natural bark pitch (1 = a collie). The chicken's is its bawk. */
-export const BARK_PITCH: Record<Breed, number> = { pug: 1.6, corgi: 1.3, keeshond: 1.1, collie: 1, poodle: 0.95, husky: 0.92, golden: 0.88, malinois: 0.85, chihuahua: 1.9, chicken: 1 };
+export const BARK_PITCH: Record<Breed, number> = { pug: 1.6, corgi: 1.3, keeshond: 1.1, collie: 1, poodle: 0.95, husky: 0.92, golden: 0.88, malinois: 0.85, shepherd: 0.8, chihuahua: 1.9, chicken: 1 };
 
 /** The bark setting: missing means it follows the dog (breed, and a chonk barks deeper). */
 export const VOICES = [
