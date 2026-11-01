@@ -8,7 +8,7 @@ import { BREEDS, BREED_NAMES, BUILDS, COLLARS, DEFAULT_COAT, EYES, VOICES, coats
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
 /** Extra lobby lines from whichever online layer is running (friends on the page, or an online room). */
-export interface LobbyExtra { html(pub?: PublicView, me?: PrivateView): string; key(): string; forceBots?: boolean; join?(v: string): void; leave?(): void; retry?(): void; share?(): void; joinCode?(code: string): void; newRoom?(): void; hostRoom?(): void; copyDetails?(): void }
+export interface LobbyExtra { html(pub?: PublicView, me?: PrivateView): string; key(): string; forceBots?: boolean; join?(v: string): void; leave?(): void; retry?(): void; share?(): void; joinCode?(code: string): void; newRoom?(): void; hostRoom?(): void; copyDetails?(): void; rejoin?(): void }
 import { sfx } from './sfx';
 import { bark } from './sounds';
 /** Whether sound and music are on, for the menu (main.ts fills these in). */
@@ -93,6 +93,7 @@ export class Panels {
     if (act === 'share') this.party?.share?.();
     if (act === 'newroom') this.party?.newRoom?.();
     if (act === 'hostroom') this.party?.hostRoom?.();
+    if (act === 'rejoin') this.party?.rejoin?.();
     if (act === 'copydetails') this.party?.copyDetails?.();
     if (act === 'joincode') this.party?.joinCode?.((document.getElementById('code-input') as HTMLInputElement | null)?.value ?? '');
     if (act === 'fold') [this.collapsed, this.keys.lobby] = [!this.collapsed, ''];

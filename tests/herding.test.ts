@@ -695,3 +695,59 @@ describe('agility', () => {
     expect(took).toBe(false);
   });
 });
+
+describe('coming back after a crash', () => {
+  it('a player back with a new token takes back their own empty seat by name, mid-run; a stranger watches', () => {
+    const h = harness(2);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+    h.toPlaying();
+    const seat = h.dog(1);
+    h.room.disconnect('c1');
+    expect(seat.connected).toBe(false);
+    // Her browser restarted: a new connection, a new token, the same dog name.
+    h.inbox.set('c9', []);
+    h.room.connect('c9');
+    h.room.message('c9', JSON.stringify({ t: 'hello', token: 'brand-new', look: { name: 'H1', breed: 'pug', eyes: 'blue' } }));
+    expect(seat.connected).toBe(true);
+    expect(seat.token).toBe('brand-new');
+    expect(seat.spectator).toBe(false);
+    expect([...h.room.dogs.values()].filter((d) => !d.bot).length).toBe(2);
+    // Someone new mid-run still watches until the next run.
+    h.inbox.set('c8', []);
+    h.room.connect('c8');
+    h.room.message('c8', JSON.stringify({ t: 'hello', token: 'stranger', look: { name: 'Zed', breed: 'pug', eyes: 'blue' } }));
+    expect([...h.room.dogs.values()].find((d) => d.token === 'stranger')!.spectator).toBe(true);
+    // A name match never takes a seat whose player is still there (and talking).
+    h.say(0, { t: 'input', dx: 0, dz: 0, sprint: false, crouch: false });
+    h.inbox.set('c7', []);
+    h.room.connect('c7');
+    h.room.message('c7', JSON.stringify({ t: 'hello', token: 'twin', look: { name: 'H0', breed: 'pug', eyes: 'blue' } }));
+    expect(h.dog(0).token).toBe('tok0');
+  });
+
+  it('a crashed phone whose connection still looks open: its seat goes quiet, and its player takes it back', () => {
+    const h = harness(2);
+    h.say(0, { t: 'start', mode: 'trials', fillBots: false });
+    h.toPlaying();
+    const seat = h.dog(1);
+    h.say(1, { t: 'input', dx: 0, dz: 0, sprint: false, crouch: false });
+    // Just restarted, while the old connection still looks alive: not yet.
+    h.inbox.set('c9', []);
+    h.room.connect('c9');
+    h.room.message('c9', JSON.stringify({ t: 'hello', token: 'restarted', look: { name: 'H1', breed: 'pug', eyes: 'blue' } }));
+    expect(seat.token).toBe('tok1');
+    expect([...h.room.dogs.values()].find((d) => d.token === 'restarted')!.spectator).toBe(true);
+    // The old seat goes quiet (the phone crashed) while she keeps talking: she moves into it, and
+    // the old connection lets go of it.
+    for (let t = 0; t < 10; t++) {
+      h.room.message('c9', JSON.stringify({ t: 'input', dx: 0, dz: 0, sprint: false, crouch: false }));
+      h.run(1);
+    }
+    expect(seat.token).toBe('restarted');
+    expect(seat.spectator).toBe(false);
+    expect([...h.room.dogs.values()].filter((d) => !d.bot).length).toBe(2);
+    expect(h.room.dogOf('c9')).toBe(seat);
+    h.room.disconnect('c1');
+    expect(seat.connected).toBe(true);
+  });
+});

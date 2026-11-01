@@ -22,6 +22,21 @@ function hosted(room: string, mark = false): boolean {
     return mark;
   }
 }
+/** The friends' room you were last in (and whose it was), so opening the site again can offer to take you back. */
+const LAST = 'cbx-last-room';
+function lastRoom(): { room: string; host: string; at: number } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(LAST) ?? 'null');
+    return v && typeof v.room === 'string' && Date.now() - v.at < 3 * 3600_000 ? v : null;
+  } catch {
+    return null;
+  }
+}
+function rememberRoom(room: string, host: string): void {
+  try {
+    localStorage.setItem(LAST, JSON.stringify({ room, host, at: Date.now() }));
+  } catch { /* no storage */ }
+}
 const newCode = () => Array.from({ length: 5 }, () => 'BCDFGHJKLMNPQRSTVWXZ23456789'[Math.floor(Math.random() * 28)]).join('');
 
 export class Online {
@@ -139,6 +154,7 @@ export class Online {
   private joined(): void {
     if (!this.guest) return;
     this.joiner = false;
+    rememberRoom(this.room, '');
     this.local.paused = true;
     this.net.use(this.guest);
     this.set('guest');
@@ -222,6 +238,12 @@ export class Online {
     this.connect();
   }
 
+  /** Back to the friends' room you were last in. */
+  rejoin(): void {
+    const last = lastRoom();
+    if (last) this.joinCode(last.room);
+  }
+
   /** Host the room you're waiting on (its host never came). */
   hostRoom(): void {
     this.joiner = false;
@@ -261,7 +283,12 @@ export class Online {
   /** The top of the lobby: the switch, the invite link, who's in your pack. */
   html(pub?: PublicView, me?: PrivateView): string {
     const tabs = `<div class="seg"><button class="${this.mode === 'solo' ? 'on' : ''}" data-act="join" data-v="solo">Solo</button><button class="${this.mode === 'friends' ? 'on' : ''}" data-act="join" data-v="friends">With friends</button></div>`;
-    if (this.mode === 'solo') return `${tabs}<p class="quiet">Just you and bot dogs. Switch to <b>With friends</b> for a code to send your friends.</p>`;
+    if (this.mode === 'solo') {
+      // Just been in a friend's game (and come back after a crash, say): offer the way back in.
+      const last = lastRoom();
+      const back = last && last.room !== this.room ? `<button class="big rejoin" data-act="rejoin">Rejoin ${last.host ? `${esc(last.host)}'s game` : 'your friends'} (room ${esc(last.room)})</button>` : '';
+      return `${tabs}${back}<p class="quiet">Just you and bot dogs. Switch to <b>With friends</b> for a code to send your friends.</p>`;
+    }
     const humans = (pub?.dogs ?? []).filter((d) => !d.bot);
     const pack = humans.map((d) => `<li><i style="background:${esc(d.look.collar)}"></i>${esc(d.look.name)}${d.id === me?.you ? ' <span class="quiet">(you)</span>' : ''}${d.id === pub?.hostId ? ' <em>host</em>' : ''}${d.connected ? '' : ' <span class="quiet">(away)</span>'}</li>`).join('');
     const packBox = `<div class="label">Your pack (${humans.length})</div><ul class="who">${pack}</ul>`;
@@ -282,10 +309,12 @@ export class Online {
         body = '<p>Couldn\'t reach the game\'s room server. Check your connection and try again.</p><div class="games"><button class="chip" data-act="retry">Try again</button><button class="chip" data-act="join" data-v="solo">Play solo</button></div>';
         break;
       case 'host':
+        if (this.friends) rememberRoom(this.room, '');
         body = `<p class="code-line">Room code <b>${esc(this.room)}</b> <button class="link" data-act="newroom">new code</button></p><div class="invite"><code>${esc(this.link().replace(/^https?:\/\//, ''))}</code><button class="chip on" data-act="share">${'share' in navigator ? 'Share link' : 'Copy link'}</button></div>
           <p class="quiet">${this.friends ? `${this.friends === 1 ? 'A friend has' : `${this.friends} friends have`} joined. Pick a course and start when you're ready.` : 'Send the code or link. When friends join, they pop up in your pack below.'} Bot dogs fill any empty spots. Your game runs the room, so keep it open.</p>${packBox}`;
         break;
       case 'guest':
+        if (hostName !== 'the host') rememberRoom(this.room, hostName);
         body = `<p>You're in <b>${esc(hostName)}</b>'s game. They pick the course and start it.</p>${packBox}<div class="games"><button class="chip" data-act="newroom">Leave and start my own room</button></div>`;
         break;
     }

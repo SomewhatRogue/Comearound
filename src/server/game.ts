@@ -25,6 +25,8 @@ import { privateView, publicView } from './view';
 export const TICK_HZ = 20;
 const BOT_NAMES = ['Biscuit', 'Juniper', 'Scout', 'Maple', 'Pepper', 'Waffles', 'Ziggy', 'Clover'];
 const LOBBY_GRACE_SEC = 30;
+/** A seat quiet this long is empty enough for its own player (same dog name) to take back. Clients say something every 3 s. */
+const SEAT_QUIET_SEC = 8;
 
 export interface GameOptions {
   seed?: number;
@@ -97,6 +99,7 @@ export class GameRoom implements Room {
     if (m.t === 'hello') return this.hello(connId, m.token, m.look);
     const d = this.dogs.get(this.conns.get(connId) ?? '');
     if (!d) return;
+    d.heardAt = this.realClock;
     switch (m.t) {
       case 'input':
         [d.dx, d.dz, d.wantSprint, d.wantCrouch] = [clamp(m.dx), clamp(m.dz), !!m.sprint, !!m.crouch];
@@ -131,6 +134,21 @@ export class GameRoom implements Room {
   private hello(connId: string, token: string, look: Look): void {
     let d = [...this.dogs.values()].find((q) => q.token === token && !q.bot);
     if (!d) {
+      // Back after a crash or a browser restart (a new tab can come with a new token): an empty seat
+      // with your dog's name is yours, mid-run too, rather than watching from the side.
+      // A seat counts as empty if its player left, or has gone quiet (a crashed phone's connection
+      // can look open for a while; a live player says something every few seconds).
+      const name = cleanLook(look).name.trim().toLowerCase();
+      const empty = (q: Dog) => !q.connected || this.realClock - q.heardAt > SEAT_QUIET_SEC;
+      d = [...this.dogs.values()].find((q) => !q.bot && empty(q) && q.look.name.trim().toLowerCase() === name);
+      if (d) {
+        // Its old connection no longer speaks for it (nor does its late goodbye count).
+        for (const [c, id] of this.conns) if (id === d.id) this.conns.delete(c);
+        d.token = String(token).slice(0, 64);
+        if (this.phase === 'lobby') d.look = cleanLook(look);
+      }
+    }
+    if (!d) {
       d = blankDog(`p${this.nextId++}`, String(token).slice(0, 64), cleanLook(look));
       d.spectator = this.phase !== 'lobby' && this.phase !== 'results';
       // Lobby: appear at the meadow's corner and trot over to the pack's row.
@@ -138,6 +156,7 @@ export class GameRoom implements Room {
       this.dogs.set(d.id, d);
     }
     d.connected = true;
+    d.heardAt = this.realClock;
     this.conns.set(connId, d.id);
     if (!this.hostId || !this.dogs.has(this.hostId)) this.hostId = d.id;
     this.sendState(connId, d);
@@ -206,8 +225,39 @@ export class GameRoom implements Room {
     }
   }
 
+  /**
+   * A player back after a crash, while their old seat still looked taken, came in as someone new:
+   * once that seat goes quiet (same dog name), they move into it. Mid-run they were watching, so
+   * they take the seat and the run carries on with them; in the lobby the old, quiet dog just goes.
+   */
+  private reseat(): void {
+    const quiet = (q: Dog) => !q.bot && (!q.connected || this.realClock - q.heardAt > SEAT_QUIET_SEC);
+    const name = (q: Dog) => q.look.name.trim().toLowerCase();
+    for (const back of [...this.dogs.values()]) {
+      if (back.bot || !back.connected || quiet(back)) continue;
+      const lobby = this.phase === 'lobby' || this.phase === 'results';
+      if (!lobby && !back.spectator) continue;
+      const seat = [...this.dogs.values()].find((q) => q !== back && quiet(q) && !q.spectator && name(q) === name(back) && (lobby || !q.bot));
+      if (!seat) continue;
+      if (lobby) {
+        for (const [c, id] of this.conns) if (id === seat.id) this.conns.delete(c);
+        this.dogs.delete(seat.id);
+        if (this.hostId === seat.id) this.hostId = back.id;
+        continue;
+      }
+      for (const [c, id] of this.conns) {
+        if (id === seat.id) this.conns.delete(c);
+        if (id === back.id) this.conns.set(c, seat.id);
+      }
+      Object.assign(seat, { token: back.token, connected: true, heardAt: back.heardAt });
+      this.dogs.delete(back.id);
+      if (this.hostId === back.id) this.hostId = seat.id;
+    }
+  }
+
   /** Clears lobby seats whose dog has been gone too long, and hands on host if needed. */
   private sweep(): void {
+    this.reseat();
     for (const [id, d] of this.dogs) {
       if (!d.connected && !d.bot && this.realClock - d.leftAt > LOBBY_GRACE_SEC && (this.phase === 'lobby' || this.phase === 'results' || d.spectator)) this.dogs.delete(id);
     }
@@ -254,7 +304,7 @@ function cleanLook(l: Partial<Look> | undefined): Look {
 function blankDog(id: string, token: string, look: Look): Dog {
   return {
     id, token, look, team: 0, x: 0, z: 0, dx: 0, dz: 0, rot: 0, wantSprint: false, wantCrouch: false, posture: 'walk', stillFor: 0,
-    stamina: DOG.staminaMax, frozen: 0, cower: 0, barkCd: 0, barks: 0, fieldBarks: 0, connected: false, leftAt: 0, spectator: false, bot: null,
+    stamina: DOG.staminaMax, frozen: 0, cower: 0, barkCd: 0, barks: 0, fieldBarks: 0, connected: false, leftAt: 0, heardAt: 0, spectator: false, bot: null,
     practising: false, pets: 0, petAt: -9, mud: 0,
   };
 }

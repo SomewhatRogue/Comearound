@@ -193,6 +193,40 @@ const FREEZE = () => {
       await Promise.all([h, f].map((p) => p.context().close().catch(() => {})));
     }
 
+    // R: mid-run, the friend's phone crashes: its page stops dead (JavaScript paused) but its
+    // connection still looks open. She opens the link again in a fresh browser (a new token, the
+    // same dog name) and should be back in the run in her own seat, not watching from the side.
+    if (only('R')) {
+      const { p: h, code } = await host(PORT_MEM, 'Kyle');
+      const f = await joinByLink(PORT_MEM, 'Sam', code);
+      await asGuest(f);
+      await hostHas(h, 1);
+      await h.click('[data-act="start"]');
+      await f.waitForFunction(() => window.__GAME_STATE__.pub.phase === 'playing', null, { timeout: 30000 });
+      const seat = await f.evaluate(() => window.__GAME_STATE__.me.you);
+      const cdp = await f.context().newCDPSession(f);
+      await cdp.send('Debugger.enable');
+      await cdp.send('Debugger.pause');
+      const t0 = Date.now();
+      const f2 = await joinByLink(PORT_MEM, 'Sam', code);
+      const back = await f2.waitForFunction(() => {
+        const g = window.__GAME_STATE__;
+        const d = g.me && g.pub?.dogs.find((q) => q.id === g.me.you);
+        return window.__party.state === 'guest' && g.pub?.phase === 'playing' && d && !d.spectator;
+      }, null, { timeout: 30000 }).then(() => true).catch(() => false);
+      const r = {
+        backInRunSec: +((Date.now() - t0) / 1000).toFixed(1),
+        back,
+        sameSeat: (await f2.evaluate(() => window.__GAME_STATE__.me?.you)) === seat,
+        humans: await h.evaluate(() => window.__GAME_STATE__.pub.dogs.filter((d) => !d.bot).map((d) => d.look.name).sort().join(',')),
+      };
+      r.ok = r.back && r.sameSeat && r.humans === 'Kyle,Sam';
+      report.scenarios['R: a friend crashes mid-run, comes back in a fresh browser, gets her seat back'] = r;
+      note(`R: ${JSON.stringify(r)}`);
+      await cdp.send('Debugger.resume').catch(() => {});
+      await Promise.all([h, f, f2].map((p) => p.context().close().catch(() => {})));
+    }
+
     // H: the host makes a room and waits a while (texting the code) before the friend types it in.
     // The host is alone the whole time, sending only heartbeats; the friend must join it, not be
     // told there's no host (which once made friends host instead, the wrong way round).

@@ -2,6 +2,30 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-10-31 (evening): back in after a crash, and a link preview (Claude Opus 5.5)
+
+- **Seen live:** a friend's game crashed mid-run; she reopened it and got into the room, but only
+  as a spectator. Her token lived in `sessionStorage`, which a crash or browser restart loses, so
+  she came back as a stranger, and late joiners watch.
+- **Your seat back by name:** a hello with an unknown token takes an empty human seat with the same
+  dog name (any phase). A seat is empty if its player left, or has been quiet for 8 s
+  (`SEAT_QUIET_SEC`): a crashed phone's socket can look open for 15 to 30 s, so every client now
+  says something every 3 s (its current input) and the room tracks `Dog.heardAt`. If she arrives
+  before the old seat goes quiet she starts as a watcher and `reseat()` (each tick) moves her into
+  it as soon as it does; in the lobby the old quiet duplicate is simply removed. The old
+  connection loses its claim, so its late goodbye changes nothing. A live player (talking every
+  3 s) can never lose their seat to a same-named newcomer.
+- **Token kept on the device too:** `localStorage` as well as per tab; a new tab takes it back
+  unless another open tab is using it (each tab stamps `tac-live-<token>` every 2 s).
+- **Rejoin button:** opening the site with no room within 3 h of playing in a friends' room offers
+  "Rejoin Kyle's game (room X)" in the lobby.
+- New online scenario R: mid-run the friend's page is frozen solid (debugger paused, socket left
+  open), she opens the link in a fresh browser with the same name: back in her own seat in under
+  8 s (before the fix: a second "Sam" watching from the side). Two unit tests cover the rules.
+- **Link preview:** Open Graph and Twitter tags with a 1200x630 card (`public/og.jpg`, 86 KB): a
+  collie in the meadow with the flock behind her and the title in the game's own lettering,
+  rendered from the game itself.
+
 ## 2026-10-31 (night, last): an agility course, and piano from the next room (Claude Opus 5.5)
 
 - **Agility, just for fun** (`shared/agility.ts`, pieces are field data like everything else):

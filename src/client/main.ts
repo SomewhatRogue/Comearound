@@ -46,17 +46,35 @@ if (!room && !online) {
   params.set('room', room);
   try { history.replaceState(null, '', `?${params}`); } catch { /* sandboxed frame */ }
 }
-// A token per tab-session lets a reload rejoin your seat; ?as= gives tests distinct players.
+// Your token gets your seat back. Per tab, so a reload keeps it and two tabs are two players; also
+// kept on the device, so a new tab after a crash or a browser restart takes it back (unless another
+// open tab is using it: each tab marks its token live every couple of seconds). ?as= gives tests
+// distinct players.
 const tokenKey = `tac-token-${online ? 'online' : room}-${params.get('as') ?? ''}`;
 const token = (() => {
   try {
-    const t = sessionStorage.getItem(tokenKey) ?? crypto.randomUUID();
+    let t = sessionStorage.getItem(tokenKey);
+    if (!t) {
+      const saved = localStorage.getItem(tokenKey);
+      const live = Number(localStorage.getItem(`tac-live-${saved}`) ?? 0);
+      t = saved && Date.now() - live > 6000 ? saved : crypto.randomUUID();
+    }
     sessionStorage.setItem(tokenKey, t);
+    localStorage.setItem(tokenKey, t);
     return t;
   } catch {
     return crypto.randomUUID();
   }
 })();
+const markLive = () => {
+  try {
+    localStorage.setItem(`tac-live-${token}`, String(Date.now()));
+  } catch {
+    /* no storage */
+  }
+};
+markLive();
+setInterval(markLive, 2000);
 
 const NAMES = ['Bramble', 'Nell', 'Moss', 'Pip', 'Fern', 'Tam', 'Juno', 'Skye', 'Bess', 'Rook'];
 let look: Look = (() => {
@@ -171,6 +189,11 @@ const sendInput = () => {
   sent++;
 };
 input.onChange = sendInput;
+// Still here: say so every few seconds even standing still, so the room can tell a live player
+// from a crashed one (whose seat it then gives back when they return).
+setInterval(() => {
+  if (net.me) net.send({ t: 'input', dx: input.dx, dz: input.dz, sprint: input.sprint, crouch: input.crouch });
+}, 3000);
 // The lobby: tap (or click) a dog to give it a pat.
 const tryPet = (x: number, y: number) => {
   if (net.pub?.phase !== 'lobby' || input.blocked) return;

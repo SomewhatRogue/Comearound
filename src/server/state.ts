@@ -43,6 +43,8 @@ export interface Dog {
   fieldBarks: number;
   connected: boolean;
   leftAt: number;
+  /** When its player was last heard from (every client says something at least every few seconds). */
+  heardAt: number;
   spectator: boolean;
   bot: BotBrain | null;
   /** Scared by lightning: cowering, slow, for this many seconds. */
