@@ -143,9 +143,30 @@ export function distToSeg(x: number, z: number, q: Seg): number {
   return Math.hypot(x - (q.ax + ex * t), z - (q.az + ez * t));
 }
 
+/**
+ * How far (x, z) is from the shore of the field's ponds: negative in the water, positive on land.
+ * Ponds that overlap make one pond with a smooth shoreline (a smooth union of their circles, so no
+ * spit of grass pokes in where two meet). The water shader (client/water.ts) runs the same sum,
+ * with the same POND_BLEND, so what's drawn is what the rules use.
+ */
+export const POND_BLEND = 2.5;
+export function pondSdf(f: FieldDef, x: number, z: number): number {
+  let d = Infinity;
+  for (const o of f.obstacles) {
+    if (o.kind !== 'pond') continue;
+    const e = Math.hypot(x - o.x, z - o.z) - o.r;
+    if (d === Infinity) d = e;
+    else {
+      const h = Math.max(POND_BLEND - Math.abs(d - e), 0) / POND_BLEND;
+      d = Math.min(d, e) - (h * h * POND_BLEND) / 4;
+    }
+  }
+  return d;
+}
+
 /** Standing in water (a stream, off its bridges, or a pond)? Dogs wade slowly there. */
 export function inWater(f: FieldDef, x: number, z: number, pad = 0): boolean {
-  if (f.obstacles.some((o) => o.kind === 'pond' && Math.hypot(x - o.x, z - o.z) < o.r + pad)) return true;
+  if (pondSdf(f, x, z) < pad) return true;
   return (f.streams ?? []).some((s) => waterSegments(s).some((q) => distToSeg(x, z, q) < s.w / 2 + pad));
 }
 

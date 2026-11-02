@@ -7,7 +7,7 @@
  * Bots bark rarely (it costs calm points and annoys the goat).
  * In versus, one bot per team may go raiding: it trots through the other team's flock.
  */
-import { bridgeEnds, crossesWater, gateOf, inPen, type FieldDef, type Pen } from '../shared/field';
+import { bridgeEnds, crossesWater, gateOf, inPen, pondSdf, type FieldDef, type Pen } from '../shared/field';
 import { DOG, SHEEP } from '../shared/tuning';
 import { bark } from './dogs';
 import { isPenned } from './flock';
@@ -239,7 +239,7 @@ function behind(f: FieldDef, h: P, [ux, uz]: [number, number], back: number, fan
 function standable(f: FieldDef, x: number, z: number): boolean {
   const r = DOG.radius + 0.3;
   if (f.pens.some((p) => Math.abs(x - p.x) < p.w / 2 + r && Math.abs(z - p.z) < p.d / 2 + r)) return false;
-  return !f.obstacles.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + r);
+  return pondSdf(f, x, z) >= r && !f.obstacles.some((o) => o.kind !== 'pond' && Math.hypot(x - o.x, z - o.z) < o.r + r);
 }
 
 /**

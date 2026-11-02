@@ -452,30 +452,3 @@ export function hayMesh(r: number): THREE.Group {
   return g;
 }
 
-/** A pond: water, a muddy rim, cattails and a lily pad or two. */
-export function pondMesh(r: number, seed: number): THREE.Group {
-  const g = group('pond');
-  const rim = mesh(new THREE.CircleGeometry(r + 0.35, 20), '#7a6a4a', false);
-  rim.rotation.x = -Math.PI / 2;
-  rim.position.y = 0.012;
-  const water = mesh(new THREE.CircleGeometry(r, 20), mat('#5b9fc2', { roughness: 0.2, metalness: 0.1 }), false);
-  water.rotation.x = -Math.PI / 2;
-  water.position.y = 0.02;
-  g.add(rim, water);
-  for (let i = 0; i < 7; i++) {
-    const a = seed + i * 0.9;
-    const reed = group('reed');
-    reed.add(at(mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.9, 4), '#5d7a3a'), 0, 0.45, 0));
-    reed.add(at(mesh(new THREE.CapsuleGeometry(0.045, 0.14, 2, 5), '#6b4226'), 0, 0.85, 0));
-    reed.position.set(Math.cos(a) * (r + 0.1), 0, Math.sin(a) * (r + 0.1));
-    reed.rotation.z = Math.sin(a * 3) * 0.15;
-    g.add(reed);
-  }
-  for (let i = 0; i < 3; i++) {
-    const pad = mesh(new THREE.CircleGeometry(0.22, 8, 0.4, Math.PI * 1.8), '#6aa04a', false);
-    pad.rotation.x = -Math.PI / 2;
-    pad.position.set(Math.cos(seed + i * 2.3) * r * 0.5, 0.03, Math.sin(seed + i * 2.3) * r * 0.5);
-    g.add(pad);
-  }
-  return g;
-}

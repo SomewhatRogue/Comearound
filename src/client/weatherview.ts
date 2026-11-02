@@ -36,6 +36,11 @@ export class WeatherView {
 
   private shade = 0;
 
+  /** How hard it's raining on screen (0 dry, 1 pouring), eased in and out with the sky. */
+  get wet(): number {
+    return this.mix;
+  }
+
   update(pub: PublicView, focus: { x: number; z: number }, dt: number): void {
     const kind = pub.phase === 'lobby' ? 'clear' : pub.weather.kind;
     const wantRain = kind === 'clear' ? 0 : 1;

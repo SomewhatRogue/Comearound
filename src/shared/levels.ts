@@ -22,7 +22,7 @@ export const TRIALS: FieldDef[] = [
     pens: [{ x: 0, z: -11, w: 8, d: 6, gate: 's', gateW: 2.8, team: null }],
     obstacles: [
       ...[-12, -6, 6, 12].flatMap((x) => [{ kind: 'tree' as const, x, z: -2, r: 1.2 }, { kind: 'tree' as const, x: x + 3, z: 4, r: 1.2 }]),
-      { kind: 'pond', x: -14, z: 9, r: 3 }, { kind: 'hay', x: 9, z: -9, r: 1 },
+      { kind: 'pond', x: -14, z: 9, r: 3.6 }, { kind: 'hay', x: 9, z: -9, r: 1 },
     ],
     flocks: [{ x: -7, z: 7, n: 7, team: null }, { x: 11, z: 8, n: 5, team: null }],
     goats: [{ x: 2, z: 7 }],
@@ -35,7 +35,7 @@ export const TRIALS: FieldDef[] = [
     id: 'duckpond', name: 'Duck Pond', w: 46, d: 32, timeLimit: 130,
     pens: [{ x: 17, z: 5, w: 7, d: 6, gate: 'w', gateW: 3.4, team: null }],
     obstacles: [
-      { kind: 'pond', x: -2, z: -1, r: 4.5 }, { kind: 'pond', x: 3, z: 2, r: 2.6 },
+      { kind: 'pond', x: -2, z: -1, r: 6 }, { kind: 'pond', x: 3, z: 2, r: 3.6 },
       { kind: 'tree', x: -15, z: 9, r: 1.3 }, { kind: 'tree', x: 10, z: -10, r: 1.2 }, { kind: 'rock', x: -10, z: -9, r: 1 }, { kind: 'hay', x: 19, z: -10, r: 1 },
     ],
     flocks: [{ x: -14, z: -6, n: 6, team: null }, { x: -12, z: 4, n: 6, team: null }],
@@ -48,7 +48,7 @@ export const TRIALS: FieldDef[] = [
     id: 'hillside', name: 'Windy Hillside', w: 48, d: 34, timeLimit: 150,
     pens: [{ x: -17, z: -11, w: 7, d: 6, gate: 'e', gateW: 2.4, team: null }],
     obstacles: [
-      { kind: 'pond', x: 0, z: 0, r: 4 }, { kind: 'rock', x: -8, z: -4, r: 1.2 }, { kind: 'rock', x: 9, z: -8, r: 1.4 },
+      { kind: 'pond', x: 0, z: 0, r: 5 }, { kind: 'rock', x: -8, z: -4, r: 1.2 }, { kind: 'rock', x: 9, z: -8, r: 1.4 },
       { kind: 'tree', x: -12, z: 6, r: 1.3 }, { kind: 'tree', x: 13, z: 7, r: 1.3 }, { kind: 'hay', x: -6, z: -12, r: 1 }, { kind: 'hay', x: 4, z: 11, r: 1 },
     ],
     flocks: [{ x: 12, z: 8, n: 8, team: null }, { x: 14, z: -6, n: 8, team: null }],
@@ -180,7 +180,7 @@ export const WILD: FieldDef[] = [
     id: 'bigsky', name: 'Big Sky Pasture', w: 72, d: 48, timeLimit: 190,
     pens: [{ x: 0, z: 0, w: 8, d: 7, gate: 'w', gateW: 3.2, team: null }],
     obstacles: [
-      { kind: 'windmill', x: 16, z: -10, r: 2.4 }, { kind: 'pond', x: -18, z: -12, r: 4 },
+      { kind: 'windmill', x: 16, z: -10, r: 2.4 }, { kind: 'pond', x: -18, z: -12, r: 6 }, { kind: 'pond', x: -24.5, z: -15.5, r: 3.5 },
       { kind: 'tree', x: -26, z: 14, r: 1.4 }, { kind: 'tree', x: -8, z: 16, r: 1.3 }, { kind: 'tree', x: 24, z: 15, r: 1.4 }, { kind: 'tree', x: 28, z: -4, r: 1.3 },
       { kind: 'rock', x: -10, z: 6, r: 1.2 }, { kind: 'rock', x: 10, z: 8, r: 1 }, { kind: 'hay', x: 4, z: -16, r: 1 }, { kind: 'hay', x: -30, z: -2, r: 1 },
       { kind: 'bramble', x: -6, z: -6, r: 1.2 }, { kind: 'bramble', x: 6, z: 12, r: 1.2 },
@@ -317,7 +317,7 @@ export const HIGHLAND: FieldDef[] = [
     id: 'loch', name: 'Loch Side', w: 60, d: 40, timeLimit: 175, weather: 'rain',
     pens: [{ x: 23, z: 13, w: 7, d: 6, gate: 'w', gateW: 3, team: null }],
     obstacles: [
-      { kind: 'pond', x: -4, z: 0, r: 5.5 }, { kind: 'pond', x: 4, z: -2, r: 4.5 }, { kind: 'pond', x: 10, z: 2, r: 3 },
+      { kind: 'pond', x: -4, z: 0, r: 6.5 }, { kind: 'pond', x: 4, z: -2, r: 5.5 }, { kind: 'pond', x: 10, z: 2, r: 3 },
       { kind: 'tree', x: -20, z: -14, r: 1.4 }, { kind: 'tree', x: 18, z: -15, r: 1.3 }, { kind: 'tree', x: -24, z: 14, r: 1.3 },
       { kind: 'rock', x: 16, z: 8, r: 1.1 }, { kind: 'bramble', x: -14, z: 8, r: 1.1 },
     ],
@@ -409,7 +409,8 @@ const PRACTICE_AGILITY = course([
 export const PRACTICE: FieldDef = {
   id: 'practice', name: 'The Meadow', w: 56, d: 40, timeLimit: 100,
   pens: [{ x: 18, z: 11, w: 7, d: 6, gate: 'w', gateW: 3.2, team: null }],
-  obstacles: [{ kind: 'tree', x: -13, z: -3, r: 1.2 }, { kind: 'tree', x: 4, z: 13, r: 1.2 }, { kind: 'rock', x: 7, z: -4, r: 0.9 }, { kind: 'tree', x: -24, z: 14, r: 1.3 }],
+  // A pond in the bottom corner, to splash about in while everyone gathers.
+  obstacles: [{ kind: 'tree', x: -13, z: -3, r: 1.2 }, { kind: 'tree', x: 4, z: 13, r: 1.2 }, { kind: 'rock', x: 7, z: -4, r: 0.9 }, { kind: 'tree', x: -24, z: 14, r: 1.3 }, { kind: 'pond', x: -12, z: 12, r: 3.8 }, { kind: 'pond', x: -7.5, z: 14.5, r: 2.4 }],
   flocks: [{ x: -4, z: 5, n: 8, team: null }],
   goats: [],
   lowFences: [{ a: [8.5, 20], b: [8.5, 15], broken: true }, ...PRACTICE_AGILITY.lowFences],

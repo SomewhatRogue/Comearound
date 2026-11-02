@@ -295,6 +295,7 @@ function frame(now: number) {
     if (!noLoop) followCamera(stage, focus.x, focus.z, dt, close, !!touring, dressing && !touring ? breedScale(look.breed) : 0);
     frameBesidePanel(dressing, dt);
     weather.update(pub, focus, dt);
+    fieldView.ripples(dt, pub.dogs.map((d) => [d.id, entities.pos.get(d.id) ?? d] as [string, { x: number; z: number }]), weather.wet, focus);
     music.setRain(pub.phase !== 'lobby' && pub.weather.kind !== 'clear');
     minimap.draw(pub, field, me.id, now);
     hud.update(pub, net.me);

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { COURSES, TRIALS, VERSUS, inPen, inWater } from '../src/shared/field';
+import { COURSES, TRIALS, VERSUS, inPen, inWater, pondSdf } from '../src/shared/field';
 import { GOAT, WEATHER } from '../src/shared/tuning';
 import { makeBrain } from '../src/server/bots';
 import { isPenned } from '../src/server/flock';
 import { GameRoom } from '../src/server/game';
 import { tally } from '../src/server/round';
 import type { Dog } from '../src/server/state';
+import { collide } from '../src/server/physics';
 
 /** A room with a fake transport that records every message per connection. */
 function harness(humans: number, seed = 7) {
@@ -871,5 +872,27 @@ describe('the versus goat', () => {
     };
     expect(comes('versus')).toBe(true);
     expect(comes('trials')).toBe(false);
+  });
+});
+
+describe('ponds that overlap make one pond', () => {
+  // Two ponds, overlapping: where their shores cross there'd be a spit of grass between them.
+  const f = { ...TRIALS[0], obstacles: [{ kind: 'pond' as const, x: -2, z: 0, r: 3 }, { kind: 'pond' as const, x: 2.5, z: 0, r: 3 }] };
+  // Just outside both circles, in the notch where they meet.
+  const notch = { x: 0.25, z: 2.6 };
+
+  it('the notch where two ponds meet is water, not a spit of grass', () => {
+    expect(Math.hypot(notch.x + 2, notch.z) > 3 && Math.hypot(notch.x - 2.5, notch.z) > 3).toBe(true);
+    expect(inWater(f, notch.x, notch.z)).toBe(true);
+    // Away from where they meet, the shore is each pond's own circle.
+    expect(pondSdf(f, -5.5, 0)).toBeCloseTo(0.5, 5);
+    expect(inWater(f, -2, -3.2)).toBe(false);
+  });
+
+  it('a sheep standing in the notch is pushed out onto the bank, and a dog can wade there', () => {
+    const [x, z] = collide(f, notch.x, notch.z, 0.5);
+    expect(pondSdf(f, x, z)).toBeGreaterThan(0.49);
+    expect(z).toBeGreaterThan(notch.z);
+    expect(collide(f, notch.x, notch.z, 0.5, { water: false })).toEqual([notch.x, notch.z]);
   });
 });

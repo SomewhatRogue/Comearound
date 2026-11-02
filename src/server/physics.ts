@@ -2,7 +2,7 @@
  * Shared collision helpers: field fence, pen fences (with their gate gaps), obstacles.
  * Everything is a circle pushed out of walls and other circles. Cheap, stable, good enough.
  */
-import { gapFor, jumpableHalf, penWalls, waterSegments, type FieldDef, type Pen } from '../shared/field';
+import { gapFor, jumpableHalf, penWalls, pondSdf, waterSegments, type FieldDef, type Pen } from '../shared/field';
 
 type Wall = { ax: number; az: number; bx: number; bz: number };
 const wallCache = new WeakMap<FieldDef, Wall[]>();
@@ -91,8 +91,9 @@ export function collide(f: FieldDef, x: number, z: number, r: number, opts: Coll
   x = Math.max(gap?.side === 'w' ? -Infinity : -mx, Math.min(gap?.side === 'e' ? Infinity : mx, x));
   z = Math.max(gap?.side === 'n' ? -Infinity : -mz, Math.min(gap?.side === 's' ? Infinity : mz, z));
   if (isWater) for (const w of water(f)) [x, z] = pushOff(w, w.r, x, z, r, opts.from);
+  if (isWater) [x, z] = outOfPonds(f, x, z, r);
   for (const o of f.obstacles) {
-    if (o.kind === 'pond' && !isWater) continue;
+    if (o.kind === 'pond') continue;
     const dx = x - o.x;
     const dz = z - o.z;
     const d = Math.hypot(dx, dz);
@@ -102,6 +103,22 @@ export function collide(f: FieldDef, x: number, z: number, r: number, opts: Coll
   for (const w of walls(f, !!opts.gateShut)) [x, z] = pushOff(w, 0, x, z, r, opts.from);
   for (const l of f.lowFences ?? []) if (!opts.hop || l.kind === 'edge') [x, z] = pushOff({ ax: l.a[0], az: l.a[1], bx: l.b[0], bz: l.b[1] }, jumpableHalf(l), x, z, r, opts.from);
   if (!opts.gateShut) for (const p of opts.closed ?? []) for (const w of gateLine(p)) [x, z] = pushOff(w, 0, x, z, r, opts.from);
+  return [x, z];
+}
+
+/** Out of the ponds (one smooth shape where they overlap): along the shore's slope, to r from it. */
+function outOfPonds(f: FieldDef, x: number, z: number, r: number): [number, number] {
+  for (let i = 0; i < 4; i++) {
+    const d = pondSdf(f, x, z);
+    if (d >= r) break;
+    const e = 0.02;
+    const gx = pondSdf(f, x + e, z) - pondSdf(f, x - e, z);
+    const gz = pondSdf(f, x, z + e) - pondSdf(f, x, z - e);
+    const g = Math.hypot(gx, gz);
+    if (g < 1e-9) break;
+    x += (gx / g) * (r - d);
+    z += (gz / g) * (r - d);
+  }
   return [x, z];
 }
 

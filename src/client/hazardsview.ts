@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three';
 import { bridgeEnds, waterSegments, type FieldDef, type Stream } from '../shared/field';
+import { streamWaterMaterial } from './water';
 import { Rng } from '../shared/rng';
 import { at, mat, mesh } from './models';
 import { label } from './scene';
@@ -67,7 +68,7 @@ function stream(s: Stream, rng: Rng): THREE.Group {
   const pts = finer(s.pts);
   const bank = new THREE.Mesh(ribbon(pts, s.w + 1.1, 0.012), mat('#6f6a45', { roughness: 1, side: THREE.DoubleSide }));
   bank.receiveShadow = true;
-  const water = new THREE.Mesh(ribbon(pts, s.w, 0.03), new THREE.MeshStandardMaterial({ color: '#5aa2c8', roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.92, side: THREE.DoubleSide }));
+  const water = new THREE.Mesh(ribbon(pts, s.w, 0.03), streamWaterMaterial());
   water.receiveShadow = true;
   water.name = 'water';
   g.add(bank, water);

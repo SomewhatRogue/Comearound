@@ -8,7 +8,8 @@ import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { gateOf, penWalls, type FieldDef } from '../shared/field';
 import type { PublicView } from '../shared/protocol';
-import { at, hayMesh, mat, mesh, pondMesh, rockMesh, treeMesh } from './models';
+import { at, hayMesh, mat, mesh, rockMesh, treeMesh } from './models';
+import { WaterFx, pondSurfaces } from './water';
 import { buildHazards } from './hazardsview';
 import { Scenery } from './scenery';
 import { heightAt } from './terrain';
@@ -94,6 +95,7 @@ export class FieldView {
   private group: THREE.Group | null = null;
   private scenery: Scenery | null = null;
   private wildlife: Wildlife | null = null;
+  private water: WaterFx | null = null;
   /** The field's agility course, if it has one (main.ts runs it with your dog). */
   agility: AgilityCourse | null = null;
   agilityEvents: AgilityEvents = { onStep: () => {}, onWrong: () => {}, onFinish: () => {} };
@@ -115,11 +117,17 @@ export class FieldView {
     this.group = buildField(f, this.lowfx);
     this.scenery = new Scenery(f, this.lowfx);
     this.group.add(this.scenery.group);
+    this.water = new WaterFx(f, this.lowfx);
     this.wildlife = new Wildlife(f, this.lowfx);
     this.group.add(this.wildlife.group);
     this.agility = f.agility?.length ? new AgilityCourse(f, (x, z) => heightAt(f, x, z), this.agilityEvents) : null;
     if (this.agility) this.group.add(this.agility.group);
     this.stage.scene.add(this.group);
+  }
+
+  /** Ripples: where each dog is drawn, how hard it's raining (0..1), where the camera looks. */
+  ripples(dt: number, dogs: Iterable<[string, { x: number; z: number }]>, wet: number, focus: { x: number; z: number }): void {
+    this.water?.update(dt, dogs, wet, focus);
   }
 
   /** Clouds, butterflies, ducks and birds. `you`: your dog, for how loud a startled duck is. */
@@ -235,14 +243,16 @@ function buildField(f: FieldDef, lowfx: boolean): THREE.Group {
     }
   }
 
+  // Ponds: one surface for the lot, overlapping ones joined into one smooth shore.
+  g.add(pondSurfaces(f, lowfx));
   for (const o of f.obstacles) {
-    if (o.kind === 'bramble') continue;
+    if (o.kind === 'bramble' || o.kind === 'pond') continue;
     const seed = o.x * 1.7 + o.z;
-    const obj = o.kind === 'tree' ? treeMesh(o.r, seed) : o.kind === 'rock' ? rockMesh(o.r) : o.kind === 'hay' ? hayMesh(o.r) : o.kind === 'windmill' ? windmillMesh(o.r / 1.7) : pondMesh(o.r, seed);
+    const obj = o.kind === 'tree' ? treeMesh(o.r, seed) : o.kind === 'rock' ? rockMesh(o.r) : o.kind === 'hay' ? hayMesh(o.r) : windmillMesh(o.r / 1.7);
     obj.position.x += o.x;
     obj.position.z += o.z;
-    // Brambles too sit on the lie of the land (ponds and windmills are on the level).
-    if (o.kind !== 'pond') obj.position.y += heightAt(f, o.x, o.z) - (o.kind === 'rock' || o.kind === 'tree' ? 0.04 : 0);
+    // Everything sits on the lie of the land (windmills are on the level).
+    obj.position.y += heightAt(f, o.x, o.z) - (o.kind === 'rock' || o.kind === 'tree' ? 0.04 : 0);
     g.add(obj);
   }
   g.add(lowFences(f, (x, z) => heightAt(f, x, z)));

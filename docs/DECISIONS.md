@@ -2,6 +2,33 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-11-02: ripples, ponds that join smoothly, bigger ponds (Claude Opus 5.5)
+
+Kyle: ripples when you run through water and when it rains; on some fields the grass laps into
+the ponds; bigger ponds.
+- **The grass in the ponds** was where two ponds overlap: each was drawn as its own circle with its
+  own bank, so a spit of grass stuck into the water at every join (Duck Pond's waist, Loch Side).
+  Ponds now have one shared shoreline, `pondSdf` in `shared/field.ts`: a smooth union of their
+  circles (POND_BLEND 2.5 m), negative in the water. The rules use it (`inWater`, sheep and goats
+  pushed out along its slope, bots' standable spots), the ground levels off round it, decoration
+  keeps off it, and the water shader runs the same sum with the same blend. Test: the notch where
+  two ponds meet is water, and a sheep standing there is pushed out onto the bank.
+- **Water surfaces** (`client/water.ts`): one plane per group of touching ponds, shaded from the
+  shoreline (deeper blue in the middle, a wet dark edge to the muddy bank, which is part of the
+  same surface); reeds only along the real shore. Streams keep their ribbons, with the same ripple code.
+- **Ripples** are drawn by the water's own shader from up to 48 rings (position, age, size), so
+  they can't spill onto the grass. A dog wading makes a ring every half metre or so (bigger the
+  faster it goes; a splash going in; a slow ring now and then standing still); rain drops little
+  single rings on the water near the camera, as hard as it's raining. Cosmetic, each player's own.
+  The two materials get their own program cache keys (Three.js keys by the patch function's text,
+  which they share).
+- **Bigger ponds:** Orchard 3.6 (was 3), Duck Pond 6 and 3.6 (4.5, 2.6), Windy Hillside 5 (4), Big
+  Sky 6 plus a second lobe, Loch Side 6.5 and 5.5 (5.5, 4.5; its small east lobe stays 3: at 3.5
+  the gap by the rock next to the pen got too tight and the bots stalled there on one seed). The hub
+  has a pond in its bottom-left corner to splash in while everyone gathers. Bench (bots, 6 seeds,
+  old and new side by side) as good or better everywhere: Duck Pond 12/12 on 5 seeds (was 1; sheep
+  used to wedge in the notch), Loch Side 103/108 sheep (was 99). `trace.ts` takes `COURSE=` now.
+
 ## 2026-10-31 (late night): stress testing joins and leaves, a Redis budget, docs/ONLINE.md (Claude Opus 5.5)
 
 - **`npm run stress:online`**: a room of real browsers (7 by default in our runs) that keep joining,

@@ -4,7 +4,7 @@
  * The ground stays flat where flat matters: by the outer fence, round pens and their gates,
  * water, mud, and anything else built on the level.
  */
-import { distToSeg, gateOf, waterSegments, type FieldDef } from '../shared/field';
+import { distToSeg, gateOf, pondSdf, waterSegments, type FieldDef } from '../shared/field';
 
 const cache = new WeakMap<FieldDef, (x: number, z: number) => number>();
 
@@ -42,7 +42,9 @@ function build(f: FieldDef): (x: number, z: number) => number {
       const g = gateOf(p);
       k = Math.min(k, ease(Math.hypot(x - (g.x + g.ox * 2.5), z - (g.z + g.oz * 2.5)), 2.5, 3));
     }
-    for (const o of f.obstacles) if (o.kind === 'pond' || o.kind === 'windmill') k = Math.min(k, ease(Math.hypot(x - o.x, z - o.z) - o.r, 0.6, 2.5));
+    for (const o of f.obstacles) if (o.kind === 'windmill') k = Math.min(k, ease(Math.hypot(x - o.x, z - o.z) - o.r, 0.6, 2.5));
+    // Level round the ponds, out past the bank.
+    k = Math.min(k, ease(pondSdf(f, x, z), 0.9, 2.5));
     for (const w of water) k = Math.min(k, ease(distToSeg(x, z, w.q) - w.r, 0.8, 2.5));
     for (const m of f.mud ?? []) k = Math.min(k, ease(Math.hypot(x - m.x, z - m.z) - m.r, 0.3, 2));
     return smooth(raw) * amp * smooth(k);

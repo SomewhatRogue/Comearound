@@ -1,11 +1,11 @@
-// Trace one bot-only field: tsx scripts/trace.ts <fieldIdx> <seed> [everySec] [fromSec]
+// Trace one bot-only field: [COURSE=highland] tsx scripts/trace.ts <fieldIdx> <seed> [everySec] [fromSec]
 import { GameRoom } from '../src/server/game';
 import { makeBrain } from '../src/server/bots';
 import { isPenned } from '../src/server/flock';
 const field = Number(process.argv[2] ?? 0), seed = Number(process.argv[3] ?? 1), every = Number(process.argv[4] ?? 4), from = Number(process.argv[5] ?? 0);
 const room = new GameRoom(() => {}, { seed });
 room.message('c1', JSON.stringify({ t: 'hello', token: 'host', look: { name: 'Host' } }));
-room.message('c1', JSON.stringify({ t: 'start', mode: 'trials', fillBots: true }));
+room.message('c1', JSON.stringify({ t: 'start', mode: 'trials', fillBots: true, course: process.env.COURSE ?? 'gentle' }));
 [...room.dogs.values()].find((d) => d.token === 'host')!.bot = makeBrain(0);
 while (room.fieldIdx < field || room.phase !== 'playing') { room.tick(0.05); if (room.phase === 'fieldEnd') room.timeLeft = 0; }
 const f = (n: number) => n.toFixed(1);
