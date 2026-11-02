@@ -7,7 +7,7 @@
  */
 import { COURSES, VERSUS_POOL, type CourseId } from '../shared/field';
 import { BREEDS, BREED_NAMES, BUILDS, COLLARS, EYES, VOICES, coatsFor } from '../shared/looks';
-import type { Look, PrivateView, PublicView } from '../shared/protocol';
+import { botSeats, type Look, type Mode, type PrivateView, type PublicView } from '../shared/protocol';
 
 export type Sheet = 'dog' | 'friends' | 'play';
 export type PlayTab = 'trials' | 'versus';
@@ -58,11 +58,23 @@ export function friendsSheet(pub: PublicView, me: PrivateView, rooms: string | n
 
 export interface PlayState { tab: PlayTab; course: CourseId; bots: boolean; showBots: boolean; bests: Record<CourseId, number> }
 
+/**
+ * The host's choice of bot dogs, said plainly: on (and how many will join, for who's here now) or
+ * off (just the people). Shown before every start, so nobody's surprised by a stranger dog.
+ */
+export function botsPick(pub: PublicView, mode: Mode, on: boolean): string {
+  const humans = pub.dogs.filter((d) => !d.bot && d.connected).length;
+  const n = botSeats(mode, humans);
+  const people = humans === 1 ? 'just you' : `just the ${humans} of you`;
+  const note = !n ? `No bot dogs needed: there are ${humans} of you.` : on ? `${n} bot dog${n > 1 ? 's' : ''} will join ${humans === 1 ? 'you' : `the ${humans} of you`}${mode === 'versus' ? ' to even up the teams' : ''}.` : `No bot dogs: ${people}.`;
+  return `<div class="bots-pick"><div class="label">Bot dogs</div><div class="seg"><button class="${on ? 'on' : ''}" data-act="bots" data-v="on">Fill in</button><button class="${on ? '' : 'on'}" data-act="bots" data-v="off">Off</button></div><p class="quiet">${note}</p></div>`;
+}
+
 export function playSheet(pub: PublicView, me: PrivateView, s: PlayState): string {
   const host = pub.hostId === me.you;
   const tabs = `<div class="seg"><button class="${s.tab === 'trials' ? 'on' : ''}" data-act="tab" data-v="trials">Trials</button><button class="${s.tab === 'versus' ? 'on' : ''}" data-act="tab" data-v="versus">Versus</button></div>`;
   const hostName = pub.dogs.find((d) => d.id === pub.hostId)?.look.name ?? 'The host';
-  const bots = host && s.showBots ? `<button class="chip ${s.bots ? 'on' : ''}" data-act="bots">Fill empty spots with bot dogs</button>` : '';
+  const bots = host && s.showBots ? botsPick(pub, s.tab, s.bots) : '';
   let body = '';
   if (s.tab === 'trials') {
     const courses = (Object.keys(COURSES) as CourseId[]).map((id) => {

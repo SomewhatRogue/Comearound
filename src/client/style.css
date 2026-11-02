@@ -146,7 +146,9 @@ body:has(#modal:not(.hidden):not(.glance)) #touch { display: none; }
 .sheet h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); }
 .sheet .x { position: absolute; top: 14px; right: 14px; background: var(--paper-2); border: 2px solid var(--line); border-radius: 999px; padding: 4px 12px; color: var(--ink); }
 .menu ol { padding-left: 20px; display: grid; gap: 8px; font-size: 15px; line-height: 1.4; }
-.menu .host { border-top: 2px solid var(--line); margin-top: 14px; padding-top: 4px; }
+.menu .host { border-bottom: 2px solid var(--line); margin: 10px 0 4px; padding-bottom: 12px; display: grid; gap: 8px; }
+.menu .host h3 { margin: 0; }
+.menu .host .big { margin: 0; }
 .tallies { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 16px; margin-top: 8px; }
 .tally ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .tally li { display: flex; justify-content: space-between; align-items: baseline; background: #fff; border-radius: 10px; padding: 7px 10px; animation: tally 0.45s cubic-bezier(.3,1.6,.5,1) both; animation-delay: var(--d); }
@@ -282,6 +284,12 @@ button.audio.is-off .off { display: inline; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--paper-2); border: 2px solid var(--line); border-radius: 999px; padding: 3px; margin: 6px 0; }
 .seg button { border: 0; background: transparent; border-radius: 999px; padding: 6px 8px; font-weight: 700; font-size: 14px; color: var(--ink-soft); }
 .seg button.on { background: var(--ink); color: #fff; }
+/* Bot dogs on or off, before every start: a label, the switch, and what it means for who's here. */
+.bots-pick { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 10px; text-align: left; }
+.bots-pick .label { margin: 0; }
+.bots-pick .seg { margin: 0; max-width: 220px; }
+.bots-pick p { grid-column: 1 / -1; margin: 2px 0 0; font-size: 13px; }
+.results .bots-pick { margin: 12px auto 4px; max-width: 360px; }
 .invite { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .invite code { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; background: #fff; border: 2px solid var(--line); border-radius: 10px; padding: 5px 8px; font-size: 13px; }
 .friends .who { margin: 0; }

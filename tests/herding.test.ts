@@ -6,6 +6,7 @@ import { isPenned } from '../src/server/flock';
 import { GameRoom } from '../src/server/game';
 import { tally } from '../src/server/round';
 import type { Dog } from '../src/server/state';
+import { botSeats } from '../src/shared/protocol';
 import { collide } from '../src/server/physics';
 
 /** A room with a fake transport that records every message per connection. */
@@ -894,5 +895,34 @@ describe('ponds that overlap make one pond', () => {
     expect(pondSdf(f, x, z)).toBeGreaterThan(0.49);
     expect(z).toBeGreaterThan(notch.z);
     expect(collide(f, notch.x, notch.z, 0.5, { water: false })).toEqual([notch.x, notch.z]);
+  });
+});
+
+describe('bot dogs are the host to choose', () => {
+  const bots = (h: ReturnType<typeof harness>) => [...h.room.dogs.values()].filter((d) => d.token.startsWith('bot-')).length;
+
+  it('fill in to make up the numbers, or not at all', () => {
+    expect([botSeats('trials', 1), botSeats('trials', 2), botSeats('trials', 4), botSeats('versus', 2), botSeats('versus', 3), botSeats('versus', 5)]).toEqual([2, 1, 0, 2, 1, 1]);
+    const on = harness(2);
+    on.say(0, { t: 'start', mode: 'trials', fillBots: true });
+    expect(bots(on)).toBe(1);
+    const off = harness(2);
+    off.say(0, { t: 'start', mode: 'versus', fillBots: false });
+    expect(bots(off)).toBe(0);
+  });
+
+  it('the host can send them home mid-game; a friend cannot', () => {
+    const h = harness(2);
+    h.say(0, { t: 'start', mode: 'versus', fillBots: true });
+    h.toPlaying();
+    expect(bots(h)).toBe(2);
+    h.say(1, { t: 'noBots' });
+    expect(bots(h)).toBe(2);
+    h.say(0, { t: 'noBots' });
+    expect(bots(h)).toBe(0);
+    // The game carries on with just the people.
+    h.run(3);
+    expect(h.room.phase).toBe('playing');
+    expect([...h.room.dogs.values()].filter((d) => !d.spectator)).toHaveLength(2);
   });
 });

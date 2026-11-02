@@ -5,7 +5,7 @@
  */
 import { COURSES, fieldById, type CourseId } from '../shared/field';
 import { DEFAULT_COAT, type Breed } from '../shared/looks';
-import { dogSheet, friendsSheet, hubBar, playSheet, type PlayTab, type Sheet } from './hub';
+import { botsPick, dogSheet, friendsSheet, hubBar, playSheet, type PlayTab, type Sheet } from './hub';
 import type { ClientMsg, FieldScore, Look, Mode, PrivateView, PublicView } from '../shared/protocol';
 import { TEAM_NAMES } from './scene';
 /** Extra lobby lines from whichever online layer is running (friends on the page, or an online room). */
@@ -29,7 +29,8 @@ export class Panels {
   /** The Play sheet: its section, and the course the host has picked. */
   private tab: PlayTab = 'trials';
   private course: CourseId = 'gentle';
-  private bots = true;
+  /** Bot dogs fill the empty spots (the host's choice, remembered in this browser). */
+  private bots = store.get('tac-bots') !== '0';
   private bests: Record<CourseId, number> = { gentle: Number(store.get('tac-best-trials') ?? 0) || 0, tricky: Number(store.get('tac-best-tricky') ?? 0) || 0, wild: Number(store.get('tac-best-wild') ?? 0) || 0, challenge: Number(store.get('tac-best-challenge') ?? 0) || 0, highland: Number(store.get('tac-best-highland') ?? 0) || 0 };
   private best = 0;
   private newBest = false;
@@ -85,7 +86,15 @@ export class Panels {
     if (act === 'sheet') this.open(v ? (this.sheet === v ? null : (v as Sheet)) : null);
     if (act === 'tab') [this.tab, this.keys.lobby] = [v as PlayTab, ''];
     if (act === 'course') [this.course, this.keys.lobby] = [v as CourseId, ''];
-    if (act === 'bots') [this.bots, this.keys.lobby] = [!this.bots, ''];
+    if (act === 'bots') {
+      this.bots = v ? v === 'on' : !this.bots;
+      store.set('tac-bots', this.bots ? '1' : '0');
+      this.keys.lobby = '';
+    }
+    if (act === 'nobots') {
+      this.send({ t: 'noBots' });
+      this.menuOpen = false;
+    }
     if (act === 'start') this.startPick(v === 'versus' ? 'versus' : this.course);
     if (act === 'again') this.startPick(v as CourseId | 'versus');
     if (act === 'copy') void navigator.clipboard?.writeText(location.href).catch(() => {});
@@ -144,10 +153,10 @@ export class Panels {
     }
     this.recordBest(pub);
     const modal = document.getElementById('modal')!;
-    const mk = JSON.stringify([pub.phase, this.menuOpen, pub.fieldIdx, pub.fieldScores.length, pub.hostId === me.you, this.newBest]);
+    const mk = JSON.stringify([pub.phase, this.menuOpen, pub.fieldIdx, pub.fieldScores.length, pub.hostId === me.you, this.newBest, this.bots, pub.dogs.filter((d) => d.bot).length, pub.dogs.filter((d) => !d.bot && d.connected).length]);
     if (mk !== this.keys.modal) {
       this.keys.modal = mk;
-      const html = this.menuOpen ? menuHtml(pub, me) : pub.phase === 'fieldEnd' ? fieldCard(pub, me) : pub.phase === 'results' ? this.resultsHtml(pub, me) : '';
+      const html = this.menuOpen ? menuHtml(pub, me, this.canBots) : pub.phase === 'fieldEnd' ? fieldCard(pub, me) : pub.phase === 'results' ? this.resultsHtml(pub, me) : '';
       modal.innerHTML = html;
       modal.classList.toggle('hidden', !html);
       modal.classList.toggle('glance', pub.phase === 'fieldEnd' && !this.menuOpen);
@@ -170,16 +179,21 @@ export class Panels {
     }
   }
 
+  /** Bot dogs are the host's to choose (solo always has them: they're who you play with). */
+  private get canBots(): boolean {
+    return !(this.solo || this.party?.forceBots);
+  }
+
   private sheetHtml(sheet: Sheet, pub: PublicView, me: PrivateView): string {
     if (sheet === 'dog') return dogSheet(this.look);
     if (sheet === 'friends') return friendsSheet(pub, me, this.party ? (this.solo ? this.party.html() : this.party.html(pub, me)) : null, this.room);
-    return playSheet(pub, me, { tab: this.tab, course: this.course, bots: this.bots, showBots: !(this.solo || this.party?.forceBots), bests: this.bests });
+    return playSheet(pub, me, { tab: this.tab, course: this.course, bots: this.bots, showBots: this.canBots, bests: this.bests });
   }
 
   private resultsHtml(pub: PublicView, me: PrivateView): string {
     const host = pub.hostId === me.you;
     const again = host
-      ? `<div class="row"><button class="big" data-act="again" data-v="${pub.mode}">Play again</button><button class="big alt" data-act="lobby">Back to the lobby</button></div>`
+      ? `${this.canBots ? botsPick(pub, pub.mode, this.bots) : ''}<div class="row"><button class="big" data-act="again" data-v="${pub.mode}">Play again</button><button class="big alt" data-act="lobby">Back to the lobby</button></div>`
       : '<p class="quiet">The host picks what happens next.</p>';
     if (pub.mode === 'versus') {
       const [a, b] = [runTotal(pub.fieldScores, 0), runTotal(pub.fieldScores, 1)];
@@ -235,14 +249,16 @@ function fieldCard(pub: PublicView, me: PrivateView): string {
   return `<div class="sheet card-end"><h4>${esc(field.name)} &middot; field ${pub.fieldIdx + 1} of ${pub.fieldCount}</h4><h2>${title}</h2><div class="tallies">${f.map(col).join('')}</div>${next}</div>`;
 }
 
-function menuHtml(pub: PublicView, me: PrivateView): string {
+function menuHtml(pub: PublicView, me: PrivateView, canBots: boolean): string {
   const host = pub.hostId === me.you && pub.phase !== 'lobby';
+  const botCount = pub.dogs.filter((d) => d.bot).length;
+  const sendHome = canBots && botCount ? `<button class="big alt" data-act="nobots">Send the bot dog${botCount > 1 ? 's' : ''} home</button>` : '';
   const hostTools = host
-    ? `<div class="host"><h3>Host</h3>${pub.phase === 'playing' ? '<button class="big alt" data-act="endField">End this field now</button>' : ''}<button class="big danger" data-act="lobby">Back to the lobby</button></div>`
+    ? `<div class="host"><h3>Host</h3>${sendHome}${pub.phase === 'playing' ? '<button class="big alt" data-act="endField">End this field now</button>' : ''}<button class="big danger" data-act="lobby">Back to the lobby</button></div>`
     : '';
   const on = (k: 'sound' | 'music') => audioState[k]();
   const chip = (k: 'sound' | 'music', name: string) => `<button class="chip ${on(k) ? 'on' : ''}" data-act="toggle" data-v="${k}">${name}: ${on(k) ? 'on' : 'off'}</button>`;
-  return `<div class="sheet menu"><button class="x" data-act="close">Close</button><div class="audio-row">${chip('sound', 'Sound')}${chip('music', 'Music')}</div><h2>How to herd</h2><ol>
+  return `<div class="sheet menu"><button class="x" data-act="close">Close</button><div class="audio-row">${chip('sound', 'Sound')}${chip('music', 'Music')}</div>${hostTools}<h2>How to herd</h2><ol>
     <li><b>Get the sheep into the pen</b>, through the gate. They count once they're inside. Every sheep in (and held for a moment) ends the field early, and the time left is bonus points.</li>
     <li><b>Sheep move away from dogs.</b> Walking pushes them; sprinting (Shift, or on a phone drag past the ring) scatters them. Circle wide to get <b>behind</b> them (on the far side from the gate) before you push.</li>
     <li><b>Crouch</b> (<b>Space</b>, or <b>DOWN</b> on a phone) to stalk. Face the sheep and you give them <b>the eye</b> (the pale cone): they drift away calmly, without panicking.</li>
@@ -253,6 +269,6 @@ function menuHtml(pub: PublicView, me: PrivateView): string {
     <li><b>The goat</b> wanders, bleats and scatters sheep. It only gives way to a dog giving it the eye. Pen it for a bonus.</li>
     <li><b>Versus:</b> blue sheep go in the blue pen, orange in the orange pen. Pen yours, or herd the goat over to their side and let it bleat.</li>
     <li><b>Keys:</b> WASD or arrows move, Shift sprints, Space crouches, E barks, M mutes, Esc for this menu.</li>
-  </ol>${hostTools}</div>`;
+  </ol></div>`;
 }
 

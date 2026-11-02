@@ -396,7 +396,7 @@ export class Online {
       case 'host':
         if (this.friends) rememberRoom(this.room, '');
         body = `<p class="code-line">Room code <b>${esc(this.room)}</b> <button class="link" data-act="newroom">new code</button></p><div class="invite"><code>${esc(this.link().replace(/^https?:\/\//, ''))}</code><button class="chip on" data-act="share">${'share' in navigator ? 'Share link' : 'Copy link'}</button></div>
-          <p class="quiet">${this.friends ? `${this.friends === 1 ? 'A friend has' : `${this.friends} friends have`} joined. Pick a course and start when you're ready.` : 'Send the code or link. When friends join, they pop up in your pack below.'} Bot dogs fill any empty spots. Your game runs the room, so keep it open.</p>${packBox}`;
+          <p class="quiet">${this.friends ? `${this.friends === 1 ? 'A friend has' : `${this.friends} friends have`} joined. Pick a course and start when you're ready.` : 'Send the code or link. When friends join, they pop up in your pack below.'} Bot dogs fill any empty spots, unless you turn them off under <b>Play</b>. Your game runs the room, so keep it open.</p>${packBox}`;
         break;
       case 'guest':
         if (hostName !== 'the host') rememberRoom(this.room, hostName);

@@ -26,7 +26,14 @@ export type ClientMsg =
   | { t: 'start'; mode: Mode; fillBots: boolean; course?: CourseId }
   | { t: 'toLobby' }
   /** Host only: skip the rest of this field. */
-  | { t: 'endField' };
+  | { t: 'endField' }
+  /** Host only, mid-game: send the bot dogs home (just the people play on). */
+  | { t: 'noBots' };
+
+/** How many bot dogs fill in when they're on: trials make up three dogs, versus two a side (and even teams). */
+export function botSeats(mode: Mode, humans: number): number {
+  return mode === 'versus' ? Math.max(4, humans + (humans % 2)) - humans : Math.max(3, humans) - humans;
+}
 
 export interface DogPub {
   id: string;

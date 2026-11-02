@@ -164,7 +164,7 @@ export class Party {
     const mine = this.guestCount ? `<p>${this.guestCount === 1 ? 'A friend has' : `${this.guestCount} friends have`} joined your game. You're the host: pick a course and start when ready.</p>` : '';
     const list = this.games.length
       ? `<div class="label">Friends with this page open</div><div class="games">${this.games.map((g) => `<button class="chip" data-act="join" data-v="${esc(g.peer)}" ${this.guestCount ? 'disabled' : ''}>Join ${esc(g.name)}'s game <span class="quiet">${g.dogs} ${g.dogs === 1 ? 'dog' : 'dogs'}${g.phase !== 'lobby' ? ', mid-run' : ''}</span></button>`).join('')}</div>`
-      : '<p class="quiet">Play with friends: share this page with them. When they open it, their game shows up here to join, or they can join yours. Bot dogs fill any empty spots.</p>';
+      : '<p class="quiet">Play with friends: share this page with them. When they open it, their game shows up here to join, or they can join yours. Bot dogs fill any empty spots, unless the host turns them off under <b>Play</b>.</p>';
     return `<div class="friends">${mine}${list}</div>`;
   }
 }

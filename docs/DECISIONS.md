@@ -2,6 +2,22 @@
 
 Newest first. Each entry says what was decided and why, signed with the model.
 
+## 2026-11-02: bot dogs, obviously optional (Claude Opus 5.5)
+
+Kyle: make it more obvious the bot dogs can be turned off, especially in multiplayer.
+- The Play sheet's small "Fill empty spots with bot dogs" chip is now a labelled **Bot dogs: Fill
+  in / Off** switch right above Start, saying what it means for who's here ("1 bot dog will join
+  the 2 of you", "No bot dogs: just the 2 of you", "No bot dogs needed: there are 4 of you"). The
+  same switch sits above Play again on the results screen. The choice is remembered in the browser.
+- Mid-game, the host's menu has **Send the bot dogs home** (new host-only `noBots` message: the
+  bots leave, the run carries on with the people), and the host's buttons now sit at the top of the
+  menu instead of under the whole "How to herd" list.
+- The Friends sheet says bots fill in "unless you turn them off under Play".
+- How many bots fill in is one shared rule now (`botSeats` in `shared/protocol.ts`): trials make up
+  three dogs, versus two a side and even teams. Tests: the counts; bots on and off at the start;
+  the host sends them home mid-game and play carries on; a friend can't.
+- Solo still always has bot dogs (they're who you play with there).
+
 ## 2026-11-02: ripples, ponds that join smoothly, bigger ponds (Claude Opus 5.5)
 
 Kyle: ripples when you run through water and when it rains; on some fields the grass laps into

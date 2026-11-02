@@ -195,7 +195,7 @@ export class RelayHost {
       }
       // A hello again (after a reconnect) is a rejoin: same token, same seat.
       this.local.room.message(m.from, raw);
-    } else if (this.guests.has(m.from) && d.t !== 'start' && d.t !== 'toLobby' && d.t !== 'endField') this.local.room.message(m.from, raw);
+    } else if (this.guests.has(m.from) && d.t !== 'start' && d.t !== 'toLobby' && d.t !== 'endField' && d.t !== 'noBots') this.local.room.message(m.from, raw);
   }
 
   private drop(id: string): void {

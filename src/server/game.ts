@@ -7,7 +7,7 @@
  */
 import { COURSES, PRACTICE, TRIALS, type FieldDef } from '../shared/field';
 import { BREEDS, COLLARS, DEFAULT_COAT, DOG_BREEDS, EYES, coatsFor, type Breed } from '../shared/looks';
-import type { ClientMsg, Look, PrivateEvent, ServerMsg } from '../shared/protocol';
+import { botSeats, type ClientMsg, type Look, type PrivateEvent, type ServerMsg } from '../shared/protocol';
 import { Rng } from '../shared/rng';
 import { DOG } from '../shared/tuning';
 import { makeBrain, tickBot } from './bots';
@@ -130,6 +130,9 @@ export class GameRoom implements Room {
       case 'endField':
         if (d.id === this.hostId && this.phase === 'playing') endField(this);
         break;
+      case 'noBots':
+        if (d.id === this.hostId && this.phase !== 'lobby') for (const [id, o] of this.dogs) if (o.bot || o.token.startsWith('bot-')) this.dogs.delete(id);
+        break;
     }
   }
 
@@ -170,7 +173,7 @@ export class GameRoom implements Room {
       else [d.spectator, d.arrive] = [!d.connected, undefined];
     }
     const humans = activeDogs(this).length;
-    const want = mode === 'versus' ? Math.max(4, humans + (humans % 2)) : Math.max(3, humans);
+    const want = humans + botSeats(mode, humans);
     if (fillBots) {
       for (let i = humans; i < want; i++) {
         const id = `p${this.nextId++}`;
